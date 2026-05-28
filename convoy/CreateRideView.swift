@@ -103,6 +103,7 @@ struct CreateRideView: View {
                     .padding(.horizontal, 20)
                 }
             }
+            .navigationBarBackButtonHidden(true)
             .navigationTitle("CREATE RIDE")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)

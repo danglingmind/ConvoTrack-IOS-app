@@ -10,6 +10,8 @@ struct RideHistoryView: View {
          "https://lh3.googleusercontent.com/aida-public/AB6AXuAb7a0IqjYOoVF7Sb7klK9L4XWraABuuk2vcOO-c2-61iWBomjNjpM3cacIGzQ43FkbB7jk9LyolFZah9nnlrl0FencvHPexB2y8qegnbHQdla1rguX72gQti0FuRKIBEetw18pWAIjSGZvVOCZjlao1L2_61xCfkHaKuxRdZewG9XdVEPC_4_bO2VBTPEBcl5ubsDp4kXGPYAJm1xv4TOqrR5Jm6vfUi6FuwW03V9I34b8xqmKIm_XMkDM56cTo1fvltKRCb1Wd6A")
     ]
 
+    @State private var showSummary = false
+
     var body: some View {
         ZStack(alignment: .top) {
             Color.surfaceDim.ignoresSafeArea()
@@ -20,61 +22,47 @@ struct RideHistoryView: View {
 
                     VStack(spacing: 24) {
                         // Summary dashboard
-                        HStack(spacing: 12) {
-                            StatCard(label: "TOTAL DISTANCE", value: "2,481", unit: "KM")
-                            StatCard(label: "RIDES COMPLETED", value: "42", unit: nil)
+                        HStack(spacing: 8) {
+                            FloatingStatPill(label: "DISTANCE", value: "2,481", unit: "KM")
+                            FloatingStatPill(label: "COMPLETED", value: "42", unit: nil)
+                            FloatingStatPill(label: "AVG SPEED", value: "38", unit: "km/h")
                         }
                         .padding(.horizontal, 20)
 
                         // Ride cards
                         VStack(spacing: 16) {
                             ForEach(rides, id: \.title) { ride in
-                                RideHistoryCard(
-                                    title: ride.title,
-                                    date: ride.date,
-                                    time: ride.time,
-                                    distance: ride.distance,
-                                    duration: ride.duration,
-                                    speed: ride.speed,
-                                    imgUrl: ride.imgUrl
-                                )
+                                Button(action: { showSummary = true }) {
+                                    RideHistoryCard(
+                                        title: ride.title,
+                                        date: ride.date,
+                                        time: ride.time,
+                                        distance: ride.distance,
+                                        duration: ride.duration,
+                                        speed: ride.speed,
+                                        imgUrl: ride.imgUrl
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 20)
 
-                        Color.clear.frame(height: 100)
+                        Color.clear.frame(height: 120)
                     }
                 }
             }
             .ignoresSafeArea(edges: .bottom)
 
-            ConvoyTopBar(title: "Ride History", showBack: true)
+            ConvoyTopBar(title: "RIDE HISTORY")
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(isPresented: $showSummary) {
+            RideSummaryView()
         }
     }
 }
 
-struct StatCard: View {
-    let label: String
-    let value: String
-    let unit: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label).font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(1)
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text(value).font(.displayMetrics).foregroundColor(Color.primaryFixedDim)
-                if let unit {
-                    Text(unit).font(.bodyMd).foregroundColor(Color.onSurfaceVariant)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color.surfaceContainerHigh.opacity(0.7))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
-    }
-}
 
 struct RideHistoryCard: View {
     let title: String

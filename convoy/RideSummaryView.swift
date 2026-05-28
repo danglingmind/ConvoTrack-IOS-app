@@ -137,9 +137,21 @@ struct RideSummaryView: View {
                     .padding(.top, 16)
                 }
             }
-            .ignoresSafeArea(edges: .top)
-
-            ConvoyTopBar(title: "APEX CONVOY")
+            .ignoresSafeArea(edges: .bottom)
+        }
+        .navigationBarBackButtonHidden(true)
+        .navigationTitle("RIDE SUMMARY")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "arrow.left").foregroundColor(Color.primaryFixed)
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Image(systemName: "antenna.radiowaves.left.and.right").foregroundColor(Color.primaryFixed)
+            }
         }
     }
 }

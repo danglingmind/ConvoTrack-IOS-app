@@ -128,7 +128,7 @@ struct CoordinationOverlayView: View {
             VStack {
                 Spacer()
                 HStack(spacing: 0) {
-                    NavTabItem(icon: "house.and.flag", label: "GARAGE", isActive: false) {}
+                    NavTabItem(icon: "house.and.flag", label: "FLAGGED", isActive: false) {}
                     Spacer()
                     NavTabItem(icon: "location.north.fill", label: "TRACK", isActive: true) {}
                     Spacer()
@@ -359,6 +359,7 @@ struct RegroupBottomSheet: View {
                 .padding(.bottom, 40)
             }
         }
+        .presentationDragIndicator(.visible)
         .preferredColorScheme(.dark)
     }
 }

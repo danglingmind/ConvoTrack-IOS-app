@@ -100,7 +100,7 @@ struct RideLobbyView: View {
                     .shadow(color: Color.primaryFixed.opacity(0.3), radius: 20)
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 96)
+                .padding(.bottom, 60)
                 .background(Color.surfaceDim)
             }
         }
@@ -123,36 +123,6 @@ struct RideLobbyView: View {
     }
 }
 
-struct FloatingStatPill: View {
-    let label: String
-    let value: String
-    let unit: String?
-    var dotColor: Color? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.labelCaps).foregroundColor(Color.onSurfaceVariant)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                if let dotColor {
-                    Circle().fill(dotColor).frame(width: 7, height: 7).offset(y: -1)
-                }
-                Text(value)
-                    .font(.system(size: 15, weight: .bold, design: .monospaced))
-                    .foregroundColor(dotColor ?? Color.onSurface)
-                if let unit {
-                    Text(unit)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color.onSurfaceVariant)
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color.surfaceContainerHigh.opacity(0.7))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.outline.opacity(0.2), lineWidth: 1))
-    }
-}
 
 struct ShareButton: View {
     let icon: String
@@ -268,6 +238,7 @@ struct QRCodeModal: View {
             .padding(24)
             .padding(.top, 16)
         }
+        .presentationDragIndicator(.visible)
         .preferredColorScheme(.dark)
     }
 }

@@ -199,20 +199,9 @@ struct JoinRideView: View {
                     .animation(.spring(), value: showToast)
                 }
             }
-            .navigationTitle("JOIN RIDE")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "arrow.left").foregroundColor(Color.primaryFixed)
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Image(systemName: "antenna.radiowaves.left.and.right").foregroundColor(Color.primaryFixed)
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
         }
+        .presentationDragIndicator(.visible)
         .preferredColorScheme(.dark)
     }
 }

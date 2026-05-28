@@ -140,12 +140,12 @@ struct ProfileView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
 
-                    Color.clear.frame(height: 100)
+                    Color.clear.frame(height: 120)
                 }
             }
             .ignoresSafeArea(edges: .bottom)
 
-            ConvoyTopBar(title: "APEX CONVOY")
+            ConvoyTopBar(title: "PROFILE")
         }
     }
 }

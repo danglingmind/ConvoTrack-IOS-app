@@ -1,9 +1,10 @@
 import SwiftUI
 
 struct HomeView: View {
-    @Binding var showCreateRide: Bool
     @Binding var showJoinRide: Bool
+    @State private var showCreateRide = false
     @State private var showLobby = false
+    @State private var showSummary = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -156,9 +157,18 @@ struct HomeView: View {
                             .padding(.horizontal, 20)
 
                             VStack(spacing: 12) {
-                                RecentRideRow(icon: "road.lanes", title: "Coorg Sunrise Ride", subtitle: "12 OCT • 142 KM • 4.5 HRS")
-                                RecentRideRow(icon: "cup.and.saucer.fill", title: "Sunday Breakfast Ride", subtitle: "08 OCT • 68 KM • 2.1 HRS")
-                                RecentRideRow(icon: "waveform.path", title: "Western Ghats Trail", subtitle: "01 OCT • 310 KM • 8.2 HRS")
+                                Button(action: { showSummary = true }) {
+                                    RecentRideRow(icon: "road.lanes", title: "Coorg Sunrise Ride", subtitle: "12 OCT • 142 KM • 4.5 HRS")
+                                }
+                                .buttonStyle(.plain)
+                                Button(action: { showSummary = true }) {
+                                    RecentRideRow(icon: "cup.and.saucer.fill", title: "Sunday Breakfast Ride", subtitle: "08 OCT • 68 KM • 2.1 HRS")
+                                }
+                                .buttonStyle(.plain)
+                                Button(action: { showSummary = true }) {
+                                    RecentRideRow(icon: "waveform.path", title: "Western Ghats Trail", subtitle: "01 OCT • 310 KM • 8.2 HRS")
+                                }
+                                .buttonStyle(.plain)
                             }
                             .padding(.horizontal, 20)
                         }
@@ -172,8 +182,14 @@ struct HomeView: View {
             ConvoyTopBar(title: "APEX CONVOY")
         }
         .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(isPresented: $showCreateRide) {
+            CreateRideView()
+        }
         .navigationDestination(isPresented: $showLobby) {
             RideLobbyView()
+        }
+        .navigationDestination(isPresented: $showSummary) {
+            RideSummaryView()
         }
     }
 }
@@ -204,5 +220,5 @@ struct RecentRideRow: View {
 }
 
 #Preview {
-    HomeView(showCreateRide: .constant(false), showJoinRide: .constant(false))
+    HomeView(showJoinRide: .constant(false))
 }

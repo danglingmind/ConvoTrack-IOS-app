@@ -132,13 +132,44 @@ struct ConvoyTopBar: View {
     }
 }
 
+struct FloatingStatPill: View {
+    let label: String
+    let value: String
+    let unit: String?
+    var dotColor: Color? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.labelCaps).foregroundColor(Color.onSurfaceVariant)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                if let dotColor {
+                    Circle().fill(dotColor).frame(width: 7, height: 7).offset(y: -1)
+                }
+                Text(value)
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .foregroundColor(dotColor ?? Color.onSurface)
+                if let unit {
+                    Text(unit)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color.onSurfaceVariant)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.surfaceContainerHigh.opacity(0.7))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.outline.opacity(0.2), lineWidth: 1))
+    }
+}
+
 struct ConvoyBottomNav: View {
-    enum Tab { case garage, track, profile }
+    enum Tab { case flagged, track, profile }
     @Binding var activeTab: Tab
 
     var body: some View {
         HStack(spacing: 0) {
-            navItem(icon: "house.and.flag", label: "GARAGE", tab: .garage)
+            navItem(icon: "house.and.flag", label: "FLAGGED", tab: .flagged)
             Spacer()
             navItem(icon: "location.north.fill", label: "TRACK", tab: .track, isPrimary: true)
             Spacer()
