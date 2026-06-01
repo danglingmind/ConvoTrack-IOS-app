@@ -61,10 +61,10 @@ struct AuthView: View {
 
     private var brandHeader: some View {
         VStack(spacing: 0) {
-            // material-symbols-outlined FILL=1 text-6xl (60px)
-            Image(systemName: "motorcycle.fill")
-                .font(.system(size: 52))
-                .foregroundColor(Color.primaryFixed)
+            Image("AppLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 100, height: 100)
                 .padding(.bottom, 16)
 
             // font-display-metrics 48px tracking-[0.2em]

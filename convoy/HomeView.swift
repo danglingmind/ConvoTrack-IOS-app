@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HomeView: View {
+    @Binding var activeTab: ConvoyBottomNav.Tab
     @Binding var showJoinRide: Bool
     @State private var showCreateRide = false
     @State private var showLobby = false
@@ -152,7 +153,9 @@ struct HomeView: View {
                             HStack {
                                 Text("RECENT RIDES").font(.headlineMd).foregroundColor(Color.onSurface)
                                 Spacer()
-                                Text("VIEW ALL").font(.labelCaps).foregroundColor(Color.primaryFixed).tracking(2)
+                                Button(action: { activeTab = .flagged }) {
+                                    Text("VIEW ALL").font(.labelCaps).foregroundColor(Color.primaryFixed).tracking(2)
+                                }
                             }
                             .padding(.horizontal, 20)
 
@@ -220,5 +223,5 @@ struct RecentRideRow: View {
 }
 
 #Preview {
-    HomeView(showJoinRide: .constant(false))
+    HomeView(activeTab: .constant(.track), showJoinRide: .constant(false))
 }

@@ -1,11 +1,28 @@
 import SwiftUI
+import MapKit
 
 struct RideLobbyView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showShareSheet = false
     @State private var showQRModal = false
-    @State private var startPressed = false
     @State private var showRiderDetail = false
+    @State private var showNavigation = false
+
+    private let lobbyStartCoordinate = CLLocationCoordinate2D(latitude: 12.3100, longitude: 75.8600)
+    private let lobbyDestCoordinate = CLLocationCoordinate2D(latitude: 12.4600, longitude: 75.7050)
+
+    private var lobbyRouteCoordinates: [CLLocationCoordinate2D] {
+        [
+            CLLocationCoordinate2D(latitude: 12.3100, longitude: 75.8600),
+            CLLocationCoordinate2D(latitude: 12.3300, longitude: 75.8300),
+            CLLocationCoordinate2D(latitude: 12.3500, longitude: 75.8100),
+            CLLocationCoordinate2D(latitude: 12.3700, longitude: 75.7880),
+            CLLocationCoordinate2D(latitude: 12.3900, longitude: 75.7700),
+            CLLocationCoordinate2D(latitude: 12.4100, longitude: 75.7480),
+            CLLocationCoordinate2D(latitude: 12.4350, longitude: 75.7220),
+            CLLocationCoordinate2D(latitude: 12.4600, longitude: 75.7050),
+        ]
+    }
 
     private let riders: [(name: String, bike: String, status: String, imgUrl: String)] = [
         ("Alex", "KTM ADVENTURE 390", "READY", "https://lh3.googleusercontent.com/aida-public/AB6AXuBQNuWhOtF3DXKKQ0DmErPqLF0oWDEa_-eO_fw2AexTNja0nmY07Crqv4TCZJawBTn6os3ACLTv3mZTFhDslWlfmm2OF0AgcFr-KOQhPjchRckoWnqjcsVN2-m3S21KpfeytbD7v63RnTqD3SO3RU9s3t3mlBVanN5ZatrrH4QuHdipl3aKe01_73ao6RBFd8A49aHQzsR__L8HmO1wfsZUemj_waCy5WqREtcvUG0Q6ZLjKUGliBZrcE28kioiP8cgYeAipweSYSg"),
@@ -21,17 +38,27 @@ struct RideLobbyView: View {
                 VStack(spacing: 0) {
                     // Map Route Preview
                     ZStack(alignment: .bottom) {
-                        AsyncImage(url: URL(string: "https://lh3.googleusercontent.com/aida-public/AB6AXuC6afDKDHLRQh89eKq9acEWfISyVapMQBJCIwQgAcyfyAi7y3-_tWHf2gv_gMsx7k3SypBiqAHMLSeu_nnxMsy5EXsyqYjLs0ZEmuIIl1hLAvpMEUu3bjUHobDLIDAmfnNz2v4bQPHsnoIoaTvd1nftmIFq0VsSftT_dfSUlDPNlGPPJ_MDHuRut6D9Cvl92mWShq8a6hgHU-lq0w4QbsMLbew4Usha0_x3LXHB0TmKmNoverYNfDnVQnVdfh5KPQgCY5jQ9uAVTlk")) { image in
-                            image.resizable().scaledToFill()
-                                .grayscale(0.4).opacity(0.6)
-                        } placeholder: {
-                            Color.surfaceContainerLow
+                        Map(position: .constant(.region(MKCoordinateRegion(
+                            center: CLLocationCoordinate2D(latitude: 12.385, longitude: 75.7825),
+                            span: MKCoordinateSpan(latitudeDelta: 0.21, longitudeDelta: 0.21)
+                        )))) {
+                            MapPolyline(coordinates: lobbyRouteCoordinates)
+                                .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+
+                            Annotation("", coordinate: lobbyStartCoordinate, anchor: .bottom) {
+                                LobbyStartPin()
+                            }
+
+                            Annotation("", coordinate: lobbyDestCoordinate, anchor: .bottom) {
+                                DestinationPin(name: "Mandalpatti Peak")
+                            }
                         }
+                        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+                        .allowsHitTesting(false)
                         .frame(maxWidth: .infinity, minHeight: 360)
-                        .clipped()
 
                         LinearGradient(
-                            colors: [Color.surfaceDim, Color.surfaceDim.opacity(0.4), .clear],
+                            colors: [Color.surfaceDim, Color.surfaceDim.opacity(0.55), .clear],
                             startPoint: .bottom,
                             endPoint: .top
                         )
@@ -84,18 +111,18 @@ struct RideLobbyView: View {
                 LinearGradient(colors: [Color.surfaceDim.opacity(0), Color.surfaceDim], startPoint: .top, endPoint: .bottom)
                     .frame(height: 40)
 
-                Button(action: { startPressed.toggle() }) {
+                Button(action: { showNavigation = true }) {
                     HStack(spacing: 12) {
-                        Image(systemName: startPressed ? "checkmark" : "play.fill")
+                        Image(systemName: "play.fill")
                             .font(.system(size: 20, weight: .bold))
-                        Text(startPressed ? "ALL SYSTEMS GO" : "START RIDE")
+                        Text("START RIDE")
                             .font(.headlineMd)
                             .tracking(-0.5)
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
-                    .background(startPressed ? Color.tertiaryFixed : Color.primaryFixed)
-                    .foregroundColor(startPressed ? Color.onTertiaryContainer : Color.onPrimaryFixed)
+                    .background(Color.primaryFixed)
+                    .foregroundColor(Color.onPrimaryFixed)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .shadow(color: Color.primaryFixed.opacity(0.3), radius: 20)
                 }
@@ -113,6 +140,19 @@ struct RideLobbyView: View {
                 }
             }
         }
+        .navigationDestination(isPresented: $showNavigation) {
+            RideNavigationView()
+        }
+        .background(
+            ShareSheetPresenter(
+                isPresented: $showShareSheet,
+                items: [
+                    URL(string: "https://convoy.app/join/coorg-morning-ride")!,
+                    "Join me on the Coorg Morning Ride! 🏍️"
+                ]
+            )
+            .frame(width: 0, height: 0)
+        )
         .sheet(isPresented: $showRiderDetail) {
             RiderDetailDrawer()
         }
@@ -240,6 +280,60 @@ struct QRCodeModal: View {
         }
         .presentationDragIndicator(.visible)
         .preferredColorScheme(.dark)
+    }
+}
+
+struct LobbyStartPin: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Circle()
+                    .fill(Color.surfaceContainerHigh)
+                    .frame(width: 36, height: 36)
+                    .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2.5))
+                    .shadow(color: Color.primaryFixed.opacity(0.4), radius: 8)
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(Color.primaryFixed)
+            }
+            Triangle()
+                .fill(Color.primaryFixed)
+                .frame(width: 8, height: 5)
+                .offset(y: -1)
+            Text("START")
+                .font(.system(size: 8, weight: .black, design: .monospaced))
+                .foregroundColor(Color.onSurface)
+                .tracking(0.5)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Color.surfaceContainerHigh.opacity(0.92))
+                .clipShape(Capsule())
+        }
+    }
+}
+
+import UIKit
+
+struct ShareSheetPresenter: UIViewControllerRepresentable {
+    @Binding var isPresented: Bool
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        UIViewController()
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        guard isPresented, uiViewController.presentedViewController == nil else { return }
+
+        let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        if let sheet = activityVC.sheetPresentationController {
+            sheet.detents = [.medium()]
+            sheet.prefersGrabberVisible = true
+        }
+        activityVC.completionWithItemsHandler = { _, _, _, _ in
+            isPresented = false
+        }
+        uiViewController.present(activityVC, animated: true)
     }
 }
 

@@ -2,147 +2,43 @@ import SwiftUI
 
 struct RiderDetailDrawer: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var pulsing = false
+    @State private var sheetHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            mapZone
-                .frame(height: 180)
+            riderHeader
+                .padding(20)
 
-            riderPanel
+            Rectangle()
+                .fill(Color.outlineVariant.opacity(0.2))
+                .frame(height: 1)
+                .padding(.horizontal, 20)
+
+            telemetryGrid
+                .padding(20)
+
+            reportButton
+                .padding(.horizontal, 20)
+                .padding(.bottom, 48)
         }
+        .background(
+            GeometryReader { geo in
+                Color.clear.onAppear { sheetHeight = geo.size.height }
+            }
+        )
         .background(Color.surfaceContainerLowest.ignoresSafeArea())
+        .presentationDetents(sheetHeight > 0 ? [.height(sheetHeight)] : [.medium])
         .presentationDragIndicator(.visible)
         .preferredColorScheme(.dark)
     }
 
-    // MARK: - Map Zone
-
-    private var mapZone: some View {
-        ZStack {
-            AsyncImage(url: URL(string: "https://lh3.googleusercontent.com/aida-public/AB6AXuBoRQ-wb31D5DezR3d-hxi4TKw-SYcbLZSKc5jTFPTXmKBJdbUyVld2fevpj6NDVJhwY2-a_2lCt3kePE0WTpOalxGcnouVY1m0P9lGVXBVvWVna4I7gE8LgDoYmX2L-Afa7iSgliQyLOGBEwc9ao4g4C9_1_13zoWuZlm6HefS1-9WA0cvpXU6SUUJC_8TX-8MqhmjI6G_wU92wiAfe9V23qCIuF8T5auQBZJyNRy7hgpc0JWr0beArfMc55d6R_dgdQFcEuYTm9s")) { image in
-                image.resizable().scaledToFill()
-                    .grayscale(0.4).opacity(0.5)
-            } placeholder: {
-                Color.surfaceContainerLowest
-            }
-            .clipped()
-
-            // fade into panel below
-            LinearGradient(
-                colors: [.clear, Color.surfaceContainerLowest],
-                startPoint: .center,
-                endPoint: .bottom
-            )
-
-            // rider pin
-            riderPin
-
-            // map controls — top-right
-            VStack {
-                HStack {
-                    Spacer()
-                    VStack(spacing: 4) {
-                        MapControlButton(icon: "plus") {}
-                        MapControlButton(icon: "minus") {}
-                        MapControlButton(icon: "location.fill") {}
-                    }
-                    .padding(.top, 12)
-                    .padding(.trailing, 16)
-                }
-                Spacer()
-            }
-        }
-    }
-
-    private var riderPin: some View {
-        VStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .fill(Color.primaryFixed.opacity(0.15))
-                    .frame(width: 68, height: 68)
-                    .scaleEffect(pulsing ? 1.2 : 1.0)
-                    .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: pulsing)
-                    .onAppear { pulsing = true }
-
-                Circle()
-                    .fill(Color.surfaceContainer)
-                    .frame(width: 46, height: 46)
-                    .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
-                    .overlay(
-                        AsyncImage(url: URL(string: "https://lh3.googleusercontent.com/aida-public/AB6AXuA5o-oVxSXVQFysUI2yvq80g_78Ky5Npi1fueHocZHVsqHaYJyU8WxZsbskAhvMVXXPsn6KhniEYxhiZc9OEiGfI1cOoVqabWYKU5tAKQO0bTFd2EkdueY7hxFyPD40hBDqbfNM0OomS0qW_-AQRz9iyB73jvAiHNQ8Y8DQ14lZrvA0eBFFdqzN-SVxqoQd3DKrFlxbjQj1nnbRZZ8sS2R-v8qggxvFEHC4s4Q9amiSblPTufkxEO8OJBMXHAB8SZk1mI4KH9Y_0U0")) { img in
-                            img.resizable().scaledToFill()
-                        } placeholder: { Color.surfaceVariant }
-                        .clipShape(Circle())
-                    )
-            }
-
-            Text("#2 SAM")
-                .font(.labelCaps)
-                .foregroundColor(Color.onSurface)
-                .tracking(2)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.surfaceContainer.opacity(0.92))
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
-        }
-    }
-
-    // MARK: - Rider Panel
-
-    private var riderPanel: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
-                riderHeader
-                    .padding(20)
-
-                Rectangle()
-                    .fill(Color.outlineVariant.opacity(0.2))
-                    .frame(height: 1)
-                    .padding(.horizontal, 20)
-
-                telemetryGrid
-                    .padding(20)
-
-                VStack(spacing: 12) {
-                    Button(action: {}) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "location.fill")
-                                .font(.system(size: 17, weight: .bold))
-                            Text("FOCUS RIDER")
-                                .font(.system(size: 15, weight: .bold))
-                                .tracking(0.5)
-                        }
-                        .modifier(LimePrimaryButton())
-                    }
-
-                    HStack(spacing: 12) {
-                        SecondaryActionButton(
-                            icon: "arrow.triangle.turn.up.right.circle",
-                            label: "SEND ROUTE",
-                            color: Color.onSurface
-                        )
-                        SecondaryActionButton(
-                            icon: "exclamationmark.triangle",
-                            label: "REPORT ISSUE",
-                            color: Color.errorColor
-                        )
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 48)
-            }
-        }
-        .background(Color.surfaceContainerLowest)
-    }
+    // MARK: - Header
 
     private var riderHeader: some View {
-        HStack(alignment: .top, spacing: 16) {
-            // Avatar
+        HStack(alignment: .center, spacing: 16) {
             Circle()
                 .fill(Color.surfaceContainer)
-                .frame(width: 56, height: 56)
+                .frame(width: 60, height: 60)
                 .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
                 .overlay(
                     AsyncImage(url: URL(string: "https://lh3.googleusercontent.com/aida-public/AB6AXuBlmttXTE0DMZ6BI0povBo7xzU813jzXL1XHG-dsBPoXXG-lUy3hEobK63F01CeBrI3qU7ccatWJoZZqf3VZSyIRORTX_8WCufPD0m471Hl6ef3-Pnlmy2uNCz2DV_MNTqqYvCHHxXQpEjjpFtO6l4cRPoT__c308QFkNUaGHbVDeuUP3FUBIXbQymlu8UOr5ETXl1l6VTtDPFob4iSalAQQgAcHZc3TmI8s-fRjUHGYkuntrVbaqjUOmrSB8le-GRLmmOjK4RVMsQ")) { img in
@@ -151,7 +47,6 @@ struct RiderDetailDrawer: View {
                     .clipShape(Circle())
                 )
 
-            // Name info
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Text("RIDER #2")
@@ -179,19 +74,10 @@ struct RiderDetailDrawer: View {
             }
 
             Spacer()
-
-            // Message button
-            Button(action: {}) {
-                Image(systemName: "message")
-                    .font(.system(size: 18))
-                    .foregroundColor(Color.onSurface)
-                    .frame(width: 44, height: 44)
-                    .background(Color.surfaceContainerHigh)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outlineVariant.opacity(0.5), lineWidth: 1))
-            }
         }
     }
+
+    // MARK: - Telemetry
 
     private var telemetryGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
@@ -201,26 +87,31 @@ struct RiderDetailDrawer: View {
             TelemetryCard(label: "SIGNAL", value: "STRONG", icon: "wifi", iconColor: Color.tertiaryFixed)
         }
     }
-}
 
-// MARK: - Supporting Views
+    // MARK: - Report
 
-struct MapControlButton: View {
-    let icon: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color.onSurface)
-                .frame(width: 36, height: 36)
-                .background(Color.surfaceContainerHigh.opacity(0.9))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.outline.opacity(0.3), lineWidth: 1))
+    private var reportButton: some View {
+        Button(action: {}) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 15, weight: .bold))
+                Text("REPORT ISSUE")
+                    .font(.labelCaps)
+                    .tracking(1)
+            }
+            .foregroundColor(Color.errorColor)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(Color.errorColor.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.errorColor.opacity(0.3), lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 10))
         }
+        .buttonStyle(DrawerButtonStyle())
     }
 }
+
+// MARK: - Telemetry Card
 
 struct TelemetryCard: View {
     let label: String
@@ -267,24 +158,14 @@ struct TelemetryCard: View {
     }
 }
 
-struct SecondaryActionButton: View {
-    let icon: String
-    let label: String
-    let color: Color
-
-    var body: some View {
-        Button(action: {}) {
-            HStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 14, weight: .medium))
-                Text(label).font(.labelCaps).tracking(1)
-            }
-            .foregroundColor(color)
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .background(color.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(color.opacity(0.3), lineWidth: 1))
-        }
+private struct DrawerButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.08 : 0))
+                    .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+            )
     }
 }
 

@@ -115,6 +115,12 @@ struct ConvoyTopBar: View {
                         .frame(width: 44, height: 44)
                 }
             }
+            if !showBack {
+                Image("AppLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 28, height: 28)
+            }
             Text(title)
                 .font(.headlineLg)
                 .foregroundColor(Color.primaryFixed)

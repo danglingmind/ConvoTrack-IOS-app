@@ -91,7 +91,6 @@ struct SplashView: View {
 
     private var logoSection: some View {
         ZStack {
-            // Matches: bg-primary-fixed/20 blur-3xl rounded-full scale-150 animate-pulse
             Circle()
                 .fill(Color.primaryFixed.opacity(0.2))
                 .frame(width: 240, height: 240)
@@ -99,14 +98,10 @@ struct SplashView: View {
                 .scaleEffect(glowPulse ? 1.05 : 1.0)
                 .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: glowPulse)
 
-            AsyncImage(url: URL(string: "https://lh3.googleusercontent.com/aida/ADBb0uglceZY3zYeWDz7QLMQRBWTmTlS04O3atubDdYkJ9VOQBZwwKdl6gs8j0vjPI7D6ZSA5dC6JYTvfB35Goh6TQRP23fV8OqE4SMwY84n8P5PT_Oaf1LDD0GNvyM1wA_J6RU1-FykDbpHx4Ur6SVkQrdAjusI84kWGmsvQj5knQ4A_gB-zR6SI-pHTLkGeR0_Kkc-9OQqUgCnt2mWFW8IL0Cjql9NTr2Nqy68SXDjJE396UQ64YevJto8bcw")) { image in
-                image.resizable().scaledToFit()
-            } placeholder: {
-                Image(systemName: "motorcycle")
-                    .font(.system(size: 80, weight: .bold))
-                    .foregroundColor(Color.primaryFixed)
-            }
-            .frame(width: 160, height: 160)
+            Image("AppLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 160, height: 160)
         }
     }
 

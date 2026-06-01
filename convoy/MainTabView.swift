@@ -3,6 +3,7 @@ import SwiftUI
 struct MainTabView: View {
     @State private var activeTab: ConvoyBottomNav.Tab = .track
     @State private var showJoinRide = false
+    @StateObject private var appState = AppState()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -14,15 +15,18 @@ struct MainTabView: View {
                     }
                 case .track:
                     NavigationStack {
-                        HomeView(showJoinRide: $showJoinRide)
+                        HomeView(activeTab: $activeTab, showJoinRide: $showJoinRide)
                     }
                 case .profile:
                     ProfileView()
                 }
             }
 
-            ConvoyBottomNav(activeTab: $activeTab)
+            if !appState.isRideActive {
+                ConvoyBottomNav(activeTab: $activeTab)
+            }
         }
+        .environmentObject(appState)
         .ignoresSafeArea(edges: .bottom)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showJoinRide) {
