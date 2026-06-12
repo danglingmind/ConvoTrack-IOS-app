@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		9CF0CB9C2FD0954300B3CF92 /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9CF0CB9B2FD0954300B3CF92 /* ClerkKit */; };
+		9CF0CB9F2FD095A100B3CF92 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = 9CF0CB9E2FD095A100B3CF92 /* SocketIO */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		9CF0CB642FC7603A00B3CF92 /* convoy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = convoy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +28,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9CF0CB9C2FD0954300B3CF92 /* ClerkKit in Frameworks */,
+				9CF0CB9F2FD095A100B3CF92 /* SocketIO in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +72,8 @@
 			);
 			name = convoy;
 			packageProductDependencies = (
+				9CF0CB9B2FD0954300B3CF92 /* ClerkKit */,
+				9CF0CB9E2FD095A100B3CF92 /* SocketIO */,
 			);
 			productName = convoy;
 			productReference = 9CF0CB642FC7603A00B3CF92 /* convoy.app */;
@@ -94,6 +103,10 @@
 			);
 			mainGroup = 9CF0CB5B2FC7603A00B3CF92;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				9CF0CB9A2FD0954300B3CF92 /* XCRemoteSwiftPackageReference "clerk-ios" */,
+				9CF0CB9D2FD095A100B3CF92 /* XCRemoteSwiftPackageReference "socket" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9CF0CB652FC7603A00B3CF92 /* Products */;
 			projectDirPath = "";
@@ -251,6 +264,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NJ5P2B5WZJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -282,6 +296,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NJ5P2B5WZJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -328,6 +343,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9CF0CB9A2FD0954300B3CF92 /* XCRemoteSwiftPackageReference "clerk-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/clerk/clerk-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.5;
+			};
+		};
+		9CF0CB9D2FD095A100B3CF92 /* XCRemoteSwiftPackageReference "socket" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/socketio/socket.io-client-swift";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9CF0CB9B2FD0954300B3CF92 /* ClerkKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9CF0CB9A2FD0954300B3CF92 /* XCRemoteSwiftPackageReference "clerk-ios" */;
+			productName = ClerkKit;
+		};
+		9CF0CB9E2FD095A100B3CF92 /* SocketIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9CF0CB9D2FD095A100B3CF92 /* XCRemoteSwiftPackageReference "socket" */;
+			productName = SocketIO;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9CF0CB5C2FC7603A00B3CF92 /* Project object */;
 }

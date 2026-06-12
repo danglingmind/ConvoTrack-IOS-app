@@ -1,8 +1,13 @@
 import SwiftUI
+import ClerkKit
 
 struct AuthView: View {
+    @Environment(Clerk.self) private var clerk
     @State private var navigateToMain = false
     @State private var appeared = false
+    @State private var isSigningIn = false
+    @State private var errorMessage: String?
+    @State private var showError = false
 
     var body: some View {
         ZStack {
@@ -21,10 +26,16 @@ struct AuthView: View {
         .preferredColorScheme(.dark)
         .opacity(appeared ? 1 : 0)
         .onAppear {
+            if clerk.user != nil { navigateToMain = true }
             withAnimation(.easeIn(duration: 0.8)) { appeared = true }
         }
         .fullScreenCover(isPresented: $navigateToMain) {
             MainTabView()
+        }
+        .alert("Sign In Failed", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "An unknown error occurred.")
         }
     }
 
@@ -101,7 +112,9 @@ struct AuthView: View {
                 background: Color.primaryFixed,
                 border: Color.primaryFixed,
                 borderWidth: 2,
-                glowColor: Color.primaryFixed.opacity(0.35)
+                glowColor: Color.primaryFixed.opacity(0.35),
+                isLoading: isSigningIn,
+                action: signInWithGoogle
             )
 
             // Apple — bg-surface-container-highest, text-primary (#fff), border-outline/30
@@ -115,7 +128,9 @@ struct AuthView: View {
                 background: Color.surfaceContainerHighest,
                 border: Color.outline.opacity(0.3),
                 borderWidth: 1,
-                glowColor: .clear
+                glowColor: .clear,
+                isLoading: false,
+                action: signInWithApple
             )
 
             // OR divider
@@ -150,25 +165,32 @@ struct AuthView: View {
         background: Color,
         border: Color,
         borderWidth: CGFloat,
-        glowColor: Color
+        glowColor: Color,
+        isLoading: Bool,
+        action: @escaping () -> Void
     ) -> some View {
-        Button(action: { navigateToMain = true }) {
+        Button(action: action) {
             ZStack {
-                // Text centered across the full width
-                Text(label)
-                    .font(.system(size: 15, weight: .bold))
-                    .textCase(.uppercase)
-                    .tracking(-0.5)
-                    .foregroundColor(foreground)
-
-                // Icon pinned to leading edge at 16pt
-                HStack(spacing: 0) {
-                    icon
-                        .frame(width: 24, height: 24)
+                if isLoading {
+                    ProgressView()
+                        .tint(foreground)
+                } else {
+                    // Text centered across the full width
+                    Text(label)
+                        .font(.system(size: 15, weight: .bold))
+                        .textCase(.uppercase)
+                        .tracking(-0.5)
                         .foregroundColor(foreground)
-                    Spacer()
+
+                    // Icon pinned to leading edge at 16pt
+                    HStack(spacing: 0) {
+                        icon
+                            .frame(width: 24, height: 24)
+                            .foregroundColor(foreground)
+                        Spacer()
+                    }
+                    .padding(.leading, 16)
                 }
-                .padding(.leading, 16)
             }
             .frame(height: 48)
             .background(background)
@@ -177,7 +199,38 @@ struct AuthView: View {
             .shadow(color: glowColor, radius: 16)
         }
         .buttonStyle(.plain)
+        .disabled(isSigningIn)
         .frame(width: 350)
+    }
+
+    // MARK: - Auth Actions
+
+    private func signInWithGoogle() {
+        isSigningIn = true
+        Task {
+            do {
+                try await clerk.auth.signInWithOAuth(provider: .google)
+                navigateToMain = true
+            } catch {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
+            isSigningIn = false
+        }
+    }
+
+    private func signInWithApple() {
+        isSigningIn = true
+        Task {
+            do {
+                try await clerk.auth.signInWithApple()
+                navigateToMain = true
+            } catch {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
+            isSigningIn = false
+        }
     }
 
     // MARK: - Footer

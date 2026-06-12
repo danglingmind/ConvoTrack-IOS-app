@@ -1,50 +1,210 @@
 import SwiftUI
 import MapKit
+import ClerkKit
+import Combine
 
-// MARK: - Data Model
+// MARK: - Display Models
 
-struct RiderOnMap: Identifiable {
-    let id: Int
+struct LiveRider: Identifiable {
+    let id: String
     let name: String
+    let avatarUrl: String?
     let rank: Int
-    let distanceToGoal: Double
-    let speed: Int
-    let imgUrl: String
+    let distanceToGoalKm: Double
+    let speedKmh: Double
     let coordinate: CLLocationCoordinate2D
+    let isMe: Bool
+}
+
+struct NavLeaderboardRow: Identifiable {
+    let id: String
+    let rank: Int
+    let name: String
+    let avatarUrl: String?
+    let distanceToGoalKm: Double
+    let isMe: Bool
+}
+
+// MARK: - NavigationViewModel
+
+@MainActor
+final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
+    @Published var riders: [LiveRider] = []
+    @Published var leaderboardRows: [NavLeaderboardRow] = []
+    @Published var mySpeedKmh: Double = 0
+    @Published var myRank: Int = 0
+    @Published var myDistanceToGoalKm: Double = 0
+    @Published var riderCount: Int = 0
+    @Published var routeCoordinates: [CLLocationCoordinate2D] = []
+    @Published var routeVersion: Int = 0   // increments when route is ready; Equatable
+    @Published var destinationCoordinate: CLLocationCoordinate2D? = nil
+    @Published var showSplitAlert = false
+    @Published var showSummary = false
+    @Published var isEnding = false
+    @Published var endError: String? = nil
+
+    var amILeader: Bool { !myUserId.isEmpty && myUserId == leaderId }
+
+    var etaString: String {
+        guard mySpeedKmh > 1, myDistanceToGoalKm > 0 else { return "--:--" }
+        let secs = (myDistanceToGoalKm / mySpeedKmh) * 3600
+        let arrival = Date().addingTimeInterval(secs)
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: arrival)
+        return String(format: "%02d:%02d", comps.hour ?? 0, comps.minute ?? 0)
+    }
+
+    private var rideId = ""
+    private var staticParticipants: [RideParticipant] = []
+    private var myUserId = ""
+    private var leaderId = ""
+    private var totalDistanceMeters: Double = 0
+
+    func setup(rideId: String, ride: Ride, myUserId: String) async {
+        self.rideId = rideId
+        self.staticParticipants = ride.participants
+        self.myUserId = myUserId
+        self.leaderId = ride.leaderId
+        self.totalDistanceMeters = ride.distanceMeters
+
+        if let dest = ride.waypoints.first(where: { $0.type == "DESTINATION" }) {
+            destinationCoordinate = CLLocationCoordinate2D(latitude: dest.lat, longitude: dest.lng)
+        }
+
+        await calculateRoute(from: ride.waypoints)
+
+        let socket = SocketClient.shared
+        socket.onStateUpdate = { [weak self] update in self?.handleStateUpdate(update) }
+        socket.onSplitDetected = { [weak self] _ in self?.showSplitAlert = true }
+        socket.onSplitResolved = { [weak self] in self?.showSplitAlert = false }
+
+        LocationService.shared.delegate = self
+        LocationService.shared.requestPermission()
+        LocationService.shared.start()
+    }
+
+    func teardown() {
+        LocationService.shared.stop()
+        LocationService.shared.delegate = nil
+        SocketClient.shared.onStateUpdate = nil
+        SocketClient.shared.onSplitDetected = nil
+        SocketClient.shared.onSplitResolved = nil
+    }
+
+    func endRide() async {
+        isEnding = true
+        endError = nil
+        do {
+            try await APIClient.shared.endRide(rideId)
+            showSummary = true
+        } catch {
+            endError = error.localizedDescription
+        }
+        isEnding = false
+    }
+
+    func broadcastRegroup(reason: CoordinationOverlayView.RegroupReason?) {
+        guard let reason, let loc = LocationService.shared.lastLocation else { return }
+        let lat = loc.coordinate.latitude
+        let lng = loc.coordinate.longitude
+        if reason.isEmergency {
+            SocketClient.shared.emitEmergency(rideId: rideId, lat: lat, lng: lng, message: "Emergency")
+        } else {
+            let type = reason.rawValue.uppercased().replacingOccurrences(of: " ", with: "_")
+            SocketClient.shared.emitRegroup(rideId: rideId, type: type, lat: lat, lng: lng)
+        }
+    }
+
+    // MARK: - LocationServiceDelegate
+
+    func locationService(_ service: LocationService, didUpdate location: CLLocation, battery: Double, signalStrength: String) {
+        mySpeedKmh = max(0, location.speed * 3.6)
+        SocketClient.shared.emitLocationUpdate(
+            rideId: rideId,
+            lat: location.coordinate.latitude,
+            lng: location.coordinate.longitude,
+            speed: location.speed,
+            heading: location.course,
+            battery: battery,
+            signalStrength: signalStrength
+        )
+    }
+
+    // MARK: - Private
+
+    private func handleStateUpdate(_ update: RideStateUpdate) {
+        riderCount = update.participants.count
+
+        leaderboardRows = update.leaderboard.map { entry in
+            let participant = staticParticipants.first { $0.userId == entry.userId }
+            let distKm = max(0, (totalDistanceMeters - entry.progress) / 1000)
+            return NavLeaderboardRow(
+                id: entry.userId, rank: entry.rank, name: entry.name,
+                avatarUrl: participant?.avatarUrl,
+                distanceToGoalKm: distKm,
+                isMe: entry.userId == myUserId
+            )
+        }
+
+        riders = update.participants.compactMap { live in
+            guard let lat = live.lat, let lng = live.lng else { return nil }
+            let participant = staticParticipants.first { $0.userId == live.userId }
+            let lbEntry = update.leaderboard.first { $0.userId == live.userId }
+            let distKm = max(0, (totalDistanceMeters - live.progress) / 1000)
+            return LiveRider(
+                id: live.userId,
+                name: participant?.name ?? lbEntry?.name ?? "Rider",
+                avatarUrl: participant?.avatarUrl,
+                rank: lbEntry?.rank ?? 99,
+                distanceToGoalKm: distKm,
+                speedKmh: (live.speed ?? 0) * 3.6,
+                coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
+                isMe: live.userId == myUserId
+            )
+        }
+
+        if let myEntry = update.leaderboard.first(where: { $0.userId == myUserId }) {
+            myRank = myEntry.rank
+            myDistanceToGoalKm = max(0, (totalDistanceMeters - myEntry.progress) / 1000)
+        }
+
+        if update.status == "COMPLETED" { showSummary = true }
+    }
+
+    private func calculateRoute(from waypoints: [Waypoint]) async {
+        let sorted = waypoints.sorted { $0.order < $1.order }
+        guard sorted.count >= 2 else { return }
+        let items = sorted.map {
+            MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)))
+        }
+        var allCoords: [CLLocationCoordinate2D] = []
+        for i in 0..<items.count - 1 {
+            let req = MKDirections.Request()
+            req.source = items[i]; req.destination = items[i + 1]; req.transportType = .automobile
+            if let route = try? await MKDirections(request: req).calculate().routes.first {
+                let coords = route.polyline.coordinates
+                allCoords += (i == 0) ? coords : Array(coords.dropFirst())
+            }
+        }
+        routeCoordinates = allCoords
+        if !allCoords.isEmpty { routeVersion += 1 }
+    }
 }
 
 // MARK: - Main View
 
 struct RideNavigationView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var appState: AppState
-    @State private var cameraPosition: MapCameraPosition = .region(
-        MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 12.3800, longitude: 75.7750),
-            span: MKCoordinateSpan(latitudeDelta: 0.22, longitudeDelta: 0.22)
-        )
-    )
-    @State private var selectedRider: RiderOnMap? = nil
+    @StateObject private var vm = NavigationViewModel()
+
+    @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var selectedRiderId: String? = nil
     @State private var showRegroup = false
     @State private var regroupReason: CoordinationOverlayView.RegroupReason? = nil
-    @State private var isPTTActive = false
+    @State private var showEndError = false
 
-    private let destination = "Mandalpatti Peak"
-
-    private let riders: [RiderOnMap] = [
-        RiderOnMap(id: 0, name: "Alex", rank: 1, distanceToGoal: 12.4, speed: 78,
-                   imgUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuBQNuWhOtF3DXKKQ0DmErPqLF0oWDEa_-eO_fw2AexTNja0nmY07Crqv4TCZJawBTn6os3ACLTv3mZTFhDslWlfmm2OF0AgcFr-KOQhPjchRckoWnqjcsVN2-m3S21KpfeytbD7v63RnTqD3SO3RU9s3t3mlBVanN5ZatrrH4QuHdipl3aKe01_73ao6RBFd8A49aHQzsR__L8HmO1wfsZUemj_waCy5WqREtcvUG0Q6ZLjKUGliBZrcE28kioiP8cgYeAipweSYSg",
-                   coordinate: CLLocationCoordinate2D(latitude: 12.4350, longitude: 75.7220)),
-        RiderOnMap(id: 1, name: "Sam", rank: 2, distanceToGoal: 18.1, speed: 82,
-                   imgUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuC0FnjMnOzopKSx-C6lRFSxZB2IDrZQfCAB7FkhPazac9ff8lLnRu_YfTbe5Uh9efwQ-LAuzMBi36kfb6tMjbCkObZgTPHzutgzCb4M1EI1u7sU7Dp4nWFQ_GKZuU0xKTnsK2QsQ8BNxqDx37boXDA04tWO1xgsvrV2v7EWL8rtwialXEjze2pI-vtQvi-VKlIgMoMW7KSVcNFGqHbnvU2iDfPdQxXdCr93DDPaHfK6cKZ_eFfbJs5hxL-6A5mFdkZ-JdwFrNMGQjU",
-                   coordinate: CLLocationCoordinate2D(latitude: 12.4100, longitude: 75.7480)),
-        RiderOnMap(id: 2, name: "Rahul", rank: 3, distanceToGoal: 24.7, speed: 71,
-                   imgUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuDmmB6IbIMz2C0QhSGsvfXl8savmkcfxNSmLZI6rgxq7PlCnBGef1D6-S5QJtzfePXR70mpXdxDchrfvxQFaqk8iLFh9QsdXA4AlbYdlSIkEVxfQinHlQ4pM_W3jo2UbXqjIGv575AdAwq5iLd8E60x-PKS-WuJ1sYx9tMCv_4kwlhAR-nlKIECtDYhdZXnSiBTuTwS53qExqViWRZ6Fbm9SrtAEPGpyGWIXZl4GqGzb21KQl__8ID34SnzCZWLhBb5VrUvidAJRT8",
-                   coordinate: CLLocationCoordinate2D(latitude: 12.3700, longitude: 75.7880)),
-        RiderOnMap(id: 3, name: "Yash", rank: 4, distanceToGoal: 31.2, speed: 69,
-                   imgUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuDZPbGMUietTU8vTKMiMrZURdftPeVXwBal64HbaxnuPTrbhm3VeCUV2QWIqgaZwBQpcjl9EK5m9ZJO48JerTdaH814KROSLqUcy8et1yq5qoa1QqJ8MY-b3HNZJZeAGX2GKKivgzlSmsPOpJJVv8kfBbKFpXwa55Wu59qhYSq25YV0uUvBKyqPQ8sCIS413OOCyHNkQzol5B8zksBCJaL62MwKxK3hyKn3dKsQ71V9lZaFXdP40IP8O6Q16D2ioN5sTL9A7_w4dpw",
-                   coordinate: CLLocationCoordinate2D(latitude: 12.3300, longitude: 75.8300)),
-    ]
+    private var destinationName: String { appState.currentRide?.destinationName ?? "Destination" }
 
     var body: some View {
         ZStack {
@@ -55,44 +215,102 @@ struct RideNavigationView: View {
         .navigationBarHidden(true)
         .preferredColorScheme(.dark)
         .onAppear { appState.isRideActive = true }
-        .onDisappear { appState.isRideActive = false }
+        .onDisappear {
+            appState.isRideActive = false
+            vm.teardown()
+        }
+        .task { await loadAndSetup() }
+        .onChange(of: vm.routeVersion) { _, _ in
+            guard !vm.routeCoordinates.isEmpty else { return }
+            let poly = MKPolyline(coordinates: vm.routeCoordinates, count: vm.routeCoordinates.count)
+            let rect = poly.boundingMapRect
+            cameraPosition = .rect(rect.insetBy(dx: -rect.width * 0.15, dy: -rect.height * 0.15))
+        }
         .sheet(isPresented: $showRegroup) {
-            RegroupBottomSheet(selectedReason: $regroupReason, onBroadcast: {
-                showRegroup = false
-            }, isBroadcasting: false)
+            RegroupBottomSheet(
+                selectedReason: $regroupReason,
+                onBroadcast: {
+                    vm.broadcastRegroup(reason: regroupReason)
+                    showRegroup = false
+                },
+                isBroadcasting: false
+            )
             .presentationDetents([.large])
+        }
+        .navigationDestination(isPresented: $vm.showSummary) {
+            RideSummaryView()
+        }
+        .alert("Couldn't End Ride", isPresented: $showEndError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(vm.endError ?? "An error occurred.")
+        }
+        .onChange(of: vm.endError) { _, err in
+            if err != nil { showEndError = true }
         }
     }
 
-    // MARK: - Layers
+    // MARK: - Load
+
+    private func loadAndSetup() async {
+        guard let rideId = appState.currentRideId else { return }
+        var ride = appState.currentRide
+        if ride == nil {
+            ride = try? await APIClient.shared.getRide(rideId)
+            appState.currentRide = ride
+        }
+        guard let ride else { return }
+        let userId = clerk.user?.id ?? ""
+        await vm.setup(rideId: rideId, ride: ride, myUserId: userId)
+    }
+
+    // MARK: - Map
 
     private var mapLayer: some View {
         Map(position: $cameraPosition) {
-            MapPolyline(coordinates: routeCoordinates)
-                .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+            if !vm.routeCoordinates.isEmpty {
+                MapPolyline(coordinates: vm.routeCoordinates)
+                    .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+            }
 
-            ForEach(riders) { rider in
+            ForEach(vm.riders) { rider in
                 Annotation(rider.name, coordinate: rider.coordinate, anchor: .bottom) {
-                    RiderMapPin(rider: rider, isSelected: selectedRider?.id == rider.id)
+                    LiveRiderPin(rider: rider, isSelected: selectedRiderId == rider.id)
                         .onTapGesture {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedRider = (selectedRider?.id == rider.id) ? nil : rider
+                                selectedRiderId = (selectedRiderId == rider.id) ? nil : rider.id
                             }
                         }
                 }
             }
 
-            Annotation("", coordinate: CLLocationCoordinate2D(latitude: 12.4600, longitude: 75.7050), anchor: .bottom) {
-                DestinationPin(name: destination)
+            if let coord = vm.destinationCoordinate {
+                Annotation("", coordinate: coord, anchor: .bottom) {
+                    DestinationPin(name: destinationName)
+                }
             }
         }
         .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .ignoresSafeArea()
     }
 
+    // MARK: - HUD
+
     private var hudLayer: some View {
         VStack(spacing: 0) {
             topBar
+
+            if vm.showSplitAlert {
+                GroupSplitAlert(
+                    onIgnore: { withAnimation(.spring()) { vm.showSplitAlert = false } },
+                    onRegroup: { showRegroup = true }
+                )
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .transition(.scale.combined(with: .opacity))
+                .animation(.spring(), value: vm.showSplitAlert)
+            }
+
             Spacer()
             bottomControls
         }
@@ -112,37 +330,31 @@ struct RideNavigationView: View {
                         .clipShape(Circle())
                         .overlay(Circle().stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
                 }
-
                 Spacer()
-
                 HStack(spacing: 8) {
                     HStack(spacing: 7) {
                         Image(systemName: "trophy.fill")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(Color.primaryFixed)
-                        Text("RANK 4")
+                        Text(vm.myRank > 0 ? "RANK \(vm.myRank)" : "RANK --")
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(Color.primaryFixed)
                             .tracking(1.5)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
                     .background(.ultraThinMaterial)
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.25), lineWidth: 1))
 
                     HStack(spacing: 7) {
-                        Circle()
-                            .fill(Color.primaryFixed)
-                            .frame(width: 7, height: 7)
+                        Circle().fill(Color.primaryFixed).frame(width: 7, height: 7)
                             .shadow(color: Color.primaryFixed, radius: 5)
-                        Text("8 RIDERS LIVE")
+                        Text(vm.riderCount > 0 ? "\(vm.riderCount) RIDERS LIVE" : "-- RIDERS LIVE")
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(Color.primaryFixed)
                             .tracking(1.5)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
                     .background(.ultraThinMaterial)
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.25), lineWidth: 1))
@@ -159,19 +371,26 @@ struct RideNavigationView: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(riders.sorted(by: { $0.rank < $1.rank })) { rider in
-                        LeaderboardCard(rider: rider, isSelected: selectedRider?.id == rider.id)
-                            .id(rider.id)
+                    if vm.leaderboardRows.isEmpty {
+                        ForEach(0..<3, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.surfaceContainerHigh.opacity(0.5))
+                                .frame(width: 140, height: 56)
+                                .redacted(reason: .placeholder)
+                        }
+                    } else {
+                        ForEach(vm.leaderboardRows) { row in
+                            LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id)
+                                .id(row.id)
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 4)
             }
-            .onChange(of: selectedRider?.id) { _, id in
+            .onChange(of: selectedRiderId) { _, id in
                 if let id {
-                    withAnimation(.spring(response: 0.4)) {
-                        proxy.scrollTo(id, anchor: .center)
-                    }
+                    withAnimation(.spring(response: 0.4)) { proxy.scrollTo(id, anchor: .center) }
                 }
             }
         }
@@ -180,117 +399,63 @@ struct RideNavigationView: View {
     // MARK: - Bottom Controls
 
     private var bottomControls: some View {
-        VStack(spacing: 14) {
-            navInstructionBanner
-
+        VStack(spacing: 0) {
             HStack(spacing: 10) {
                 regroupButton
-                pttButton
                 endRideButton
             }
             .padding(.horizontal, 20)
+            .padding(.top, 14)
             .padding(.bottom, 44)
         }
         .background(
             LinearGradient(
                 colors: [.clear, Color.surfaceDim.opacity(0.65), Color.surfaceDim.opacity(0.97)],
-                startPoint: .top,
-                endPoint: .bottom
+                startPoint: .top, endPoint: .bottom
             )
             .ignoresSafeArea(edges: .bottom)
         )
     }
 
-    private var navInstructionBanner: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "arrow.turn.up.right")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(Color.onPrimaryFixed)
-                .frame(width: 52, height: 52)
-                .background(Color.primaryFixed)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("IN 2.4 KM")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color.primaryFixed)
-                    .tracking(2)
-                Text("Turn right onto Madikeri Road")
-                    .font(.bodyLg)
-                    .foregroundColor(Color.onSurface)
-                    .fontWeight(.semibold)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("31.2 km")
-                    .font(.system(size: 13, weight: .black, design: .monospaced))
-                    .foregroundColor(Color.onSurface)
-                Text("TO DEST")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color.onSurfaceVariant)
-                    .tracking(1)
-            }
-        }
-        .padding(14)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.outlineVariant.opacity(0.25), lineWidth: 1))
-        .padding(.horizontal, 20)
-    }
-
     private var regroupButton: some View {
         Button(action: { showRegroup = true }) {
             VStack(spacing: 5) {
-                Image(systemName: "person.3.fill")
-                    .font(.system(size: 19))
+                Image(systemName: "person.3.fill").font(.system(size: 19))
                 Text("REGROUP")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
+                    .font(.system(size: 8, weight: .bold, design: .monospaced)).tracking(0.5)
             }
             .foregroundColor(Color.onSurface)
-            .frame(width: 76, height: 72)
+            .frame(maxWidth: .infinity).frame(height: 72)
             .background(Color.surfaceContainerHigh.opacity(0.9))
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
         }
     }
 
-    private var pttButton: some View {
-        Button(action: { withAnimation(.spring(response: 0.2)) { isPTTActive.toggle() } }) {
-            VStack(spacing: 5) {
-                Image(systemName: isPTTActive ? "mic.fill" : "mic")
-                    .font(.system(size: 26, weight: .bold))
-                Text(isPTTActive ? "TALKING" : "HOLD TALK")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
-            }
-            .foregroundColor(isPTTActive ? Color.onPrimaryFixed : Color.onPrimaryFixed)
-            .frame(maxWidth: .infinity)
-            .frame(height: 72)
-            .background(isPTTActive ? Color.tertiaryFixed : Color.primaryFixed)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .shadow(color: (isPTTActive ? Color.tertiaryFixed : Color.primaryFixed).opacity(0.45), radius: 14)
-            .scaleEffect(isPTTActive ? 1.04 : 1)
-        }
-    }
-
     private var endRideButton: some View {
-        Button(action: { dismiss() }) {
+        Button(action: {
+            if vm.amILeader {
+                Task { await vm.endRide() }
+            } else {
+                dismiss()
+            }
+        }) {
             VStack(spacing: 5) {
-                Image(systemName: "stop.fill")
-                    .font(.system(size: 19))
-                Text("END RIDE")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
+                if vm.isEnding {
+                    ProgressView().tint(Color.errorColor).scaleEffect(0.8)
+                } else {
+                    Image(systemName: "stop.fill").font(.system(size: 19))
+                }
+                Text(vm.amILeader ? "END RIDE" : "LEAVE RIDE")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced)).tracking(0.5)
             }
             .foregroundColor(Color.errorColor)
-            .frame(width: 76, height: 72)
+            .frame(maxWidth: .infinity).frame(height: 72)
             .background(Color.errorContainer.opacity(0.12))
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.errorColor.opacity(0.35), lineWidth: 1))
         }
+        .disabled(vm.isEnding)
     }
 
     // MARK: - Right Stat Pills
@@ -301,9 +466,17 @@ struct RideNavigationView: View {
             HStack {
                 Spacer()
                 VStack(spacing: 9) {
-                    NavStatPill(label: "SPEED", value: "69", unit: "KM/H")
-                    NavStatPill(label: "ETA", value: "14:32", unit: nil)
-                    NavStatPill(label: "DIST", value: "31.2", unit: "KM")
+                    NavStatPill(
+                        label: "SPEED",
+                        value: vm.mySpeedKmh > 0 ? String(format: "%.0f", vm.mySpeedKmh) : "--",
+                        unit: "KM/H"
+                    )
+                    NavStatPill(label: "ETA", value: vm.etaString, unit: nil)
+                    NavStatPill(
+                        label: "DIST",
+                        value: vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--",
+                        unit: "KM"
+                    )
                 }
                 .padding(.trailing, 14)
             }
@@ -312,27 +485,12 @@ struct RideNavigationView: View {
         .padding(.top, 180)
         .padding(.bottom, 220)
     }
-
-    // MARK: - Route
-
-    private var routeCoordinates: [CLLocationCoordinate2D] {
-        [
-            CLLocationCoordinate2D(latitude: 12.3100, longitude: 75.8600),
-            CLLocationCoordinate2D(latitude: 12.3300, longitude: 75.8300),
-            CLLocationCoordinate2D(latitude: 12.3500, longitude: 75.8100),
-            CLLocationCoordinate2D(latitude: 12.3700, longitude: 75.7880),
-            CLLocationCoordinate2D(latitude: 12.3900, longitude: 75.7700),
-            CLLocationCoordinate2D(latitude: 12.4100, longitude: 75.7480),
-            CLLocationCoordinate2D(latitude: 12.4350, longitude: 75.7220),
-            CLLocationCoordinate2D(latitude: 12.4600, longitude: 75.7050),
-        ]
-    }
 }
 
-// MARK: - Rider Map Pin
+// MARK: - Live Rider Pin
 
-struct RiderMapPin: View {
-    let rider: RiderOnMap
+struct LiveRiderPin: View {
+    let rider: LiveRider
     let isSelected: Bool
 
     private var size: CGFloat { isSelected ? 52 : 42 }
@@ -341,30 +499,29 @@ struct RiderMapPin: View {
         VStack(spacing: 0) {
             ZStack {
                 Circle()
-                    .fill(Color.surfaceContainerHigh)
+                    .fill(rider.isMe ? Color.primaryFixed.opacity(0.15) : Color.surfaceContainerHigh)
                     .frame(width: size, height: size)
-                    .overlay(
-                        Circle().stroke(
-                            isSelected ? Color.primaryFixed : Color.outlineVariant.opacity(0.6),
-                            lineWidth: isSelected ? 3 : 2
-                        )
-                    )
+                    .overlay(Circle().stroke(
+                        isSelected ? Color.primaryFixed : (rider.isMe ? Color.primaryFixed : Color.outlineVariant.opacity(0.6)),
+                        lineWidth: isSelected || rider.isMe ? 3 : 2
+                    ))
                     .shadow(color: Color.primaryFixed.opacity(isSelected ? 0.6 : 0.2), radius: isSelected ? 14 : 5)
 
-                AsyncImage(url: URL(string: rider.imgUrl)) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Circle().fill(Color.surfaceVariant)
+                if let url = rider.avatarUrl.flatMap(URL.init) {
+                    AsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                    placeholder: { Circle().fill(Color.surfaceVariant) }
+                        .frame(width: size - 8, height: size - 8)
+                        .clipShape(Circle())
+                } else {
+                    Text(String(rider.name.prefix(1)).uppercased())
+                        .font(.system(size: size * 0.3, weight: .bold))
+                        .foregroundColor(rider.isMe ? Color.primaryFixed : Color.onSurface)
                 }
-                .frame(width: size - 8, height: size - 8)
-                .clipShape(Circle())
 
-                // Rank badge
                 Text("\(rider.rank)")
                     .font(.system(size: 8, weight: .black, design: .monospaced))
-                    .foregroundColor(Color.onPrimaryFixed)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
+                    .foregroundColor(rider.rank == 1 ? Color.onPrimaryFixed : Color.onSurface)
+                    .padding(.horizontal, 4).padding(.vertical, 2)
                     .background(rider.rank == 1 ? Color.primaryFixed : Color.surfaceContainerHighest)
                     .clipShape(Capsule())
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -372,26 +529,92 @@ struct RiderMapPin: View {
                     .frame(width: size, height: size)
             }
 
-            // Small triangle pointer
             Triangle()
-                .fill(isSelected ? Color.primaryFixed : Color.outlineVariant.opacity(0.6))
+                .fill(isSelected ? Color.primaryFixed : (rider.isMe ? Color.primaryFixed : Color.outlineVariant.opacity(0.6)))
                 .frame(width: 10, height: 6)
                 .offset(y: -1)
 
-            // Name tag
             if isSelected {
                 Text(rider.name.uppercased())
                     .font(.system(size: 9, weight: .black, design: .monospaced))
                     .foregroundColor(Color.onSurface)
                     .tracking(1)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(Color.surfaceContainerHigh.opacity(0.92))
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
                     .transition(.scale.combined(with: .opacity))
             }
         }
+        .animation(.spring(response: 0.3), value: isSelected)
+    }
+}
+
+// MARK: - Live Leaderboard Card
+
+struct LiveLeaderboardCard: View {
+    let row: NavLeaderboardRow
+    var isSelected: Bool = false
+
+    private var isHighlighted: Bool { row.rank == 1 || isSelected || row.isMe }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("\(row.rank)")
+                .font(.system(size: 15, weight: .black, design: .monospaced))
+                .foregroundColor(isHighlighted ? Color.primaryFixed : Color.onSurfaceVariant)
+                .frame(width: 26)
+
+            Group {
+                if let url = row.avatarUrl.flatMap(URL.init) {
+                    AsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                    placeholder: { Circle().fill(Color.surfaceVariant) }
+                } else {
+                    Circle().fill(Color.surfaceVariant)
+                        .overlay(
+                            Text(String(row.name.prefix(1)).uppercased())
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(isHighlighted ? Color.primaryFixed : Color.onSurface)
+                        )
+                }
+            }
+            .frame(width: 36, height: 36)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(
+                isHighlighted ? Color.primaryFixed : Color.outlineVariant.opacity(0.4),
+                lineWidth: isHighlighted ? 2 : 1
+            ))
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(row.name)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(Color.onSurface)
+                    if row.isMe {
+                        Text("YOU")
+                            .font(.system(size: 7, weight: .black, design: .monospaced))
+                            .foregroundColor(Color.onPrimaryFixed)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.primaryFixed).clipShape(Capsule())
+                    }
+                }
+                HStack(spacing: 3) {
+                    Text(String(format: "%.1f", row.distanceToGoalKm))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(isHighlighted ? Color.primaryFixed : Color.onSurfaceVariant)
+                    Text("KM TO GO")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color.onSurfaceVariant)
+                }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(isHighlighted ? Color.primaryFixed.opacity(0.12) : Color.surfaceContainerHigh.opacity(0.88))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(
+            isHighlighted ? Color.primaryFixed : Color.outlineVariant.opacity(0.3),
+            lineWidth: isHighlighted ? 1.5 : 1
+        ))
         .animation(.spring(response: 0.3), value: isSelected)
     }
 }
@@ -404,87 +627,22 @@ struct DestinationPin: View {
     var body: some View {
         VStack(spacing: 2) {
             ZStack {
-                Circle()
-                    .fill(Color.primaryFixed)
-                    .frame(width: 44, height: 44)
+                Circle().fill(Color.primaryFixed).frame(width: 44, height: 44)
                     .shadow(color: Color.primaryFixed.opacity(0.7), radius: 12)
                 Image(systemName: "flag.checkered")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(Color.onPrimaryFixed)
             }
-            Triangle()
-                .fill(Color.primaryFixed)
-                .frame(width: 10, height: 6)
-                .offset(y: -1)
+            Triangle().fill(Color.primaryFixed).frame(width: 10, height: 6).offset(y: -1)
             Text(name.uppercased())
                 .font(.system(size: 8, weight: .black, design: .monospaced))
                 .foregroundColor(Color.onSurface)
                 .tracking(0.5)
                 .lineLimit(1)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
+                .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(Color.surfaceContainerHigh.opacity(0.92))
                 .clipShape(Capsule())
         }
-    }
-}
-
-// MARK: - Leaderboard Card
-
-struct LeaderboardCard: View {
-    let rider: RiderOnMap
-    var isSelected: Bool = false
-
-    private var isLeader: Bool { rider.rank == 1 }
-    private var isHighlighted: Bool { isLeader || isSelected }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Text("\(rider.rank)")
-                .font(.system(size: 15, weight: .black, design: .monospaced))
-                .foregroundColor(isHighlighted ? Color.primaryFixed : Color.onSurfaceVariant)
-                .frame(width: 26)
-
-            AsyncImage(url: URL(string: rider.imgUrl)) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Circle().fill(Color.surfaceVariant)
-            }
-            .frame(width: 36, height: 36)
-            .clipShape(Circle())
-            .overlay(
-                Circle().stroke(
-                    isHighlighted ? Color.primaryFixed : Color.outlineVariant.opacity(0.4),
-                    lineWidth: isHighlighted ? 2 : 1
-                )
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(rider.name)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Color.onSurface)
-                HStack(spacing: 3) {
-                    Text(String(format: "%.1f", rider.distanceToGoal))
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(isHighlighted ? Color.primaryFixed : Color.onSurfaceVariant)
-                    Text("KM TO GO")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(Color.onSurfaceVariant)
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(isHighlighted ? Color.primaryFixed.opacity(0.12) : Color.surfaceContainerHigh.opacity(0.88))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(
-                    isHighlighted ? Color.primaryFixed : Color.outlineVariant.opacity(0.3),
-                    lineWidth: isHighlighted ? 1.5 : 1
-                )
-        )
-        .animation(.spring(response: 0.3), value: isSelected)
     }
 }
 
@@ -500,18 +658,14 @@ struct NavStatPill: View {
         VStack(alignment: .center, spacing: 1) {
             Text(label)
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundColor(Color.onSurfaceVariant)
-                .tracking(1)
+                .foregroundColor(Color.onSurfaceVariant).tracking(1)
             Text(value)
                 .font(.system(size: 17, weight: .black, design: .monospaced))
                 .foregroundColor(accentColor ?? Color.onSurface)
             if let unit {
-                Text(unit)
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color.onSurfaceVariant)
+                Text(unit).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundColor(Color.onSurfaceVariant)
             } else {
-                Text(" ")
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                Text(" ").font(.system(size: 8, weight: .medium, design: .monospaced))
             }
         }
         .frame(width: 72, height: 72)
@@ -537,5 +691,7 @@ struct Triangle: Shape {
 #Preview {
     NavigationStack {
         RideNavigationView()
+            .environmentObject(AppState())
+            .environment(Clerk.shared)
     }
 }

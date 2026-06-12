@@ -4,11 +4,11 @@ struct RideSummaryView: View {
     @Environment(\.dismiss) private var dismiss
 
     private let leaderboard: [(rank: String, name: String, role: String, sync: String, imgUrl: String)] = [
-        ("01", "Ghost Rider 01", "SQUAD LEADER • 100% SYNC", "100%",
+        ("01", "Ghost Rider 01", "RIDE LEADER • 100% SYNC", "100%",
          "https://lh3.googleusercontent.com/aida-public/AB6AXuAx6XWZwwLVdo1d8NlDDCir4bF88KWjOAWF8BsFU7TPui59Wy9CHNT01cPH2sG5DbiJ2vgR-D6isYhTHQEqg2xujV2bPa9_b1GXdkWyMnjMmHB9t1fkFWI7FC4PN5ONuHVx2DpEuRBz8DJup61XEkm9ISyTWE2Lw0tzBY811A5ttFMOH7eczMPpB9HWOSU-fiBRSBhZDiFUthvaXKhGnx3MSb3hGzX--S70uTEJA7xbWNpZtPMpRI6z6zs-rWtynmybwSj_zrzi-Ak"),
-        ("02", "NightHawk", "WINGMAN • 94% SYNC", "94%",
+        ("02", "NightHawk", "PACE KEEPER • 94% SYNC", "94%",
          "https://lh3.googleusercontent.com/aida-public/AB6AXuC992f9Cm7jTCvt3mfOSge5BkbqYGv4uOxpnhjH_JbSzonkeayM42n912CpuKKsDWDo68jSgPmL1LrDWcCDXj3t_Exrt0mXfpz9GM_Hd2MNr98snCoqN0w2v6v7ZmJGeAJhzPp4M0wO26X2cMJXJowCeaY33B0sV1wNHqcwGQ3awcuuxgvONLN_2WBMTWQ8ktHT3iz-6yJ9GQdO0dN-ZH8AO_7CHrmVd7U0N21WDH71s_HTnMFJhH43-JitVbsu9Bu3AsoLPW_31XY"),
-        ("03", "Valkyrie", "SWEEP • 88% SYNC", "88%",
+        ("03", "Valkyrie", "TRAIL GUARDIAN • 88% SYNC", "88%",
          "https://lh3.googleusercontent.com/aida-public/AB6AXuDTealI-uVMH5912keenzHV7rQcE7Bf20M3iQDQqN046qi9YuWovLHScoClfiGymfH5LDnCrapyYP3jhTOT5AxPlF4_KchhrahgvPylfZkm09sDR0yPLkVEmNobRRKAX7rShT2_9mVow5BoJEMyvRgPzrWSYFo7HKgdiFqwD_A_ecwXTv-sJB0WP9yP53grYNvuqXt97-a1r9YO9hmISgaMeBosTOrDbjmTBnw2vI0tqZf6PsmIHl1sf0Il9TUpaXUl5J7IcJCm76g")
     ]
 

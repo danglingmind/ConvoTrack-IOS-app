@@ -107,21 +107,6 @@ struct CoordinationOverlayView: View {
 
                 Spacer()
 
-                // PTT Button
-                HStack {
-                    Spacer()
-                    Button(action: {}) {
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(Color.onPrimaryFixed)
-                            .frame(width: 64, height: 64)
-                            .background(Color.primaryFixed)
-                            .clipShape(Circle())
-                            .shadow(color: Color.primaryFixed.opacity(0.4), radius: 12)
-                    }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 100)
-                }
             }
 
             // Bottom Nav

@@ -14,9 +14,7 @@ struct MainTabView: View {
                         RideHistoryView()
                     }
                 case .track:
-                    NavigationStack {
-                        HomeView(activeTab: $activeTab, showJoinRide: $showJoinRide)
-                    }
+                    HomeView(activeTab: $activeTab, showJoinRide: $showJoinRide)
                 case .profile:
                     ProfileView()
                 }
@@ -31,6 +29,7 @@ struct MainTabView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showJoinRide) {
             JoinRideView()
+                .environmentObject(appState)
         }
     }
 }
