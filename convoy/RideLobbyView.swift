@@ -206,23 +206,10 @@ struct RideLobbyView: View {
 
     private var mapSection: some View {
         ZStack(alignment: .bottom) {
-            Map(position: $mapPosition) {
-                if !routeCoordinates.isEmpty {
-                    MapPolyline(coordinates: routeCoordinates)
-                        .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-                }
-                if let wp = appState.currentRide?.waypoints.first(where: { $0.type == "START" }) {
-                    let coord = CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng)
-                    Annotation("", coordinate: coord, anchor: .bottom) { LobbyStartPin() }
-                }
-                if let wp = appState.currentRide?.waypoints.first(where: { $0.type == "DESTINATION" }) {
-                    let coord = CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng)
-                    Annotation("", coordinate: coord, anchor: .bottom) { DestinationPin(name: destinationName) }
-                }
-            }
-            .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
-            .allowsHitTesting(false)
-            .frame(maxWidth: .infinity, minHeight: 360)
+            Map(position: $mapPosition, content: lobbyMapContent)
+                .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+                .allowsHitTesting(false)
+                .frame(maxWidth: .infinity, minHeight: 360)
 
             LinearGradient(
                 colors: [Color.surfaceDim, Color.surfaceDim.opacity(0.55), .clear],
@@ -249,6 +236,35 @@ struct RideLobbyView: View {
             }
         }
         .frame(height: 360)
+    }
+
+    @MapContentBuilder
+    private func lobbyMapContent() -> some MapContent {
+        if !routeCoordinates.isEmpty {
+            MapPolyline(coordinates: routeCoordinates)
+                .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+        }
+        lobbyWaypointAnnotations
+    }
+
+    @MapContentBuilder
+    private var lobbyWaypointAnnotations: some MapContent {
+        let waypoints = appState.currentRide?.waypoints ?? []
+        if let wp = waypoints.first(where: { $0.type == "START" }) {
+            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
+                LobbyStartPin()
+            }
+        }
+        ForEach(waypoints.filter { $0.type == "WAYPOINT" }, id: \.order) { wp in
+            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
+                WaypointPin(name: wp.name)
+            }
+        }
+        if let wp = waypoints.first(where: { $0.type == "DESTINATION" }) {
+            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
+                DestinationPin(name: wp.name)
+            }
+        }
     }
 
     // MARK: - Roster Section

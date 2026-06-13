@@ -86,18 +86,7 @@ struct RideSummaryView: View {
                             .foregroundColor(Color.primaryFixed.opacity(0.15))
                     )
             } else {
-                Map(position: $mapPosition) {
-                    MapPolyline(coordinates: routeCoordinates)
-                        .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-                    if let startWp = mapWaypoints.first(where: { $0.type == "START" }) {
-                        let coord = CLLocationCoordinate2D(latitude: startWp.lat, longitude: startWp.lng)
-                        Annotation("", coordinate: coord, anchor: .bottom) { LobbyStartPin() }
-                    }
-                    if let destWp = mapWaypoints.first(where: { $0.type == "DESTINATION" }) {
-                        let coord = CLLocationCoordinate2D(latitude: destWp.lat, longitude: destWp.lng)
-                        Annotation("", coordinate: coord, anchor: .bottom) { DestinationPin(name: destWp.name) }
-                    }
-                }
+                Map(position: $mapPosition, content: summaryMapContent)
                 .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
                 .allowsHitTesting(false)
                 .frame(maxWidth: .infinity)
@@ -275,6 +264,34 @@ struct RideSummaryView: View {
             }
         }
         .padding(.horizontal, 20)
+    }
+
+    // MARK: - Map Content
+
+    @MapContentBuilder
+    private func summaryMapContent() -> some MapContent {
+        MapPolyline(coordinates: routeCoordinates)
+            .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+        summaryWaypointAnnotations
+    }
+
+    @MapContentBuilder
+    private var summaryWaypointAnnotations: some MapContent {
+        if let wp = mapWaypoints.first(where: { $0.type == "START" }) {
+            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
+                LobbyStartPin()
+            }
+        }
+        ForEach(mapWaypoints.filter { $0.type == "WAYPOINT" }, id: \.order) { wp in
+            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
+                WaypointPin(name: wp.name)
+            }
+        }
+        if let wp = mapWaypoints.first(where: { $0.type == "DESTINATION" }) {
+            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
+                DestinationPin(name: wp.name)
+            }
+        }
     }
 
     // MARK: - Helpers

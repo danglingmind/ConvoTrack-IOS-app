@@ -72,14 +72,24 @@ struct HomeView: View {
                             }
                             Spacer()
                             ZStack(alignment: .bottomTrailing) {
-                                Circle()
-                                    .fill(Color.surfaceVariant)
-                                    .frame(width: 56, height: 56)
-                                    .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
-                                    .overlay(
-                                        Text(String(clerkDisplayName.prefix(1)).uppercased())
-                                            .font(.headlineMd).foregroundColor(Color.primaryFixed)
-                                    )
+                                AsyncImage(url: clerkImageUrl) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image.resizable().scaledToFill()
+                                            .frame(width: 56, height: 56)
+                                            .clipShape(Circle())
+                                            .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
+                                    default:
+                                        Circle()
+                                            .fill(Color.surfaceVariant)
+                                            .frame(width: 56, height: 56)
+                                            .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
+                                            .overlay(
+                                                Text(String(clerkDisplayName.prefix(1)).uppercased())
+                                                    .font(.headlineMd).foregroundColor(Color.primaryFixed)
+                                            )
+                                    }
+                                }
                                 Circle()
                                     .fill(Color.primaryFixed)
                                     .frame(width: 14, height: 14)
@@ -202,6 +212,11 @@ struct HomeView: View {
             .compactMap { $0 }.filter { !$0.isEmpty }
         let name = parts.joined(separator: " ")
         return name.isEmpty ? (clerk.user?.username ?? "Rider") : name
+    }
+
+    private var clerkImageUrl: URL? {
+        guard let str = clerk.user?.imageUrl, !str.isEmpty else { return nil }
+        return URL(string: str)
     }
 
 }

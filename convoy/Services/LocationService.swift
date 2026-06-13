@@ -13,7 +13,6 @@ final class LocationService: NSObject {
     weak var delegate: LocationServiceDelegate?
 
     private let manager = CLLocationManager()
-    private var updateTimer: Timer?
     private(set) var lastLocation: CLLocation?
 
     private override init() {
@@ -21,44 +20,34 @@ final class LocationService: NSObject {
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.distanceFilter = kCLDistanceFilterNone
+        manager.pausesLocationUpdatesAutomatically = false
         UIDevice.current.isBatteryMonitoringEnabled = true
     }
 
     // MARK: - Permission
 
     func requestPermission() {
-        manager.requestWhenInUseAuthorization()
+        manager.requestAlwaysAuthorization()
     }
 
     // MARK: - Tracking
 
     func start() {
-        manager.startUpdatingLocation()
-        // Emit location every 2 seconds as required by backend
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.fireUpdate()
+        // allowsBackgroundLocationUpdates throws NSInvalidArgumentException if UIBackgroundModes
+        // doesn't include "location" — check the plist at runtime before enabling.
+        if let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String],
+           modes.contains("location") {
+            manager.allowsBackgroundLocationUpdates = true
         }
+        manager.startUpdatingLocation()
     }
 
     func stop() {
         manager.stopUpdatingLocation()
-        updateTimer?.invalidate()
-        updateTimer = nil
     }
 
     // MARK: - Private
 
-    private func fireUpdate() {
-        guard let location = lastLocation, let delegate else { return }
-        let battery = Double(UIDevice.current.batteryLevel).clamped(to: 0...1)
-        let signal = signalStrength()
-        Task { @MainActor in
-            delegate.locationService(self, didUpdate: location, battery: battery, signalStrength: signal)
-        }
-    }
-
-    // CoreTelephony does not expose raw signal bars on modern iOS.
-    // We map network availability to a coarse tier as a best-effort proxy.
     private func signalStrength() -> String {
         return "STRONG"
     }
@@ -68,7 +57,14 @@ final class LocationService: NSObject {
 
 extension LocationService: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        lastLocation = locations.last
+        guard let location = locations.last else { return }
+        lastLocation = location
+        guard let del = delegate else { return }
+        let battery = Double(UIDevice.current.batteryLevel).clamped(to: 0...1)
+        let signal = signalStrength()
+        Task { @MainActor in
+            del.locationService(self, didUpdate: location, battery: battery, signalStrength: signal)
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

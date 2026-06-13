@@ -39,19 +39,32 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var routeVersion: Int = 0   // increments when route is ready; Equatable
     @Published var destinationCoordinate: CLLocationCoordinate2D? = nil
     @Published var startCoordinate: CLLocationCoordinate2D? = nil
+    @Published var middleWaypoints: [Waypoint] = []
+    @Published var locationTick: Int = 0   // increments each update, triggers camera onChange
+    @Published var userHeading: Double = 0
+    private(set) var userLocation: CLLocationCoordinate2D? = nil
     @Published var showSplitAlert = false
     @Published var showSummary = false
     @Published var isEnding = false
     @Published var endError: String? = nil
+    @Published var currentInstruction: String = ""
+    @Published var distanceToNextTurnMeters: Double = 0
 
     var amILeader: Bool { !myUserId.isEmpty && myUserId == leaderId }
 
     var etaString: String {
-        guard mySpeedKmh > 1, myDistanceToGoalKm > 0 else { return "--:--" }
-        let secs = (myDistanceToGoalKm / mySpeedKmh) * 3600
-        let arrival = Date().addingTimeInterval(secs)
+        guard routeExpectedTravelTime > 0, totalDistanceMeters > 0, myDistanceToGoalKm >= 0 else { return "--:--" }
+        let remainingFraction = (myDistanceToGoalKm * 1000) / totalDistanceMeters
+        let remainingSecs = routeExpectedTravelTime * max(0, remainingFraction)
+        let arrival = Date().addingTimeInterval(remainingSecs)
         let comps = Calendar.current.dateComponents([.hour, .minute], from: arrival)
         return String(format: "%02d:%02d", comps.hour ?? 0, comps.minute ?? 0)
+    }
+
+    private struct NavStep {
+        let instruction: String
+        let endCoordinate: CLLocationCoordinate2D
+        let distanceMeters: Double
     }
 
     private var rideId = ""
@@ -59,6 +72,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var myUserId = ""
     private var leaderId = ""
     private var totalDistanceMeters: Double = 0
+    private var routeExpectedTravelTime: TimeInterval = 0
+    private var navSteps: [NavStep] = []
+    private var currentStepIndex: Int = 0
+    private var lastBroadcastDate: Date = .distantPast
+    private var lastCameraTickDate: Date = .distantPast
 
     func setup(rideId: String, ride: Ride, myUserId: String) async {
         self.rideId = rideId
@@ -74,6 +92,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         if let start = sorted.first {
             startCoordinate = CLLocationCoordinate2D(latitude: start.lat, longitude: start.lng)
         }
+        middleWaypoints = sorted.filter { $0.type == "WAYPOINT" }
 
         // Pre-populate leaderboard so it shows immediately before any socket updates
         let active = ride.participants.filter { $0.status != "LEFT" }
@@ -143,6 +162,19 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
     func locationService(_ service: LocationService, didUpdate location: CLLocation, battery: Double, signalStrength: String) {
         mySpeedKmh = max(0, location.speed * 3.6)
+        userLocation = location.coordinate
+        if location.course >= 0 { userHeading = location.course }
+        updateCurrentStep(location: location)
+
+        let now = Date()
+        // Cap camera updates at ~10 Hz so overlapping animations don't jam the map
+        if now.timeIntervalSince(lastCameraTickDate) >= 0.1 {
+            lastCameraTickDate = now
+            locationTick += 1
+        }
+
+        guard now.timeIntervalSince(lastBroadcastDate) >= 2.0 else { return }
+        lastBroadcastDate = now
         SocketClient.shared.emitLocationUpdate(
             rideId: rideId,
             lat: location.coordinate.latitude,
@@ -207,16 +239,42 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)))
         }
         var allCoords: [CLLocationCoordinate2D] = []
+        var totalTime: TimeInterval = 0
+        var steps: [NavStep] = []
         for i in 0..<items.count - 1 {
             let req = MKDirections.Request()
             req.source = items[i]; req.destination = items[i + 1]; req.transportType = .automobile
             if let route = try? await MKDirections(request: req).calculate().routes.first {
                 let coords = route.polyline.coordinates
                 allCoords += (i == 0) ? coords : Array(coords.dropFirst())
+                totalTime += route.expectedTravelTime
+                for step in route.steps {
+                    let instr = step.instructions.trimmingCharacters(in: .whitespaces)
+                    guard !instr.isEmpty, let end = step.polyline.coordinates.last else { continue }
+                    steps.append(NavStep(instruction: instr, endCoordinate: end, distanceMeters: step.distance))
+                }
             }
         }
+        navSteps = steps
+        currentStepIndex = 0
+        if let first = navSteps.first {
+            currentInstruction = first.instruction
+            distanceToNextTurnMeters = first.distanceMeters
+        }
         routeCoordinates = allCoords
-        routeVersion += 1  // always trigger camera update, even if route calc failed
+        routeExpectedTravelTime = totalTime
+        routeVersion += 1
+    }
+
+    private func updateCurrentStep(location: CLLocation) {
+        guard currentStepIndex < navSteps.count else { return }
+        let step = navSteps[currentStepIndex]
+        let endLoc = CLLocation(latitude: step.endCoordinate.latitude, longitude: step.endCoordinate.longitude)
+        distanceToNextTurnMeters = location.distance(from: endLoc)
+        if distanceToNextTurnMeters < 30, currentStepIndex + 1 < navSteps.count {
+            currentStepIndex += 1
+            currentInstruction = navSteps[currentStepIndex].instruction
+        }
     }
 }
 
@@ -238,6 +296,14 @@ struct RideNavigationView: View {
 
     private var destinationName: String { appState.currentRide?.destinationName ?? "Destination" }
 
+    private var navCameraDistance: Double {
+        switch vm.mySpeedKmh {
+        case ..<20:  return 300
+        case ..<60:  return 500
+        default:     return 800
+        }
+    }
+
     var body: some View {
         ZStack {
             mapLayer
@@ -253,6 +319,8 @@ struct RideNavigationView: View {
         }
         .task { await loadAndSetup() }
         .onChange(of: vm.routeVersion) { _, _ in
+            // Show full route overview until the first location update arrives
+            guard vm.locationTick == 0 else { return }
             if !vm.routeCoordinates.isEmpty {
                 let poly = MKPolyline(coordinates: vm.routeCoordinates, count: vm.routeCoordinates.count)
                 let rect = poly.boundingMapRect
@@ -261,6 +329,18 @@ struct RideNavigationView: View {
                 cameraPosition = .region(MKCoordinateRegion(
                     center: dest,
                     span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
+                ))
+            }
+        }
+        .onChange(of: vm.locationTick) { old, new in
+            guard let coord = vm.userLocation else { return }
+            let isFirstFix = old == 0
+            withAnimation(isFirstFix ? .easeInOut(duration: 1.5) : .linear(duration: 0.3)) {
+                cameraPosition = .camera(MapCamera(
+                    centerCoordinate: coord,
+                    distance: navCameraDistance,
+                    heading: vm.userHeading,
+                    pitch: 55
                 ))
             }
         }
@@ -302,43 +382,56 @@ struct RideNavigationView: View {
     // MARK: - Map
 
     private var mapLayer: some View {
-        Map(position: $cameraPosition) {
-            if !vm.routeCoordinates.isEmpty {
-                MapPolyline(coordinates: vm.routeCoordinates)
-                    .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-            }
+        Map(position: $cameraPosition, content: mapContent)
+            .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+            .ignoresSafeArea()
+    }
 
-            // Live rider pins from socket (other riders only — current user shown via UserAnnotation)
-            ForEach(vm.riders.filter { !$0.isMe }) { rider in
-                Annotation(rider.name, coordinate: rider.coordinate, anchor: .bottom) {
-                    LiveRiderPin(rider: rider, isSelected: selectedRiderId == rider.id)
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedRiderId = (selectedRiderId == rider.id) ? nil : rider.id
-                            }
-                        }
-                }
-            }
+    @MapContentBuilder
+    private func mapContent() -> some MapContent {
+        routePolyline
+        riderAnnotations
+        waypointAnnotations
+    }
 
-            // Start pin
-            if let coord = vm.startCoordinate {
-                Annotation("", coordinate: coord, anchor: .center) {
-                    StartPin()
-                }
-            }
-
-            // Destination pin
-            if let coord = vm.destinationCoordinate {
-                Annotation("", coordinate: coord, anchor: .bottom) {
-                    DestinationPin(name: destinationName)
-                }
-            }
-
-            // Current user location (native iOS dot)
-            UserAnnotation()
+    @MapContentBuilder
+    private var routePolyline: some MapContent {
+        if !vm.routeCoordinates.isEmpty {
+            MapPolyline(coordinates: vm.routeCoordinates)
+                .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
         }
-        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
-        .ignoresSafeArea()
+    }
+
+    @MapContentBuilder
+    private var riderAnnotations: some MapContent {
+        ForEach(vm.riders.filter { !$0.isMe }) { rider in
+            Annotation(rider.name, coordinate: rider.coordinate, anchor: .bottom) {
+                LiveRiderPin(rider: rider, isSelected: selectedRiderId == rider.id)
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedRiderId = (selectedRiderId == rider.id) ? nil : rider.id
+                        }
+                    }
+            }
+        }
+    }
+
+    @MapContentBuilder
+    private var waypointAnnotations: some MapContent {
+        if let coord = vm.startCoordinate {
+            Annotation("", coordinate: coord, anchor: .center) { StartPin() }
+        }
+        ForEach(vm.middleWaypoints, id: \.order) { wp in
+            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
+                WaypointPin(name: wp.name)
+            }
+        }
+        if let coord = vm.destinationCoordinate {
+            Annotation("", coordinate: coord, anchor: .bottom) { DestinationPin(name: destinationName) }
+        }
+        if let coord = vm.userLocation {
+            Annotation("", coordinate: coord, anchor: .center) { NavUserArrow() }
+        }
     }
 
     // MARK: - HUD
@@ -409,9 +502,60 @@ struct RideNavigationView: View {
             }
             .padding(.horizontal, 20)
 
+            turnBanner
             leaderboardStrip
         }
         .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private var turnBanner: some View {
+        if !vm.currentInstruction.isEmpty {
+            HStack(spacing: 14) {
+                Image(systemName: maneuverIcon(for: vm.currentInstruction))
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.primaryFixed.opacity(0.18))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primaryFixed.opacity(0.4), lineWidth: 1))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(vm.currentInstruction)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color.onSurface)
+                        .lineLimit(2)
+
+                    if vm.distanceToNextTurnMeters > 0 {
+                        Text(vm.distanceToNextTurnMeters >= 1000
+                             ? String(format: "in %.1f km", vm.distanceToNextTurnMeters / 1000)
+                             : String(format: "in %.0f m", vm.distanceToNextTurnMeters))
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.primaryFixed)
+                    }
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.outlineVariant.opacity(0.25), lineWidth: 1))
+            .padding(.horizontal, 20)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .animation(.spring(response: 0.4), value: vm.currentInstruction)
+        }
+    }
+
+    private func maneuverIcon(for instruction: String) -> String {
+        let l = instruction.lowercased()
+        if l.contains("arrive") || l.contains("destination") { return "flag.checkered" }
+        if l.contains("u-turn") || l.contains("uturn") { return "arrow.uturn.left" }
+        if l.contains("left") { return "arrow.turn.up.left" }
+        if l.contains("right") { return "arrow.turn.up.right" }
+        if l.contains("merge") { return "arrow.merge" }
+        if l.contains("roundabout") || l.contains("rotary") { return "arrow.triangle.turn.up.right.circle" }
+        return "arrow.up"
     }
 
     private var leaderboardStrip: some View {
@@ -604,13 +748,18 @@ struct LiveLeaderboardCard: View {
     var isSelected: Bool = false
 
     private var isHighlighted: Bool { row.rank == 1 || isSelected || row.isMe }
+    private var firstName: String { row.name.components(separatedBy: " ").first ?? row.name }
+    private var lastName: String {
+        let parts = row.name.components(separatedBy: " ")
+        return parts.dropFirst().joined(separator: " ")
+    }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 7) {
             Text("\(row.rank)")
-                .font(.system(size: 15, weight: .black, design: .monospaced))
+                .font(.system(size: 11, weight: .black, design: .monospaced))
                 .foregroundColor(isHighlighted ? Color.primaryFixed : Color.onSurfaceVariant)
-                .frame(width: 26)
+                .frame(width: 18)
 
             Group {
                 if let url = row.avatarUrl.flatMap(URL.init) {
@@ -620,49 +769,105 @@ struct LiveLeaderboardCard: View {
                     Circle().fill(Color.surfaceVariant)
                         .overlay(
                             Text(String(row.name.prefix(1)).uppercased())
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(isHighlighted ? Color.primaryFixed : Color.onSurface)
                         )
                 }
             }
-            .frame(width: 36, height: 36)
+            .frame(width: 26, height: 26)
             .clipShape(Circle())
             .overlay(Circle().stroke(
                 isHighlighted ? Color.primaryFixed : Color.outlineVariant.opacity(0.4),
                 lineWidth: isHighlighted ? 2 : 1
             ))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
-                    Text(row.name)
-                        .font(.system(size: 13, weight: .bold))
+                    Text(firstName)
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundColor(Color.onSurface)
+                        .lineLimit(1)
                     if row.isMe {
                         Text("YOU")
-                            .font(.system(size: 7, weight: .black, design: .monospaced))
+                            .font(.system(size: 6, weight: .black, design: .monospaced))
                             .foregroundColor(Color.onPrimaryFixed)
-                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .padding(.horizontal, 3).padding(.vertical, 1)
                             .background(Color.primaryFixed).clipShape(Capsule())
                     }
                 }
-                HStack(spacing: 3) {
-                    Text(String(format: "%.1f", row.distanceToGoalKm))
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(isHighlighted ? Color.primaryFixed : Color.onSurfaceVariant)
-                    Text("KM TO GO")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                if !lastName.isEmpty {
+                    Text(lastName)
+                        .font(.system(size: 10, weight: .regular))
                         .foregroundColor(Color.onSurfaceVariant)
+                        .lineLimit(1)
                 }
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
+        .padding(.horizontal, 10).padding(.vertical, 8)
         .background(isHighlighted ? Color.primaryFixed.opacity(0.12) : Color.surfaceContainerHigh.opacity(0.88))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(
             isHighlighted ? Color.primaryFixed : Color.outlineVariant.opacity(0.3),
             lineWidth: isHighlighted ? 1.5 : 1
         ))
         .animation(.spring(response: 0.3), value: isSelected)
+    }
+}
+
+// MARK: - Destination Pin
+
+// MARK: - Nav User Arrow
+
+struct NavUserArrow: View {
+    var body: some View {
+        ZStack {
+            // Outer glow ring
+            Circle()
+                .fill(Color(red: 0.0, green: 0.48, blue: 1.0).opacity(0.25))
+                .frame(width: 48, height: 48)
+            // Arrow body
+            ZStack {
+                Circle()
+                    .fill(Color(red: 0.0, green: 0.48, blue: 1.0))
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().stroke(Color.white, lineWidth: 2.5))
+                    .shadow(color: .black.opacity(0.3), radius: 4)
+                Image(systemName: "arrowtriangle.up.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                    .offset(y: -1)
+            }
+        }
+    }
+}
+
+// MARK: - Waypoint Pin
+
+struct WaypointPin: View {
+    let name: String
+
+    var body: some View {
+        VStack(spacing: 2) {
+            ZStack {
+                Circle()
+                    .fill(Color.surfaceContainerHighest)
+                    .frame(width: 32, height: 32)
+                    .overlay(Circle().stroke(Color.tertiaryFixed, lineWidth: 2))
+                    .shadow(color: Color.tertiaryFixed.opacity(0.4), radius: 6)
+                Image(systemName: "mappin")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Color.tertiaryFixed)
+            }
+            Triangle().fill(Color.tertiaryFixed).frame(width: 8, height: 5).offset(y: -1)
+            Text(name.uppercased())
+                .font(.system(size: 7, weight: .black, design: .monospaced))
+                .foregroundColor(Color.onSurface)
+                .tracking(0.5)
+                .lineLimit(1)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Color.surfaceContainerHigh.opacity(0.92))
+                .clipShape(Capsule())
+        }
     }
 }
 

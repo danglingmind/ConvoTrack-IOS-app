@@ -24,11 +24,13 @@ private struct StopSearchField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(label)
-                .font(.labelCaps)
-                .foregroundColor(Color.onSurfaceVariant)
-                .tracking(2)
-                .padding(.bottom, 8)
+            if !label.isEmpty {
+                Text(label)
+                    .font(.labelCaps)
+                    .foregroundColor(Color.onSurfaceVariant)
+                    .tracking(2)
+                    .padding(.bottom, 8)
+            }
 
             ZStack(alignment: .leading) {
                 Image(systemName: icon)
@@ -186,6 +188,7 @@ struct CreateRideView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.surfaceDim.ignoresSafeArea()
+                .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
 
                 ScrollView {
                     VStack(spacing: 24) {
@@ -246,6 +249,7 @@ struct CreateRideView: View {
                     }
                     .padding(.horizontal, 20)
                 }
+                .scrollDismissesKeyboard(.interactively)
             .navigationBarBackButtonHidden(true)
             .navigationTitle("CREATE RIDE")
             .navigationBarTitleDisplayMode(.inline)
@@ -291,7 +295,7 @@ struct CreateRideView: View {
                     stopDot(color: Color.primaryFixed.opacity(0.6), isFirst: false)
                     HStack(alignment: .top, spacing: 8) {
                         StopSearchField(
-                            label: "VIA",
+                            label: "",
                             placeholder: "Search stop...",
                             icon: "mappin",
                             text: $stop.text,

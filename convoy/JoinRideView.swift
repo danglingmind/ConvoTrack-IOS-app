@@ -61,7 +61,10 @@ struct JoinRideView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
+            .contentShape(Rectangle())
+            .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             .toolbar(.hidden, for: .navigationBar)
         }
         .presentationDragIndicator(.visible)
