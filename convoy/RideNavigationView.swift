@@ -98,6 +98,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         socket.onSplitDetected = { [weak self] _ in self?.showSplitAlert = true }
         socket.onSplitResolved = { [weak self] in self?.showSplitAlert = false }
 
+        // Re-join room so the server sends the current state snapshot to this client
+        // and so state updates are received after any socket reconnect.
+        socket.joinRoom(rideId: rideId)
+
         LocationService.shared.delegate = self
         LocationService.shared.requestPermission()
         LocationService.shared.start()
@@ -155,15 +159,20 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private func handleStateUpdate(_ update: RideStateUpdate) {
         riderCount = update.participants.count
 
-        leaderboardRows = update.leaderboard.map { entry in
-            let participant = staticParticipants.first { $0.userId == entry.userId }
-            let distKm = max(0, (totalDistanceMeters - entry.progress) / 1000)
-            return NavLeaderboardRow(
-                id: entry.userId, rank: entry.rank, name: entry.name,
-                avatarUrl: participant?.avatarUrl,
-                distanceToGoalKm: distKm,
-                isMe: entry.userId == myUserId
-            )
+        // Only overwrite the pre-populated leaderboard when the server actually has data.
+        // The initial ride:state_update emitted on start has leaderboard: [] before any
+        // location updates have been processed — don't let that clear what we pre-seeded.
+        if !update.leaderboard.isEmpty {
+            leaderboardRows = update.leaderboard.map { entry in
+                let participant = staticParticipants.first { $0.userId == entry.userId }
+                let distKm = max(0, (totalDistanceMeters - entry.progress) / 1000)
+                return NavLeaderboardRow(
+                    id: entry.userId, rank: entry.rank, name: entry.name,
+                    avatarUrl: participant?.avatarUrl,
+                    distanceToGoalKm: distKm,
+                    isMe: entry.userId == myUserId
+                )
+            }
         }
 
         riders = update.participants.compactMap { live in
@@ -207,13 +216,15 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             }
         }
         routeCoordinates = allCoords
-        if !allCoords.isEmpty { routeVersion += 1 }
+        routeVersion += 1  // always trigger camera update, even if route calc failed
     }
 }
 
 // MARK: - Main View
 
 struct RideNavigationView: View {
+    let rideId: String
+
     @Environment(\.dismiss) private var dismiss
     @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var appState: AppState
@@ -242,10 +253,16 @@ struct RideNavigationView: View {
         }
         .task { await loadAndSetup() }
         .onChange(of: vm.routeVersion) { _, _ in
-            guard !vm.routeCoordinates.isEmpty else { return }
-            let poly = MKPolyline(coordinates: vm.routeCoordinates, count: vm.routeCoordinates.count)
-            let rect = poly.boundingMapRect
-            cameraPosition = .rect(rect.insetBy(dx: -rect.width * 0.15, dy: -rect.height * 0.15))
+            if !vm.routeCoordinates.isEmpty {
+                let poly = MKPolyline(coordinates: vm.routeCoordinates, count: vm.routeCoordinates.count)
+                let rect = poly.boundingMapRect
+                cameraPosition = .rect(rect.insetBy(dx: -rect.width * 0.15, dy: -rect.height * 0.15))
+            } else if let dest = vm.destinationCoordinate {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: dest,
+                    span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
+                ))
+            }
         }
         .sheet(isPresented: $showRegroup) {
             RegroupBottomSheet(
@@ -259,7 +276,7 @@ struct RideNavigationView: View {
             .presentationDetents([.large])
         }
         .navigationDestination(isPresented: $vm.showSummary) {
-            RideSummaryView(rideId: appState.currentRideId, rideTitle: appState.currentRide?.title, isPostRide: true)
+            RideSummaryView(rideId: rideId, rideTitle: appState.currentRide?.title, isPostRide: true)
         }
         .alert("Couldn't End Ride", isPresented: $showEndError) {
             Button("OK", role: .cancel) {}
@@ -274,12 +291,9 @@ struct RideNavigationView: View {
     // MARK: - Load
 
     private func loadAndSetup() async {
-        guard let rideId = appState.currentRideId else { return }
-        var ride = appState.currentRide
-        if ride == nil {
-            ride = try? await APIClient.shared.getRide(rideId)
-            appState.currentRide = ride
-        }
+        let fetched = try? await APIClient.shared.getRide(rideId)
+        let ride = fetched ?? appState.currentRide
+        if let fetched { appState.currentRide = fetched }
         guard let ride else { return }
         let userId = clerk.user?.id ?? ""
         await vm.setup(rideId: rideId, ride: ride, myUserId: userId)
@@ -740,7 +754,7 @@ struct Triangle: Shape {
 
 #Preview {
     NavigationStack {
-        RideNavigationView()
+        RideNavigationView(rideId: "preview")
             .environmentObject(AppState())
             .environment(Clerk.shared)
     }

@@ -13,6 +13,7 @@ final class LobbyViewModel: ObservableObject {
     @Published var socketConnected = false
     @Published var startError: String? = nil
 
+    var rideId = ""
     var myUserId = ""
     var leaderId = ""
 
@@ -86,6 +87,13 @@ final class LobbyViewModel: ObservableObject {
         startError = nil
         do {
             try await APIClient.shared.startRide(rideId)
+        } catch let error as APIClientError {
+            switch error {
+            case .serverError(let msg) where msg.contains("RIDE_NOT_IN_LOBBY"):
+                break  // ride is already ACTIVE — treat as success and navigate
+            default:
+                startError = error.localizedDescription
+            }
         } catch {
             startError = error.localizedDescription
         }
@@ -169,7 +177,7 @@ struct RideLobbyView: View {
             }
         }
         .navigationDestination(isPresented: $showNavigation) {
-            RideNavigationView()
+            RideNavigationView(rideId: vm.rideId)
         }
         .background(
             ShareSheetPresenter(
@@ -329,7 +337,7 @@ struct RideLobbyView: View {
     private var leaderStartButton: some View {
         Button(action: {
             Task {
-                await vm.startRide(rideId: appState.currentRideId ?? "")
+                await vm.startRide(rideId: vm.rideId)
                 if vm.startError == nil {
                     // Mark ride as ACTIVE locally so resuming correctly shows RESUME NAVIGATION
                     if let ride = appState.currentRide {
@@ -377,7 +385,7 @@ struct RideLobbyView: View {
 
     private var riderReadyButton: some View {
         Button(action: {
-            vm.markReady(rideId: appState.currentRideId ?? "")
+            vm.markReady(rideId: vm.rideId)
         }) {
             HStack(spacing: 12) {
                 Image(systemName: vm.myStatus == "READY" ? "checkmark.circle.fill" : "circle")
@@ -405,6 +413,7 @@ struct RideLobbyView: View {
 
     private func loadRideAndConnect() async {
         guard let rideId = appState.currentRideId else { return }
+        vm.rideId = rideId
 
         // Always fetch fresh — ride status may have changed since last visit (e.g. LOBBY → ACTIVE)
         if let ride = try? await APIClient.shared.getRide(rideId) {

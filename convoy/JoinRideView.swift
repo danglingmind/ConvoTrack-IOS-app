@@ -281,8 +281,8 @@ struct JoinRideView: View {
             case .serverError(let msg) where msg.contains("INVITE_CODE_NOT_FOUND") || msg.contains("404") || msg.contains("NOT_FOUND"):
                 errorMessage = "No ride found with this code. Double-check and try again."
                 showError = true
-            case .serverError(let msg) where msg.contains("RIDE_NOT_IN_LOBBY") || msg.contains("409"):
-                errorMessage = "This ride has already started or ended."
+            case .serverError(let msg) where msg.contains("RIDE_ENDED"):
+                errorMessage = "This ride has already ended."
                 showError = true
             default:
                 errorMessage = error.localizedDescription
@@ -325,8 +325,8 @@ struct JoinRideView: View {
                     return
                 } else if msg.contains("QUOTA_EXCEEDED") {
                     errorMessage = "You're already in another active ride. End it before joining a new one."
-                } else if msg.contains("RIDE_NOT_IN_LOBBY") || msg.contains("NOT_IN_LOBBY") {
-                    errorMessage = "This ride has already started. You can't join mid-ride."
+                } else if msg.contains("RIDE_ENDED") {
+                    errorMessage = "This ride has already ended."
                 } else {
                     errorMessage = "Couldn't join: \(msg)"
                 }
