@@ -30,7 +30,6 @@ struct Ride: Codable {
 }
 
 struct Waypoint: Codable {
-    let id: String
     let order: Int
     let name: String
     let type: String
@@ -139,6 +138,24 @@ struct SummaryParticipant: Codable {
     let avatarUrl: String?
     let rideTitle: String?
     let syncScore: Int?
+}
+
+// MARK: - Ride History
+
+struct MyRidesResponse: Codable {
+    let rides: [HistoryRide]
+}
+
+struct HistoryRide: Codable, Identifiable {
+    var id: String { rideId }
+    let rideId: String
+    let title: String
+    let startedAt: String?
+    let endedAt: String?
+    let distanceMeters: Double
+    let durationSeconds: Int?
+    let avgSpeedKmh: Double?
+    let compactnessScore: Double?
 }
 
 // MARK: - API Errors
