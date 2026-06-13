@@ -528,11 +528,11 @@ struct CreateRideView: View {
             lat: startCoord.latitude,
             lng: startCoord.longitude
         ))
-        for (i, stop) in middleStops.enumerated() {
+        for stop in middleStops {
             guard let item = stop.mapItem else { continue }
             let c = item.location.coordinate
             waypoints.append(CreateWaypoint(
-                order: i + 1,
+                order: waypoints.count,
                 name: item.name ?? stop.text,
                 type: "WAYPOINT",
                 lat: c.latitude,
