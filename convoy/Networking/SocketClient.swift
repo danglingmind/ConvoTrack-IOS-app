@@ -12,6 +12,7 @@ final class SocketClient {
     var onParticipantJoined: ((RideParticipant) -> Void)?
     var onParticipantLeft: ((String) -> Void)?
     var onParticipantReady: ((String) -> Void)?
+    var onLobbyRoster: (([RideParticipant], String) -> Void)?
     var onSplitDetected: (([String: Any]) -> Void)?
     var onSplitResolved: (() -> Void)?
     var onEmergencyStarted: (([String: Any]) -> Void)?
@@ -120,6 +121,16 @@ final class SocketClient {
             guard let dict = data.first as? [String: Any],
                   let userId = dict["userId"] as? String else { return }
             DispatchQueue.main.async { self?.onParticipantReady?(userId) }
+        }
+
+        socket.on("ride:lobby_roster") { [weak self] data, _ in
+            guard let self,
+                  let dict = data.first as? [String: Any],
+                  let leaderId = dict["leaderId"] as? String,
+                  let rawList = dict["participants"] as? [[String: Any]],
+                  let json = try? JSONSerialization.data(withJSONObject: rawList),
+                  let participants = try? self.decoder.decode([RideParticipant].self, from: json) else { return }
+            DispatchQueue.main.async { self.onLobbyRoster?(participants, leaderId) }
         }
 
         socket.on("ride:split_detected") { [weak self] data, _ in

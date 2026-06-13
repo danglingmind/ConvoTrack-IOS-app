@@ -1,16 +1,19 @@
 import SwiftUI
 
 struct RideHistoryView: View {
-    private let rides: [(title: String, date: String, time: String, distance: String, duration: String, speed: String, imgUrl: String)] = [
-        ("Coorg Sunrise Ride", "12 OCT 2023", "06:15 AM", "142.5 KM", "4.5 HRS", "31 KM/H",
-         "https://lh3.googleusercontent.com/aida-public/AB6AXuC0i4WtNFxs0Mo3sY3EX3Pq0fp028lBLh5SXL2aHJIj0G2sESnBQPco5x2jd29o6yb8jbGJuS6wf6C6MXpIDxDZym2Cgfqv3nc3i2mqvfTvBhHQrbLhPeOLqjGQpiJPDh0ahT-PUvh8eAmkIEuJ6IBQ-DW7PTQbHLSntEtF1aV6hidLaLxbgfRY_8EDEx9bHng53gMm4DSHujWirh53vXmQbA70QQjSsEEBYnMdBMUnCWPDVO1T7WqVw2BK8AdKy7G_eAzpPWegxGw"),
-        ("Western Ghats Express", "08 OCT 2023", "04:30 PM", "210.2 KM", "6.2 HRS", "48 KM/H",
-         "https://lh3.googleusercontent.com/aida-public/AB6AXuDW7JjRvd9n97zaru5PsZFg2f9C6BVWvK-DH09BTiVPOBwlJXVQvqvbYC_N53e-U2NpH_fVj5pAI9o9vkS5j-uktzwgIlzV4HFvsFn4P6tLQ98Khq_48GH2vggUM8_IDgROrpsbFIb0mfMNqseDkDRJcfUgoh6OQdla0EFa1EiHhd2XTWjMEXwPy5IpZM8Xa7xJ4nYU0fkw9oVBPMPGvgzI270k1JjObsgGAzP2iLDwVmSkKY3Zd3MO546jHBQBnEb4FLYWDMhzYUI"),
-        ("Nandi Hills Loop", "30 SEP 2023", "10:00 AM", "88.4 KM", "2.8 HRS", "35 KM/H",
-         "https://lh3.googleusercontent.com/aida-public/AB6AXuAb7a0IqjYOoVF7Sb7klK9L4XWraABuuk2vcOO-c2-61iWBomjNjpM3cacIGzQ43FkbB7jk9LyolFZah9nnlrl0FencvHPexB2y8qegnbHQdla1rguX72gQti0FuRKIBEetw18pWAIjSGZvVOCZjlao1L2_61xCfkHaKuxRdZewG9XdVEPC_4_bO2VBTPEBcl5ubsDp4kXGPYAJm1xv4TOqrR5Jm6vfUi6FuwW03V9I34b8xqmKIm_XMkDM56cTo1fvltKRCb1Wd6A")
-    ]
-
+    @State private var rides: [HistoryRide] = []
+    @State private var isLoading = true
+    @State private var selectedRide: HistoryRide? = nil
     @State private var showSummary = false
+
+    private var totalDistanceKm: Double {
+        rides.reduce(0) { $0 + $1.distanceMeters / 1000 }
+    }
+    private var avgSpeedKmh: Double {
+        let speeds = rides.compactMap { $0.avgSpeedKmh }
+        guard !speeds.isEmpty else { return 0 }
+        return speeds.reduce(0, +) / Double(speeds.count)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -21,32 +24,47 @@ struct RideHistoryView: View {
                     Color.clear.frame(height: 72)
 
                     VStack(spacing: 24) {
-                        // Summary dashboard
-                        HStack(spacing: 8) {
-                            FloatingStatPill(label: "DISTANCE", value: "2,481", unit: "KM")
-                            FloatingStatPill(label: "COMPLETED", value: "42", unit: nil)
-                            FloatingStatPill(label: "AVG SPEED", value: "38", unit: "km/h")
-                        }
-                        .padding(.horizontal, 20)
+                        if isLoading {
+                            ProgressView()
+                                .tint(Color.primaryFixed)
+                                .padding(.top, 40)
+                        } else {
+                            HStack(spacing: 8) {
+                                FloatingStatPill(
+                                    label: "DISTANCE",
+                                    value: String(format: "%.0f", totalDistanceKm),
+                                    unit: "KM"
+                                )
+                                FloatingStatPill(
+                                    label: "COMPLETED",
+                                    value: "\(rides.count)",
+                                    unit: nil
+                                )
+                                FloatingStatPill(
+                                    label: "AVG SPEED",
+                                    value: avgSpeedKmh > 0 ? String(format: "%.0f", avgSpeedKmh) : "--",
+                                    unit: "km/h"
+                                )
+                            }
+                            .padding(.horizontal, 20)
 
-                        // Ride cards
-                        VStack(spacing: 16) {
-                            ForEach(rides, id: \.title) { ride in
-                                Button(action: { showSummary = true }) {
-                                    RideHistoryCard(
-                                        title: ride.title,
-                                        date: ride.date,
-                                        time: ride.time,
-                                        distance: ride.distance,
-                                        duration: ride.duration,
-                                        speed: ride.speed,
-                                        imgUrl: ride.imgUrl
-                                    )
+                            if rides.isEmpty {
+                                emptyState
+                            } else {
+                                VStack(spacing: 16) {
+                                    ForEach(rides) { ride in
+                                        Button(action: {
+                                            selectedRide = ride
+                                            showSummary = true
+                                        }) {
+                                            RideHistoryCard(ride: ride)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 }
-                                .buttonStyle(.plain)
+                                .padding(.horizontal, 20)
                             }
                         }
-                        .padding(.horizontal, 20)
 
                         Color.clear.frame(height: 120)
                     }
@@ -58,36 +76,79 @@ struct RideHistoryView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $showSummary) {
-            RideSummaryView()
+            RideSummaryView(rideId: selectedRide?.rideId, rideTitle: selectedRide?.title, fallback: selectedRide)
         }
+        .task { await loadHistory() }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "flag.slash")
+                .font(.system(size: 48))
+                .foregroundColor(Color.onSurfaceVariant.opacity(0.4))
+            Text("No completed rides yet")
+                .font(.headlineMd)
+                .foregroundColor(Color.onSurfaceVariant)
+            Text("Your ride history will appear here after you complete your first convoy.")
+                .font(.bodyMd)
+                .foregroundColor(Color.onSurfaceVariant.opacity(0.6))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+        .padding(.top, 40)
+    }
+
+    private func loadHistory() async {
+        rides = (try? await APIClient.shared.getMyRides()) ?? []
+        isLoading = false
     }
 }
 
-
 struct RideHistoryCard: View {
-    let title: String
-    let date: String
-    let time: String
-    let distance: String
-    let duration: String
-    let speed: String
-    let imgUrl: String
+    let ride: HistoryRide
+
+    var dateLabel: String {
+        guard let iso = ride.endedAt,
+              let date = ISO8601DateFormatter().date(from: iso) else { return "--" }
+        let f = DateFormatter()
+        f.dateFormat = "dd MMM yyyy"
+        return f.string(from: date).uppercased()
+    }
+
+    var timeLabel: String {
+        guard let iso = ride.startedAt,
+              let date = ISO8601DateFormatter().date(from: iso) else { return "" }
+        let f = DateFormatter()
+        f.dateFormat = "hh:mm a"
+        return f.string(from: date)
+    }
+
+    var distanceLabel: String {
+        String(format: "%.1f KM", ride.distanceMeters / 1000)
+    }
+
+    var durationLabel: String {
+        guard let s = ride.durationSeconds else { return "--" }
+        let h = s / 3600; let m = (s % 3600) / 60
+        return String(format: "%d:%02d HRS", h, m)
+    }
+
+    var speedLabel: String {
+        ride.avgSpeedKmh.map { String(format: "%.0f KM/H", $0) } ?? "--"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Map image
             ZStack(alignment: .topTrailing) {
-                AsyncImage(url: URL(string: imgUrl)) { image in
-                    image.resizable().scaledToFill()
-                        .grayscale(0.4)
-                        .opacity(0.6)
-                } placeholder: {
-                    Color.surfaceContainerLow
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 120)
-                .clipped()
-                .overlay(LinearGradient(colors: [.clear, Color.surfaceDim], startPoint: .top, endPoint: .bottom))
+                Color.surfaceContainerLow
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 80)
+                    .overlay(
+                        Image(systemName: "road.lanes")
+                            .font(.system(size: 40))
+                            .foregroundColor(Color.primaryFixed.opacity(0.08))
+                    )
+                    .overlay(LinearGradient(colors: [.clear, Color.surfaceDim], startPoint: .top, endPoint: .bottom))
 
                 Text("COMPLETED")
                     .font(.labelCaps)
@@ -101,19 +162,20 @@ struct RideHistoryCard: View {
                     .padding(12)
             }
 
-            // Details
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
-                        Text(date).font(.labelCaps).foregroundColor(Color.primaryFixedDim)
-                        Circle().fill(Color.outlineVariant).frame(width: 4, height: 4)
-                        Text(time).font(.labelCaps).foregroundColor(Color.onSurfaceVariant)
+                        Text(dateLabel).font(.labelCaps).foregroundColor(Color.primaryFixedDim)
+                        if !timeLabel.isEmpty {
+                            Circle().fill(Color.outlineVariant).frame(width: 4, height: 4)
+                            Text(timeLabel).font(.labelCaps).foregroundColor(Color.onSurfaceVariant)
+                        }
                     }
-                    Text(title).font(.headlineMd).foregroundColor(Color.onSurface)
+                    Text(ride.title).font(.headlineMd).foregroundColor(Color.onSurface)
                     HStack(spacing: 20) {
-                        MetricSmall(label: "DISTANCE", value: distance)
-                        MetricSmall(label: "DURATION", value: duration)
-                        MetricSmall(label: "AVG SPEED", value: speed)
+                        MetricSmall(label: "DISTANCE", value: distanceLabel)
+                        MetricSmall(label: "DURATION", value: durationLabel)
+                        MetricSmall(label: "AVG SPEED", value: speedLabel)
                     }
                 }
                 Spacer()

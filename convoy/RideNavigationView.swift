@@ -38,6 +38,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
     @Published var routeVersion: Int = 0   // increments when route is ready; Equatable
     @Published var destinationCoordinate: CLLocationCoordinate2D? = nil
+    @Published var startCoordinate: CLLocationCoordinate2D? = nil
     @Published var showSplitAlert = false
     @Published var showSummary = false
     @Published var isEnding = false
@@ -66,8 +67,28 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         self.leaderId = ride.leaderId
         self.totalDistanceMeters = ride.distanceMeters
 
-        if let dest = ride.waypoints.first(where: { $0.type == "DESTINATION" }) {
+        let sorted = ride.waypoints.sorted { $0.order < $1.order }
+        if let dest = sorted.last {
             destinationCoordinate = CLLocationCoordinate2D(latitude: dest.lat, longitude: dest.lng)
+        }
+        if let start = sorted.first {
+            startCoordinate = CLLocationCoordinate2D(latitude: start.lat, longitude: start.lng)
+        }
+
+        // Pre-populate leaderboard so it shows immediately before any socket updates
+        let active = ride.participants.filter { $0.status != "LEFT" }
+        leaderboardRows = active.enumerated().map { index, p in
+            NavLeaderboardRow(
+                id: p.userId, rank: index + 1, name: p.name,
+                avatarUrl: p.avatarUrl,
+                distanceToGoalKm: ride.distanceMeters / 1000,
+                isMe: p.userId == myUserId
+            )
+        }
+        riderCount = active.count
+        if let myRow = leaderboardRows.first(where: { $0.isMe }) {
+            myRank = myRow.rank
+            myDistanceToGoalKm = ride.distanceMeters / 1000
         }
 
         await calculateRoute(from: ride.waypoints)
@@ -238,7 +259,7 @@ struct RideNavigationView: View {
             .presentationDetents([.large])
         }
         .navigationDestination(isPresented: $vm.showSummary) {
-            RideSummaryView()
+            RideSummaryView(rideId: appState.currentRideId, rideTitle: appState.currentRide?.title, isPostRide: true)
         }
         .alert("Couldn't End Ride", isPresented: $showEndError) {
             Button("OK", role: .cancel) {}
@@ -273,7 +294,8 @@ struct RideNavigationView: View {
                     .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
             }
 
-            ForEach(vm.riders) { rider in
+            // Live rider pins from socket (other riders only — current user shown via UserAnnotation)
+            ForEach(vm.riders.filter { !$0.isMe }) { rider in
                 Annotation(rider.name, coordinate: rider.coordinate, anchor: .bottom) {
                     LiveRiderPin(rider: rider, isSelected: selectedRiderId == rider.id)
                         .onTapGesture {
@@ -284,11 +306,22 @@ struct RideNavigationView: View {
                 }
             }
 
+            // Start pin
+            if let coord = vm.startCoordinate {
+                Annotation("", coordinate: coord, anchor: .center) {
+                    StartPin()
+                }
+            }
+
+            // Destination pin
             if let coord = vm.destinationCoordinate {
                 Annotation("", coordinate: coord, anchor: .bottom) {
                     DestinationPin(name: destinationName)
                 }
             }
+
+            // Current user location (native iOS dot)
+            UserAnnotation()
         }
         .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
         .ignoresSafeArea()
@@ -642,6 +675,23 @@ struct DestinationPin: View {
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(Color.surfaceContainerHigh.opacity(0.92))
                 .clipShape(Capsule())
+        }
+    }
+}
+
+// MARK: - Start Pin
+
+struct StartPin: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.surfaceContainerHighest)
+                .frame(width: 36, height: 36)
+                .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
+                .shadow(color: Color.primaryFixed.opacity(0.3), radius: 8)
+            Image(systemName: "location.fill")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(Color.primaryFixed)
         }
     }
 }

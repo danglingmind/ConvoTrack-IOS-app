@@ -34,6 +34,13 @@ final class LobbyViewModel: ObservableObject {
         // state_update carries LiveParticipant (GPS/progress) — consumed by RideNavigationView, not lobby
         socket.onStateUpdate = nil
 
+        socket.onLobbyRoster = { [weak self] participants, leaderId in
+            guard let self else { return }
+            // Roster snapshot from server — use it to seed the list if REST failed
+            if self.participants.isEmpty { self.participants = participants }
+            if self.leaderId.isEmpty { self.leaderId = leaderId }
+        }
+
         socket.onParticipantJoined = { [weak self] participant in
             guard let self else { return }
             if !self.participants.contains(where: { $0.userId == participant.userId }) {

@@ -1,15 +1,33 @@
 import SwiftUI
+import ClerkKit
 
 struct ProfileView: View {
+    @Binding var activeTab: ConvoyBottomNav.Tab
+    @Environment(Clerk.self) private var clerk
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.dismiss) private var dismiss
     @State private var notificationsEnabled = true
     @State private var units = "Metric"
     @State private var mapStyle = "Dark"
+    @State private var recentRides: [HistoryRide] = []
+    @State private var isSigningOut = false
+
+    private var displayName: String {
+        let parts = [clerk.user?.firstName, clerk.user?.lastName]
+            .compactMap { $0 }.filter { !$0.isEmpty }
+        let name = parts.joined(separator: " ")
+        return name.isEmpty ? (clerk.user?.username ?? "Rider") : name
+    }
+
+    private var avatarUrl: URL? {
+        guard let str = clerk.user?.imageUrl, !str.isEmpty else { return nil }
+        return URL(string: str)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
             Color.surfaceDim.ignoresSafeArea()
 
-            // Radial glow at top
             Color.clear
                 .background(
                     RadialGradient(
@@ -33,10 +51,14 @@ struct ProfileView: View {
                                 .frame(width: 88, height: 88)
                                 .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
                                 .overlay(
-                                    AsyncImage(url: URL(string: "https://lh3.googleusercontent.com/aida-public/AB6AXuDJ_bNMdnimNgQ1C4e8XScHlGyOw8a_2vv0F4QRb-qp9ZXZtnNs7V6D5UqCZ-B1C4dsDow3M3FFWPkfsJBUm1ktfybXwEOCv8VaO9UZ6tLQNfep5lo65CgFw28slMBGcYmI6ZJ3XD-D9Cq8a05tosRlznts1wMXP2IUCzNXkH30wkXskK3UbyYJf4a7OMeCbEnFq-b3kntl7PGvfCHZwWPAYgcTZfwga6T4j0nclVMLPbCPiHbdV20Tj58F9qiU0oc2qxrRr8lpMj8")) { img in
+                                    AsyncImage(url: avatarUrl) { img in
                                         img.resizable().scaledToFill()
-                                    } placeholder: { Color.clear }
-                                        .clipShape(Circle())
+                                    } placeholder: {
+                                        Text(String(displayName.prefix(1)).uppercased())
+                                            .font(.system(size: 32, weight: .bold))
+                                            .foregroundColor(Color.primaryFixed)
+                                    }
+                                    .clipShape(Circle())
                                 )
 
                             ZStack {
@@ -46,14 +68,14 @@ struct ProfileView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Yash")
+                            Text(displayName)
                                 .font(.headlineLg)
                                 .foregroundColor(Color.onSurface)
                             HStack(spacing: 8) {
                                 Image(systemName: "motorcycle")
                                     .font(.system(size: 16))
                                     .foregroundColor(Color.primaryFixed)
-                                Text("Continental GT")
+                                Text("Convoy Rider")
                                     .font(.bodyLg)
                                     .foregroundColor(Color.onSurfaceVariant)
                             }
@@ -67,7 +89,7 @@ struct ProfileView: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
                     .padding(.horizontal, 20)
 
-                    // Preferences Section
+                    // Preferences
                     VStack(alignment: .leading, spacing: 12) {
                         Text("PREFERENCES")
                             .font(.labelCaps)
@@ -80,7 +102,6 @@ struct ProfileView: View {
                             PrefCard(icon: "map", label: "MAP STYLE", value: mapStyle) { mapStyle = mapStyle == "Dark" ? "Satellite" : "Dark" }
                         }
 
-                        // Notifications toggle
                         HStack(spacing: 16) {
                             Image(systemName: "bell.badge.fill")
                                 .font(.system(size: 22))
@@ -105,30 +126,45 @@ struct ProfileView: View {
                         HStack {
                             Text("RIDE HISTORY").font(.labelCaps).foregroundColor(Color.primaryFixed).tracking(4)
                             Spacer()
-                            Text("VIEW ALL").font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
+                            Button(action: { activeTab = .flagged }) {
+                                Text("VIEW ALL").font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
+                            }
                         }
                         .padding(.horizontal, 4)
 
-                        VStack(spacing: 12) {
-                            ProfileRideCard(
-                                title: "Coorg Ride",
-                                subtitle: "420 KM • 12 JAN 2024",
-                                imgUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuDzcyXuFLtMMlKNikcVIMxeEfjOnrqTdZ93Gkt996PV2wtl4ZYtubmuedU0q5P4QAImZb2nidQ0blXENb7-HuvS9vtZnQpDMPUU7iWn2Jsbk_n5itcvAt40j5fNAex8jOGY_BDAzKT363Dn5_Xo_gIDaqJdFCWba3NCKIP8sAnG9YmpxfyjpQCar7Ewq_hhfWKLh-qbtuAXiPR-Omt9mYkXR3T0OFTLBAL6aT471SRM_V_22ZHsv7etXRuUL_raiAnkoOcnKY-3e8w"
-                            )
-                            ProfileRideCard(
-                                title: "Ooty Ride",
-                                subtitle: "280 KM • 24 DEC 2023",
-                                imgUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuAIj9nHImxYrunvxwkRZU4C6cssjo5-JBt6GN1DSI3p-CMBs0sTNMhT3LZltQdVPs6pOVyKlKkBNxTqjSQBmuJ_kG5VS093AjbTC5LVbBhT-SxaynXZTouj6tEq8hmmsc_pc8pOMGUR3P0lonY5wg5k9lO2Wzc_gZ7FWnx04BYaPPw5MImpa3oyHDOZ0jVVsy3LbRjOlhpd-J1_LA3ZUT54nVH2umSMrJyjXVV10l60aQzGkzkLIF0g7g4M7p0PHPoyrtx_9hvbvM4"
-                            )
+                        if recentRides.isEmpty {
+                            Text("No completed rides yet")
+                                .font(.bodyMd)
+                                .foregroundColor(Color.onSurfaceVariant.opacity(0.6))
+                                .padding(.vertical, 12)
+                        } else {
+                            VStack(spacing: 12) {
+                                ForEach(recentRides.prefix(2)) { ride in
+                                    ProfileRideRow(ride: ride)
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, 20)
 
                     // Logout
-                    Button(action: {}) {
+                    Button(action: {
+                        Task {
+                            isSigningOut = true
+                            appState.currentRideId = nil
+                            appState.inviteCode = nil
+                            appState.currentRide = nil
+                            try? await Clerk.shared.auth.signOut()
+                            dismiss()
+                        }
+                    }) {
                         HStack(spacing: 8) {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                            Text("LOGOUT").font(.bodyLg)
+                            if isSigningOut {
+                                ProgressView().tint(Color.errorColor).scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "rectangle.portrait.and.arrow.right")
+                            }
+                            Text(isSigningOut ? "SIGNING OUT..." : "LOGOUT").font(.bodyLg)
                         }
                         .foregroundColor(Color.errorColor)
                         .frame(maxWidth: .infinity)
@@ -137,6 +173,7 @@ struct ProfileView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.3), lineWidth: 1))
                     }
+                    .disabled(isSigningOut)
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
 
@@ -147,8 +184,66 @@ struct ProfileView: View {
 
             ConvoyTopBar(title: "PROFILE")
         }
+        .task { recentRides = (try? await APIClient.shared.getMyRides()) ?? [] }
     }
 }
+
+// MARK: - Profile Ride Row
+
+struct ProfileRideRow: View {
+    let ride: HistoryRide
+
+    var subtitleLabel: String {
+        var parts: [String] = []
+        if ride.distanceMeters > 0 {
+            parts.append(String(format: "%.0f KM", ride.distanceMeters / 1000))
+        }
+        if let iso = ride.endedAt,
+           let date = ISO8601DateFormatter().date(from: iso) {
+            let f = DateFormatter()
+            f.dateFormat = "dd MMM yyyy"
+            parts.append(f.string(from: date).uppercased())
+        }
+        return parts.joined(separator: " • ")
+    }
+
+    var body: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.surfaceContainerLow)
+                    .frame(width: 48, height: 48)
+                Image(systemName: "road.lanes")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color.primaryFixed.opacity(0.6))
+            }
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(ride.title).font(.bodyLg).foregroundColor(Color.onSurface)
+                Text(subtitleLabel).font(.dataMono).foregroundColor(Color.onSurfaceVariant)
+            }
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                Circle().fill(Color.tertiaryFixedDim).frame(width: 6, height: 6)
+                Text("Completed").font(.labelCaps).foregroundColor(Color.tertiaryFixedDim).tracking(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.onTertiaryContainer.opacity(0.2))
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(Color.tertiaryContainer.opacity(0.3), lineWidth: 1))
+        }
+        .padding(16)
+        .background(Color.surfaceContainerHigh.opacity(0.8))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
+    }
+}
+
+// MARK: - Pref Card
 
 struct PrefCard: View {
     let icon: String
@@ -179,47 +274,7 @@ struct PrefCard: View {
     }
 }
 
-struct ProfileRideCard: View {
-    let title: String
-    let subtitle: String
-    let imgUrl: String
-
-    var body: some View {
-        HStack(spacing: 16) {
-            AsyncImage(url: URL(string: imgUrl)) { image in
-                image.resizable().scaledToFill()
-                    .opacity(0.6)
-            } placeholder: {
-                Color.surfaceContainerLow
-            }
-            .frame(width: 48, height: 48)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.bodyLg).foregroundColor(Color.onSurface)
-                Text(subtitle).font(.dataMono).foregroundColor(Color.onSurfaceVariant)
-            }
-
-            Spacer()
-
-            HStack(spacing: 6) {
-                Circle().fill(Color.tertiaryFixedDim).frame(width: 6, height: 6)
-                Text("Completed").font(.labelCaps).foregroundColor(Color.tertiaryFixedDim).tracking(1)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.onTertiaryContainer.opacity(0.2))
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(Color.tertiaryContainer.opacity(0.3), lineWidth: 1))
-        }
-        .padding(16)
-        .background(Color.surfaceContainerHigh.opacity(0.8))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
-    }
-}
-
 #Preview {
-    ProfileView()
+    ProfileView(activeTab: .constant(.profile))
+        .environmentObject(AppState())
 }

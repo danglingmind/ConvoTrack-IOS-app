@@ -4,7 +4,6 @@ import ClerkKit
 enum HomeRoute: Hashable {
     case createRide
     case rideLobby
-    case rideSummary
 }
 
 struct HomeView: View {
@@ -13,6 +12,10 @@ struct HomeView: View {
     @Binding var activeTab: ConvoyBottomNav.Tab
     @Binding var showJoinRide: Bool
     @State private var navPath = NavigationPath()
+    @State private var recentRides: [HistoryRide] = []
+    @State private var ridesLoaded = false
+    @State private var selectedRide: HistoryRide? = nil
+    @State private var showRideSummary = false
 
     var body: some View {
         NavigationStack(path: $navPath) {
@@ -23,15 +26,27 @@ struct HomeView: View {
                         CreateRideView()
                     case .rideLobby:
                         RideLobbyView()
-                    case .rideSummary:
-                        RideSummaryView()
                     }
+                }
+                .navigationDestination(isPresented: $showRideSummary) {
+                    if let ride = selectedRide {
+                        RideSummaryView(rideId: ride.rideId, rideTitle: ride.title, fallback: ride)
+                    }
+                }
+                .task {
+                    recentRides = (try? await APIClient.shared.getMyRides()) ?? []
+                    ridesLoaded = true
                 }
         }
         .onChange(of: appState.currentRideId) { _, newId in
             guard newId != nil else { return }
-            // Atomically replace the nav stack with Lobby — no push/pop race possible.
             navPath = NavigationPath([HomeRoute.rideLobby])
+        }
+        .onChange(of: appState.popToRoot) { _, shouldPop in
+            if shouldPop {
+                navPath = NavigationPath()
+                appState.popToRoot = false
+            }
         }
     }
 
@@ -123,21 +138,31 @@ struct HomeView: View {
                             }
                             .padding(.horizontal, 20)
 
-                            VStack(spacing: 12) {
-                                Button(action: { navPath.append(HomeRoute.rideSummary) }) {
-                                    RecentRideRow(icon: "road.lanes", title: "Coorg Sunrise Ride", subtitle: "12 OCT • 142 KM • 4.5 HRS")
+                            if !ridesLoaded {
+                                ProgressView()
+                                    .tint(Color.primaryFixed)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 24)
+                            } else if recentRides.isEmpty {
+                                Text("No rides yet")
+                                    .font(.bodyMd)
+                                    .foregroundColor(Color.onSurfaceVariant)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 24)
+                            } else {
+                                VStack(spacing: 12) {
+                                    ForEach(Array(recentRides.prefix(3))) { ride in
+                                        Button(action: {
+                                            selectedRide = ride
+                                            showRideSummary = true
+                                        }) {
+                                            RecentRideRow(icon: "road.lanes", title: ride.title, subtitle: rideSubtitle(ride))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 }
-                                .buttonStyle(.plain)
-                                Button(action: { navPath.append(HomeRoute.rideSummary) }) {
-                                    RecentRideRow(icon: "cup.and.saucer.fill", title: "Sunday Breakfast Ride", subtitle: "08 OCT • 68 KM • 2.1 HRS")
-                                }
-                                .buttonStyle(.plain)
-                                Button(action: { navPath.append(HomeRoute.rideSummary) }) {
-                                    RecentRideRow(icon: "waveform.path", title: "Western Ghats Trail", subtitle: "01 OCT • 310 KM • 8.2 HRS")
-                                }
-                                .buttonStyle(.plain)
+                                .padding(.horizontal, 20)
                             }
-                            .padding(.horizontal, 20)
                         }
 
                         Color.clear.frame(height: 100)
@@ -151,7 +176,26 @@ struct HomeView: View {
         .toolbar(.hidden, for: .navigationBar)
     }
 
-    // MARK: - Computed
+    // MARK: - Helpers
+
+    private func rideSubtitle(_ ride: HistoryRide) -> String {
+        var parts: [String] = []
+        if let raw = ride.endedAt {
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = iso.date(from: raw) {
+                let df = DateFormatter()
+                df.dateFormat = "dd MMM"
+                parts.append(df.string(from: date).uppercased())
+            }
+        }
+        parts.append(String(format: "%.0f KM", ride.distanceMeters / 1000))
+        if let secs = ride.durationSeconds {
+            let h = secs / 3600; let m = (secs % 3600) / 60
+            parts.append(String(format: "%d:%02d HRS", h, m))
+        }
+        return parts.joined(separator: " · ")
+    }
 
     private var clerkDisplayName: String {
         let parts = [clerk.user?.firstName, clerk.user?.lastName]
@@ -173,9 +217,9 @@ struct ActiveRideSection: View {
 
     private var statusLabel: String {
         switch ride?.status {
-        case "IN_PROGRESS": return "LIVE NOW"
-        case "LOBBY":       return "IN LOBBY"
-        default:            return "ACTIVE"
+        case "ACTIVE": return "LIVE NOW"
+        case "LOBBY":  return "IN LOBBY"
+        default:       return "ACTIVE"
         }
     }
 

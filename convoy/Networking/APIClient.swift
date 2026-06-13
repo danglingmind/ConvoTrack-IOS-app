@@ -119,4 +119,15 @@ final class APIClient {
     func getRideSummary(_ rideId: String) async throws -> RideSummary {
         return try await fetch("/rides/\(rideId)/summary")
     }
+
+    func getMyRides() async throws -> [HistoryRide] {
+        let response: MyRidesResponse = try await fetch("/rides/me")
+        return response.rides
+    }
+
+    func syncProfile(name: String, avatarUrl: String?) async throws {
+        struct Body: Encodable { let name: String; let avatarUrl: String? }
+        let body = try encoder.encode(Body(name: name, avatarUrl: avatarUrl))
+        try await fetchVoid("/users/me", method: "PATCH", body: body)
+    }
 }
