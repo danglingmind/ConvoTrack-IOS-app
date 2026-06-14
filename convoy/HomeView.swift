@@ -181,7 +181,7 @@ struct HomeView: View {
             }
             .ignoresSafeArea(edges: .bottom)
 
-            ConvoyTopBar(title: "APEX CONVOY")
+            ConvoyTopBar(title: "CONVOY")
         }
         .toolbar(.hidden, for: .navigationBar)
     }

@@ -11,6 +11,7 @@ final class LocationService: NSObject {
     static let shared = LocationService()
 
     weak var delegate: LocationServiceDelegate?
+    var onHeadingUpdate: ((Double) -> Void)?
 
     private let manager = CLLocationManager()
     private(set) var lastLocation: CLLocation?
@@ -40,10 +41,12 @@ final class LocationService: NSObject {
             manager.allowsBackgroundLocationUpdates = true
         }
         manager.startUpdatingLocation()
+        manager.startUpdatingHeading()
     }
 
     func stop() {
         manager.stopUpdatingLocation()
+        manager.stopUpdatingHeading()
     }
 
     // MARK: - Private
@@ -65,6 +68,13 @@ extension LocationService: CLLocationManagerDelegate {
         Task { @MainActor in
             del.locationService(self, didUpdate: location, battery: battery, signalStrength: signal)
         }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        guard newHeading.headingAccuracy >= 0 else { return }
+        let heading = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        let cb = onHeadingUpdate
+        Task { @MainActor in cb?(heading) }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

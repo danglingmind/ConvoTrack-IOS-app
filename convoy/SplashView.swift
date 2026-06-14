@@ -65,7 +65,7 @@ struct SplashView: View {
                 // Footer — pinned to very bottom (like `fixed bottom-gutter`)
                 VStack {
                     Spacer()
-                    Text("EST. 2024 — APEX CONVOY PROTOCOL V4.2")
+                    Text("EST. 2024 — CONVOY PROTOCOL V4.2")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundColor(Color.onSurfaceVariant.opacity(0.3))
                         .tracking(1)
@@ -126,7 +126,7 @@ struct SplashView: View {
     private var titleSection: some View {
         VStack(spacing: 8) {
             // font-display-metrics text-display-metrics: 48px bold tracking-tighter uppercase
-            Text("Apex convoy")
+            Text("convoy")
                 .font(.system(size: 48, weight: .bold))
                 .foregroundColor(Color.primaryFixed)
                 .tracking(-1)

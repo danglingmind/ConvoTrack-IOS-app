@@ -55,7 +55,7 @@ struct CoordinationOverlayView: View {
                             .background(Color.surfaceContainer.opacity(0.7))
                             .clipShape(Circle())
                     }
-                    Text("APEX CONVOY")
+                    Text("CONVOY")
                         .font(.headlineLg)
                         .foregroundColor(Color.primaryFixed)
                     Spacer()

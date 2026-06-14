@@ -49,6 +49,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var endError: String? = nil
     @Published var currentInstruction: String = ""
     @Published var distanceToNextTurnMeters: Double = 0
+    @Published var rerouteCoordinates: [CLLocationCoordinate2D] = []
+    @Published var isOffRoute: Bool = false
 
     var amILeader: Bool { !myUserId.isEmpty && myUserId == leaderId }
 
@@ -77,6 +79,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var currentStepIndex: Int = 0
     private var lastBroadcastDate: Date = .distantPast
     private var lastCameraTickDate: Date = .distantPast
+    private var remainingStops: [CLLocationCoordinate2D] = []
+    private var lastRerouteLocation: CLLocation? = nil
+    private var rerouteTask: Task<Void, Never>? = nil
+    private let offRouteThresholdMeters: Double = 60
 
     func setup(rideId: String, ride: Ride, myUserId: String) async {
         self.rideId = rideId
@@ -93,6 +99,9 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             startCoordinate = CLLocationCoordinate2D(latitude: start.lat, longitude: start.lng)
         }
         middleWaypoints = sorted.filter { $0.type == "WAYPOINT" }
+        remainingStops = sorted
+            .filter { $0.type == "WAYPOINT" || $0.type == "DESTINATION" }
+            .map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
 
         // Pre-populate leaderboard so it shows immediately before any socket updates
         let active = ride.participants.filter { $0.status != "LEFT" }
@@ -122,13 +131,26 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         socket.joinRoom(rideId: rideId)
 
         LocationService.shared.delegate = self
+        LocationService.shared.onHeadingUpdate = { [weak self] heading in
+            guard let self else { return }
+            // Compass drives heading when GPS course is unavailable (low speed / stationary).
+            // At speed, location.course already overwrites this on every location tick.
+            self.userHeading = heading
+            let now = Date()
+            if now.timeIntervalSince(self.lastCameraTickDate) >= 0.1 {
+                self.lastCameraTickDate = now
+                self.locationTick += 1
+            }
+        }
         LocationService.shared.requestPermission()
         LocationService.shared.start()
     }
 
     func teardown() {
+        rerouteTask?.cancel()
         LocationService.shared.stop()
         LocationService.shared.delegate = nil
+        LocationService.shared.onHeadingUpdate = nil
         SocketClient.shared.onStateUpdate = nil
         SocketClient.shared.onSplitDetected = nil
         SocketClient.shared.onSplitResolved = nil
@@ -165,6 +187,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         userLocation = location.coordinate
         if location.course >= 0 { userHeading = location.course }
         updateCurrentStep(location: location)
+        checkOffRoute(location: location)
 
         let now = Date()
         // Cap camera updates at ~10 Hz so overlapping animations don't jam the map
@@ -275,6 +298,54 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             currentStepIndex += 1
             currentInstruction = navSteps[currentStepIndex].instruction
         }
+    }
+
+    private func checkOffRoute(location: CLLocation) {
+        // Advance past stops the user has already reached
+        while let next = remainingStops.first {
+            let dist = location.distance(from: CLLocation(latitude: next.latitude, longitude: next.longitude))
+            guard dist < 50 else { break }
+            remainingStops.removeFirst()
+        }
+
+        let offRoute = minimumDistanceToRoute(from: location) > offRouteThresholdMeters
+        if offRoute != isOffRoute { isOffRoute = offRoute }
+
+        if offRoute, let target = remainingStops.first {
+            // Don't recalculate until the user has moved at least 30 m from the last reroute origin
+            if let last = lastRerouteLocation, location.distance(from: last) < 30 { return }
+            lastRerouteLocation = location
+            rerouteTask?.cancel()
+            let coord = location.coordinate
+            rerouteTask = Task { await self.calculateReroute(from: coord, to: target) }
+        } else if !offRoute {
+            rerouteCoordinates = []
+            rerouteTask?.cancel()
+            lastRerouteLocation = nil
+        }
+    }
+
+    private func minimumDistanceToRoute(from location: CLLocation) -> Double {
+        guard !routeCoordinates.isEmpty else { return 0 }
+        var minDist = Double.infinity
+        // Sample every 5th coordinate — fast enough for real-time use
+        for i in stride(from: 0, to: routeCoordinates.count, by: 5) {
+            let c = routeCoordinates[i]
+            let d = location.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+            if d < minDist { minDist = d }
+            if minDist < 20 { return minDist }  // clearly on-route, early exit
+        }
+        return minDist
+    }
+
+    private func calculateReroute(from origin: CLLocationCoordinate2D, to target: CLLocationCoordinate2D) async {
+        let req = MKDirections.Request()
+        req.source = MKMapItem(placemark: MKPlacemark(coordinate: origin))
+        req.destination = MKMapItem(placemark: MKPlacemark(coordinate: target))
+        req.transportType = .automobile
+        guard let route = try? await MKDirections(request: req).calculate().routes.first,
+              !Task.isCancelled else { return }
+        rerouteCoordinates = route.polyline.coordinates
     }
 }
 
@@ -389,9 +460,21 @@ struct RideNavigationView: View {
 
     @MapContentBuilder
     private func mapContent() -> some MapContent {
+        reroutePolyline
         routePolyline
         riderAnnotations
         waypointAnnotations
+    }
+
+    @MapContentBuilder
+    private var reroutePolyline: some MapContent {
+        if !vm.rerouteCoordinates.isEmpty {
+            MapPolyline(coordinates: vm.rerouteCoordinates)
+                .stroke(
+                    Color(red: 1.0, green: 0.6, blue: 0.15),
+                    style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round, dash: [10, 6])
+                )
+        }
     }
 
     @MapContentBuilder
@@ -439,6 +522,14 @@ struct RideNavigationView: View {
     private var hudLayer: some View {
         VStack(spacing: 0) {
             topBar
+
+            if vm.isOffRoute {
+                offRouteBanner
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(), value: vm.isOffRoute)
+            }
 
             if vm.showSplitAlert {
                 GroupSplitAlert(
@@ -587,6 +678,29 @@ struct RideNavigationView: View {
         }
     }
 
+    private var offRouteBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(Color.errorColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("OFF ROUTE")
+                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                    .foregroundColor(Color.errorColor)
+                    .tracking(1.5)
+                Text("Rerouting to next stop")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Color.errorColor.opacity(0.75))
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.errorContainer.opacity(0.85))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.35), lineWidth: 1))
+    }
+
     // MARK: - Bottom Controls
 
     private var bottomControls: some View {
@@ -684,60 +798,87 @@ struct LiveRiderPin: View {
     let rider: LiveRider
     let isSelected: Bool
 
-    private var size: CGFloat { isSelected ? 52 : 42 }
+    private var size: CGFloat { isSelected ? 54 : 46 }
+    private var firstName: String { rider.name.components(separatedBy: " ").first ?? rider.name }
+    private var borderColor: Color {
+        isSelected ? Color.primaryFixed : (rider.isMe ? Color.primaryFixed : Color.white.opacity(0.9))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
+                // White backing so the photo reads clearly on any map tile colour
                 Circle()
-                    .fill(rider.isMe ? Color.primaryFixed.opacity(0.15) : Color.surfaceContainerHigh)
+                    .fill(Color.white)
                     .frame(width: size, height: size)
-                    .overlay(Circle().stroke(
-                        isSelected ? Color.primaryFixed : (rider.isMe ? Color.primaryFixed : Color.outlineVariant.opacity(0.6)),
-                        lineWidth: isSelected || rider.isMe ? 3 : 2
-                    ))
-                    .shadow(color: Color.primaryFixed.opacity(isSelected ? 0.6 : 0.2), radius: isSelected ? 14 : 5)
 
+                // Profile photo fills the circle; letter fallback shown while loading or if no URL
                 if let url = rider.avatarUrl.flatMap(URL.init) {
-                    AsyncImage(url: url) { img in img.resizable().scaledToFill() }
-                    placeholder: { Circle().fill(Color.surfaceVariant) }
-                        .frame(width: size - 8, height: size - 8)
-                        .clipShape(Circle())
+                    AsyncImage(url: url) { phase in
+                        if let img = phase.image {
+                            img.resizable().scaledToFill()
+                        } else {
+                            letterFallback
+                        }
+                    }
+                    .frame(width: size - 4, height: size - 4)
+                    .clipShape(Circle())
                 } else {
-                    Text(String(rider.name.prefix(1)).uppercased())
-                        .font(.system(size: size * 0.3, weight: .bold))
-                        .foregroundColor(rider.isMe ? Color.primaryFixed : Color.onSurface)
+                    letterFallback
+                        .frame(width: size - 4, height: size - 4)
                 }
 
-                Text("\(rider.rank)")
-                    .font(.system(size: 8, weight: .black, design: .monospaced))
+                // Coloured border ring on top
+                Circle()
+                    .stroke(borderColor, lineWidth: isSelected ? 3 : 2.5)
+                    .frame(width: size, height: size)
+
+                // Rank badge
+                Text("#\(rider.rank)")
+                    .font(.system(size: 7, weight: .black, design: .monospaced))
                     .foregroundColor(rider.rank == 1 ? Color.onPrimaryFixed : Color.onSurface)
-                    .padding(.horizontal, 4).padding(.vertical, 2)
-                    .background(rider.rank == 1 ? Color.primaryFixed : Color.surfaceContainerHighest)
+                    .padding(.horizontal, 3).padding(.vertical, 1.5)
+                    .background(rider.rank == 1 ? Color.primaryFixed : Color.surfaceContainerHighest.opacity(0.95))
                     .clipShape(Capsule())
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .offset(x: 5, y: 5)
+                    .offset(x: 4, y: 4)
                     .frame(width: size, height: size)
             }
+            .shadow(color: isSelected ? Color.primaryFixed.opacity(0.55) : Color.black.opacity(0.3),
+                    radius: isSelected ? 12 : 5, y: 2)
 
             Triangle()
-                .fill(isSelected ? Color.primaryFixed : (rider.isMe ? Color.primaryFixed : Color.outlineVariant.opacity(0.6)))
+                .fill(Color.white)
                 .frame(width: 10, height: 6)
+                .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
                 .offset(y: -1)
 
-            if isSelected {
-                Text(rider.name.uppercased())
-                    .font(.system(size: 9, weight: .black, design: .monospaced))
-                    .foregroundColor(Color.onSurface)
-                    .tracking(1)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Color.surfaceContainerHigh.opacity(0.92))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
-                    .transition(.scale.combined(with: .opacity))
-            }
+            // Name label always visible — first name only unless selected
+            Text(isSelected ? rider.name.uppercased() : firstName.uppercased())
+                .font(.system(size: isSelected ? 9 : 8, weight: .black, design: .monospaced))
+                .foregroundColor(Color.onSurface)
+                .tracking(0.5)
+                .lineLimit(1)
+                .padding(.horizontal, isSelected ? 8 : 6)
+                .padding(.vertical, isSelected ? 4 : 3)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(
+                    isSelected ? Color.primaryFixed.opacity(0.6) : Color.outlineVariant.opacity(0.3),
+                    lineWidth: 1
+                ))
         }
         .animation(.spring(response: 0.3), value: isSelected)
+    }
+
+    private var letterFallback: some View {
+        Circle()
+            .fill(Color.surfaceContainerHigh)
+            .overlay(
+                Text(String(rider.name.prefix(1)).uppercased())
+                    .font(.system(size: size * 0.32, weight: .bold))
+                    .foregroundColor(rider.isMe ? Color.primaryFixed : Color.onSurface)
+            )
     }
 }
 
