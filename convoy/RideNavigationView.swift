@@ -133,8 +133,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         LocationService.shared.delegate = self
         LocationService.shared.onHeadingUpdate = { [weak self] heading in
             guard let self else { return }
-            // Compass drives heading when GPS course is unavailable (low speed / stationary).
-            // At speed, location.course already overwrites this on every location tick.
+            // Suppress micro-fluctuations (< 5°) that cause camera dancing while stationary
+            let raw = abs(heading - self.userHeading).truncatingRemainder(dividingBy: 360)
+            let delta = min(raw, 360 - raw)
+            guard delta >= 5 else { return }
             self.userHeading = heading
             let now = Date()
             if now.timeIntervalSince(self.lastCameraTickDate) >= 0.1 {
@@ -364,6 +366,8 @@ struct RideNavigationView: View {
     @State private var showRegroup = false
     @State private var regroupReason: CoordinationOverlayView.RegroupReason? = nil
     @State private var showEndError = false
+    @State private var isFreeLooking: Bool = false
+    @State private var lastInteractionDate: Date = .distantPast
 
     private var destinationName: String { appState.currentRide?.destinationName ?? "Destination" }
 
@@ -380,6 +384,7 @@ struct RideNavigationView: View {
             mapLayer
             hudLayer
             rightStatPills
+            freelookOverlay
         }
         .navigationBarHidden(true)
         .preferredColorScheme(.dark)
@@ -406,6 +411,12 @@ struct RideNavigationView: View {
         .onChange(of: vm.locationTick) { old, new in
             guard let coord = vm.userLocation else { return }
             let isFirstFix = old == 0
+            let isMoving = vm.mySpeedKmh > 2.0
+            let idleSeconds = Date().timeIntervalSince(lastInteractionDate)
+            // Resume auto-follow only on first GPS fix, or when moving AND 3 s since last touch
+            let shouldFollow = isFirstFix || (isMoving && idleSeconds >= 3.0)
+            if isFreeLooking && shouldFollow { isFreeLooking = false }
+            guard shouldFollow else { return }
             withAnimation(isFirstFix ? .easeInOut(duration: 1.5) : .linear(duration: 0.3)) {
                 cameraPosition = .camera(MapCamera(
                     centerCoordinate: coord,
@@ -456,6 +467,33 @@ struct RideNavigationView: View {
         Map(position: $cameraPosition, content: mapContent)
             .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
             .ignoresSafeArea()
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
+                    .onChanged { _ in onMapInteraction() }
+            )
+            .simultaneousGesture(
+                MagnifyGesture()
+                    .onChanged { _ in onMapInteraction() }
+            )
+    }
+
+    private func onMapInteraction() {
+        lastInteractionDate = Date()
+        if !isFreeLooking { isFreeLooking = true }
+    }
+
+    private func resumeNavigation() {
+        isFreeLooking = false
+        lastInteractionDate = .distantPast
+        guard let coord = vm.userLocation else { return }
+        withAnimation(.easeInOut(duration: 0.8)) {
+            cameraPosition = .camera(MapCamera(
+                centerCoordinate: coord,
+                distance: navCameraDistance,
+                heading: vm.userHeading,
+                pitch: 55
+            ))
+        }
     }
 
     @MapContentBuilder
@@ -676,6 +714,32 @@ struct RideNavigationView: View {
                 }
             }
         }
+    }
+
+    private var freelookOverlay: some View {
+        VStack {
+            Spacer()
+            if isFreeLooking {
+                Button(action: resumeNavigation) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("RESUME")
+                            .font(.system(size: 10, weight: .black, design: .monospaced))
+                            .tracking(1.2)
+                    }
+                    .foregroundColor(Color.onPrimaryFixed)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(Color.primaryFixed)
+                    .clipShape(Capsule())
+                    .shadow(color: Color.primaryFixed.opacity(0.55), radius: 10)
+                }
+                .transition(.scale.combined(with: .opacity))
+                .padding(.bottom, 160)
+            }
+        }
+        .animation(.spring(response: 0.35), value: isFreeLooking)
     }
 
     private var offRouteBanner: some View {
