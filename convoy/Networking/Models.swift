@@ -87,11 +87,21 @@ struct InviteCodeResponse: Codable {
 
 // MARK: - Socket.IO Live State
 
+struct RegroupEvent: Codable, Equatable {
+    let regroupId: String
+    let type: String       // "FUEL" | "FOOD" | "SCENIC" | "STOP"
+    let lat: Double
+    let lng: Double
+    let createdBy: String
+    let createdAt: String
+}
+
 struct RideStateUpdate: Codable {
     let rideId: String
     let status: String
     let participants: [LiveParticipant]
     let leaderboard: [LiveLeaderboardEntry]
+    let openRegroup: RegroupEvent?
 }
 
 struct LiveParticipant: Codable {
@@ -150,8 +160,12 @@ struct HistoryRide: Codable, Identifiable {
     var id: String { rideId }
     let rideId: String
     let title: String
+    let status: String
+    let isLeader: Bool?
+    let inviteCode: String?
     let startedAt: String?
     let endedAt: String?
+    let createdAt: String?
     let distanceMeters: Double
     let durationSeconds: Int?
     let avgSpeedKmh: Double?

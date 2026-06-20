@@ -11,6 +11,8 @@ struct ProfileView: View {
     @State private var mapStyle = "Dark"
     @State private var recentRides: [HistoryRide] = []
     @State private var isSigningOut = false
+    @State private var selectedRide: HistoryRide? = nil
+    @State private var showSummary = false
 
     private var displayName: String {
         let parts = [clerk.user?.firstName, clerk.user?.lastName]
@@ -133,14 +135,17 @@ struct ProfileView: View {
                         .padding(.horizontal, 4)
 
                         if recentRides.isEmpty {
-                            Text("No completed rides yet")
+                            Text("No rides yet")
                                 .font(.bodyMd)
                                 .foregroundColor(Color.onSurfaceVariant.opacity(0.6))
                                 .padding(.vertical, 12)
                         } else {
                             VStack(spacing: 12) {
                                 ForEach(recentRides.prefix(2)) { ride in
-                                    ProfileRideRow(ride: ride)
+                                    Button(action: { handleRideTap(ride) }) {
+                                        ProfileRideRow(ride: ride)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                         }
@@ -184,7 +189,23 @@ struct ProfileView: View {
 
             ConvoyTopBar(title: "PROFILE")
         }
+        .navigationDestination(isPresented: $showSummary) {
+            if let ride = selectedRide {
+                RideSummaryView(rideId: ride.rideId, rideTitle: ride.title, fallback: ride)
+            }
+        }
         .task { recentRides = (try? await APIClient.shared.getMyRides()) ?? [] }
+    }
+
+    private func handleRideTap(_ ride: HistoryRide) {
+        selectedRide = ride
+        if ride.status == "COMPLETED" {
+            showSummary = true
+        } else {
+            appState.currentRideId = ride.rideId
+            if let code = ride.inviteCode { appState.inviteCode = code }
+            activeTab = .track
+        }
     }
 }
 
@@ -198,13 +219,37 @@ struct ProfileRideRow: View {
         if ride.distanceMeters > 0 {
             parts.append(String(format: "%.0f KM", ride.distanceMeters / 1000))
         }
-        if let iso = ride.endedAt,
-           let date = ISO8601DateFormatter().date(from: iso) {
+        let iso = ride.endedAt ?? ride.startedAt ?? ride.createdAt
+        if let iso, let date = ISO8601DateFormatter().date(from: iso) {
             let f = DateFormatter()
             f.dateFormat = "dd MMM yyyy"
             parts.append(f.string(from: date).uppercased())
         }
         return parts.joined(separator: " • ")
+    }
+
+    var statusColor: Color {
+        switch ride.status {
+        case "LOBBY":             return Color.primaryFixed
+        case "ACTIVE", "PAUSED": return Color.tertiaryFixed
+        default:                  return Color.tertiaryFixedDim
+        }
+    }
+
+    var statusBgColor: Color {
+        switch ride.status {
+        case "LOBBY": return Color.onPrimaryContainer
+        default:      return Color.onTertiaryContainer
+        }
+    }
+
+    var statusLabel: String {
+        switch ride.status {
+        case "LOBBY":   return "In Lobby"
+        case "ACTIVE":  return "Active"
+        case "PAUSED":  return "Paused"
+        default:        return "Completed"
+        }
     }
 
     var body: some View {
@@ -227,14 +272,14 @@ struct ProfileRideRow: View {
             Spacer()
 
             HStack(spacing: 6) {
-                Circle().fill(Color.tertiaryFixedDim).frame(width: 6, height: 6)
-                Text("Completed").font(.labelCaps).foregroundColor(Color.tertiaryFixedDim).tracking(1)
+                Circle().fill(statusColor).frame(width: 6, height: 6)
+                Text(statusLabel).font(.labelCaps).foregroundColor(statusColor).tracking(1)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Color.onTertiaryContainer.opacity(0.2))
+            .background(statusBgColor.opacity(0.2))
             .clipShape(Capsule())
-            .overlay(Capsule().stroke(Color.tertiaryContainer.opacity(0.3), lineWidth: 1))
+            .overlay(Capsule().stroke(statusColor.opacity(0.3), lineWidth: 1))
         }
         .padding(16)
         .background(Color.surfaceContainerHigh.opacity(0.8))

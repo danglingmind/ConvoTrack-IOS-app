@@ -58,6 +58,7 @@ struct HomeView: View {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: 72)
 
+
                     VStack(spacing: 32) {
                         // Greeting
                         HStack(alignment: .top) {
@@ -162,10 +163,7 @@ struct HomeView: View {
                             } else {
                                 VStack(spacing: 12) {
                                     ForEach(Array(recentRides.prefix(3))) { ride in
-                                        Button(action: {
-                                            selectedRide = ride
-                                            showRideSummary = true
-                                        }) {
+                                        Button(action: { handleRecentRideTap(ride) }) {
                                             RecentRideRow(icon: "road.lanes", title: ride.title, subtitle: rideSubtitle(ride))
                                         }
                                         .buttonStyle(.plain)
@@ -179,6 +177,10 @@ struct HomeView: View {
                     }
                 }
             }
+            .refreshable {
+                async let rides = APIClient.shared.getMyRides()
+                recentRides = (try? await rides) ?? recentRides
+            }
             .ignoresSafeArea(edges: .bottom)
 
             ConvoyTopBar(title: "CONVOY")
@@ -187,6 +189,17 @@ struct HomeView: View {
     }
 
     // MARK: - Helpers
+
+    private func handleRecentRideTap(_ ride: HistoryRide) {
+        if ride.status == "COMPLETED" {
+            selectedRide = ride
+            showRideSummary = true
+        } else {
+            appState.currentRideId = ride.rideId
+            if let code = ride.inviteCode { appState.inviteCode = code }
+            navPath = NavigationPath([HomeRoute.rideLobby])
+        }
+    }
 
     private func rideSubtitle(_ ride: HistoryRide) -> String {
         var parts: [String] = []

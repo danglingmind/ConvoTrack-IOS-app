@@ -51,6 +51,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var distanceToNextTurnMeters: Double = 0
     @Published var rerouteCoordinates: [CLLocationCoordinate2D] = []
     @Published var isOffRoute: Bool = false
+    @Published var activeRegroup: RegroupEvent? = nil
+    @Published var hasMarkedArrived: Bool = false
+    @Published var showRegroupToast: Bool = false
+    @Published var showRegroupResolvedToast: Bool = false
 
     var amILeader: Bool { !myUserId.isEmpty && myUserId == leaderId }
 
@@ -80,9 +84,16 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var lastBroadcastDate: Date = .distantPast
     private var lastCameraTickDate: Date = .distantPast
     private var remainingStops: [CLLocationCoordinate2D] = []
-    private var lastRerouteLocation: CLLocation? = nil
     private var rerouteTask: Task<Void, Never>? = nil
-    private let offRouteThresholdMeters: Double = 60
+    private var regroupResolvedToastTask: Task<Void, Never>? = nil
+    private var isRerouteInFlight = false
+    private var lastRerouteOrigin: CLLocation? = nil
+    private let offRouteThresholdMeters: Double = 40
+    private var currentRouteSegmentIndex: Int = 0
+    private var consecutiveOffCount: Int = 0
+    private var consecutiveOnCount: Int = 0
+    private let offRouteConfirmCount = 3   // consecutive off-route readings before flagging
+    private let onRouteClearCount = 4      // consecutive on-route readings before clearing
 
     func setup(rideId: String, ride: Ride, myUserId: String) async {
         self.rideId = rideId
@@ -125,6 +136,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         socket.onStateUpdate = { [weak self] update in self?.handleStateUpdate(update) }
         socket.onSplitDetected = { [weak self] _ in self?.showSplitAlert = true }
         socket.onSplitResolved = { [weak self] in self?.showSplitAlert = false }
+        socket.onRegroupStarted = { [weak self] event in self?.handleRegroupStarted(event) }
+        socket.onRegroupResolved = { [weak self] regroupId in self?.handleRegroupResolved(regroupId) }
 
         // Re-join room so the server sends the current state snapshot to this client
         // and so state updates are received after any socket reconnect.
@@ -133,16 +146,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         LocationService.shared.delegate = self
         LocationService.shared.onHeadingUpdate = { [weak self] heading in
             guard let self else { return }
-            // Suppress micro-fluctuations (< 5°) that cause camera dancing while stationary
             let raw = abs(heading - self.userHeading).truncatingRemainder(dividingBy: 360)
             let delta = min(raw, 360 - raw)
             guard delta >= 5 else { return }
             self.userHeading = heading
-            let now = Date()
-            if now.timeIntervalSince(self.lastCameraTickDate) >= 0.1 {
-                self.lastCameraTickDate = now
-                self.locationTick += 1
-            }
         }
         LocationService.shared.requestPermission()
         LocationService.shared.start()
@@ -150,12 +157,16 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
     func teardown() {
         rerouteTask?.cancel()
+        regroupResolvedToastTask?.cancel()
         LocationService.shared.stop()
         LocationService.shared.delegate = nil
         LocationService.shared.onHeadingUpdate = nil
         SocketClient.shared.onStateUpdate = nil
         SocketClient.shared.onSplitDetected = nil
         SocketClient.shared.onSplitResolved = nil
+        SocketClient.shared.onRegroupStarted = nil
+        SocketClient.shared.onRegroupResolved = nil
+        SocketClient.shared.onParticipantOffline = nil
     }
 
     func endRide() async {
@@ -170,15 +181,58 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         isEnding = false
     }
 
-    func broadcastRegroup(reason: CoordinationOverlayView.RegroupReason?) {
-        guard let reason, let loc = LocationService.shared.lastLocation else { return }
-        let lat = loc.coordinate.latitude
-        let lng = loc.coordinate.longitude
+    func broadcastRegroup(reason: CoordinationOverlayView.RegroupReason?, at coordinate: CLLocationCoordinate2D? = nil) {
+        guard let reason else { return }
+        let lat: Double
+        let lng: Double
+        if let coordinate {
+            lat = coordinate.latitude
+            lng = coordinate.longitude
+        } else if let last = LocationService.shared.lastLocation {
+            lat = last.coordinate.latitude
+            lng = last.coordinate.longitude
+        } else {
+            return
+        }
         if reason.isEmergency {
             SocketClient.shared.emitEmergency(rideId: rideId, lat: lat, lng: lng, message: "Emergency")
         } else {
-            let type = reason.rawValue.uppercased().replacingOccurrences(of: " ", with: "_")
-            SocketClient.shared.emitRegroup(rideId: rideId, type: type, lat: lat, lng: lng)
+            let type: String
+            switch reason {
+            case .fuel:      type = "FUEL"
+            case .food:      type = "FOOD"
+            case .scenic:    type = "SCENIC"
+            case .emergency: return
+            }
+            SocketClient.shared.emitRegroup(rideId: rideId, type: type, lat: lat, lng: lng) { _ in }
+        }
+    }
+
+    func markArrivedAtRegroup() {
+        guard let regroup = activeRegroup else { return }
+        SocketClient.shared.emitRegroupArrived(rideId: rideId, regroupId: regroup.regroupId)
+        hasMarkedArrived = true
+    }
+
+    private func handleRegroupStarted(_ event: RegroupEvent) {
+        activeRegroup = event
+        hasMarkedArrived = false
+        // Only toast for riders who didn't broadcast it
+        if event.createdBy != myUserId {
+            showRegroupToast = true
+        }
+    }
+
+    private func handleRegroupResolved(_ regroupId: String) {
+        guard activeRegroup?.regroupId == regroupId else { return }
+        activeRegroup = nil
+        hasMarkedArrived = false
+        showRegroupToast = false
+        showRegroupResolvedToast = true
+        regroupResolvedToastTask?.cancel()
+        regroupResolvedToastTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.5))
+            self?.showRegroupResolvedToast = false
         }
     }
 
@@ -255,6 +309,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         }
 
         if update.status == "COMPLETED" { showSummary = true }
+
+        // Late-join: pick up any open regroup from state snapshot
+        if activeRegroup == nil, let incoming = update.openRegroup {
+            handleRegroupStarted(incoming)
+        }
     }
 
     private func calculateRoute(from waypoints: [Waypoint]) async {
@@ -288,6 +347,9 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         }
         routeCoordinates = allCoords
         routeExpectedTravelTime = totalTime
+        currentRouteSegmentIndex = 0
+        consecutiveOffCount = 0
+        consecutiveOnCount = 0
         routeVersion += 1
     }
 
@@ -303,41 +365,48 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     }
 
     private func checkOffRoute(location: CLLocation) {
-        // Advance past stops the user has already reached
         while let next = remainingStops.first {
             let dist = location.distance(from: CLLocation(latitude: next.latitude, longitude: next.longitude))
-            guard dist < 50 else { break }
+            guard dist < 80 else { break }
             remainingStops.removeFirst()
         }
 
-        let offRoute = minimumDistanceToRoute(from: location) > offRouteThresholdMeters
-        if offRoute != isOffRoute { isOffRoute = offRoute }
+        advanceRouteProgress(to: location)
+        let rawOffRoute = minimumDistanceToUpcomingRoute(from: location) > offRouteThresholdMeters
 
-        if offRoute, let target = remainingStops.first {
-            // Don't recalculate until the user has moved at least 30 m from the last reroute origin
-            if let last = lastRerouteLocation, location.distance(from: last) < 30 { return }
-            lastRerouteLocation = location
-            rerouteTask?.cancel()
+        if rawOffRoute {
+            consecutiveOffCount += 1
+            consecutiveOnCount = 0
+        } else {
+            consecutiveOnCount += 1
+            consecutiveOffCount = 0
+        }
+
+        if !isOffRoute && consecutiveOffCount >= offRouteConfirmCount {
+            isOffRoute = true
+        } else if isOffRoute && consecutiveOnCount >= onRouteClearCount {
+            isOffRoute = false
+        }
+
+        if isOffRoute {
+            // Never cancel an in-flight MKDirections request — that was the root bug.
+            // Only start a new request when none is running, and refresh every 150 m of
+            // travel so the road-following polyline stays current as the user moves.
+            guard !isRerouteInFlight else { return }
+            if let last = lastRerouteOrigin, location.distance(from: last) < 150,
+               !rerouteCoordinates.isEmpty { return }
+            guard let target = rerouteJoinPoint() ?? remainingStops.first else { return }
+            lastRerouteOrigin = location
+            isRerouteInFlight = true
             let coord = location.coordinate
             rerouteTask = Task { await self.calculateReroute(from: coord, to: target) }
-        } else if !offRoute {
-            rerouteCoordinates = []
+        } else {
             rerouteTask?.cancel()
-            lastRerouteLocation = nil
+            rerouteTask = nil
+            isRerouteInFlight = false
+            lastRerouteOrigin = nil
+            if !rerouteCoordinates.isEmpty { rerouteCoordinates = [] }
         }
-    }
-
-    private func minimumDistanceToRoute(from location: CLLocation) -> Double {
-        guard !routeCoordinates.isEmpty else { return 0 }
-        var minDist = Double.infinity
-        // Sample every 5th coordinate — fast enough for real-time use
-        for i in stride(from: 0, to: routeCoordinates.count, by: 5) {
-            let c = routeCoordinates[i]
-            let d = location.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
-            if d < minDist { minDist = d }
-            if minDist < 20 { return minDist }  // clearly on-route, early exit
-        }
-        return minDist
     }
 
     private func calculateReroute(from origin: CLLocationCoordinate2D, to target: CLLocationCoordinate2D) async {
@@ -345,10 +414,84 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         req.source = MKMapItem(placemark: MKPlacemark(coordinate: origin))
         req.destination = MKMapItem(placemark: MKPlacemark(coordinate: target))
         req.transportType = .automobile
-        guard let route = try? await MKDirections(request: req).calculate().routes.first,
-              !Task.isCancelled else { return }
-        rerouteCoordinates = route.polyline.coordinates
+        if let route = try? await MKDirections(request: req).calculate().routes.first,
+           !Task.isCancelled {
+            rerouteCoordinates = route.polyline.coordinates
+        }
+        isRerouteInFlight = false
     }
+
+    /// Advance `currentRouteSegmentIndex` to the closest upcoming segment, never backwards.
+    private func advanceRouteProgress(to location: CLLocation) {
+        guard routeCoordinates.count >= 2 else { return }
+        let lookEnd = min(routeCoordinates.count - 2, currentRouteSegmentIndex + 200)
+        guard lookEnd >= currentRouteSegmentIndex else { return }
+
+        var minDist = Double.infinity
+        var bestIdx = currentRouteSegmentIndex
+        for i in currentRouteSegmentIndex...lookEnd {
+            let d = distanceToLineSegment(from: location, a: routeCoordinates[i], b: routeCoordinates[i + 1])
+            if d < minDist { minDist = d; bestIdx = i }
+            if minDist < 5 { break }
+        }
+        // Only advance if user is actually near the route — prevents a far-away GPS fix
+        // from jumping the index to the end of a short route, which caused the straight-line bug.
+        if bestIdx > currentRouteSegmentIndex && minDist <= 80 {
+            currentRouteSegmentIndex = bestIdx
+        }
+    }
+
+    /// Minimum perpendicular distance to any segment in a window around the current progress index.
+    private func minimumDistanceToUpcomingRoute(from location: CLLocation) -> Double {
+        guard routeCoordinates.count >= 2 else { return 0 }
+        let start = max(0, currentRouteSegmentIndex - 5)
+        let end = min(routeCoordinates.count - 2, currentRouteSegmentIndex + 100)
+        guard end >= start else { return 0 }
+
+        var minDist = Double.infinity
+        for i in start...end {
+            let d = distanceToLineSegment(from: location, a: routeCoordinates[i], b: routeCoordinates[i + 1])
+            if d < minDist { minDist = d }
+            if minDist < 5 { return minDist }
+        }
+        return minDist
+    }
+
+    /// Perpendicular distance from `point` to segment A→B, clamped to the segment ends.
+    private func distanceToLineSegment(from point: CLLocation, a: CLLocationCoordinate2D, b: CLLocationCoordinate2D) -> Double {
+        // Project to a local flat-earth frame (degrees → approximate equal-scale units)
+        let cosLat = cos(a.latitude * .pi / 180)
+        let ax = a.longitude * cosLat, ay = a.latitude
+        let bx = b.longitude * cosLat, by = b.latitude
+        let px = point.coordinate.longitude * cosLat, py = point.coordinate.latitude
+
+        let dx = bx - ax, dy = by - ay
+        let lenSq = dx * dx + dy * dy
+        let nearLat: Double, nearLng: Double
+        if lenSq < 1e-18 {
+            nearLat = a.latitude; nearLng = a.longitude
+        } else {
+            let t = max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
+            nearLat = a.latitude + t * (b.latitude - a.latitude)
+            nearLng = a.longitude + t * (b.longitude - a.longitude)
+        }
+        return point.distance(from: CLLocation(latitude: nearLat, longitude: nearLng))
+    }
+
+    /// Walk ~500 m ahead on the planned route from the current progress point so the
+    /// reroute leads the rider back to the actual planned road, not straight to the next stop.
+    private func rerouteJoinPoint() -> CLLocationCoordinate2D? {
+        guard routeCoordinates.count > currentRouteSegmentIndex + 1 else { return nil }
+        var accumulated = 0.0
+        for i in currentRouteSegmentIndex..<routeCoordinates.count - 1 {
+            let a = CLLocation(latitude: routeCoordinates[i].latitude, longitude: routeCoordinates[i].longitude)
+            let b = CLLocation(latitude: routeCoordinates[i + 1].latitude, longitude: routeCoordinates[i + 1].longitude)
+            accumulated += a.distance(from: b)
+            if accumulated >= 500 { return routeCoordinates[i + 1] }
+        }
+        return nil
+    }
+
 }
 
 // MARK: - Main View
@@ -365,6 +508,7 @@ struct RideNavigationView: View {
     @State private var selectedRiderId: String? = nil
     @State private var showRegroup = false
     @State private var regroupReason: CoordinationOverlayView.RegroupReason? = nil
+    @State private var isBroadcasting = false
     @State private var showEndError = false
     @State private var isFreeLooking: Bool = false
     @State private var lastInteractionDate: Date = .distantPast
@@ -373,81 +517,59 @@ struct RideNavigationView: View {
 
     private var navCameraDistance: Double {
         switch vm.mySpeedKmh {
-        case ..<20:  return 300
-        case ..<60:  return 500
-        default:     return 800
+        case ..<20:  return 400
+        case ..<60:  return 700
+        default:     return 1000
         }
     }
 
     var body: some View {
+        coreView
+            .sheet(isPresented: $showRegroup, onDismiss: { isBroadcasting = false }) {
+                RegroupBottomSheet(
+                    selectedReason: $regroupReason,
+                    onBroadcast: { coordinate in
+                        guard !isBroadcasting else { return }
+                        isBroadcasting = true
+                        vm.broadcastRegroup(reason: regroupReason, at: coordinate)
+                        showRegroup = false
+                    },
+                    isBroadcasting: isBroadcasting
+                )
+                .presentationDetents([.large])
+            }
+            .onChange(of: vm.activeRegroup) { _, regroup in handleRegroupChanged(regroup) }
+            .navigationDestination(isPresented: $vm.showSummary) {
+                RideSummaryView(rideId: rideId, rideTitle: appState.currentRide?.title, isPostRide: true)
+            }
+            .alert("Couldn't End Ride", isPresented: $showEndError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(vm.endError ?? "An error occurred.")
+            }
+            .onChange(of: vm.endError) { _, err in if err != nil { showEndError = true } }
+    }
+
+    private var coreView: some View {
         ZStack {
             mapLayer
             hudLayer
             rightStatPills
-            freelookOverlay
         }
         .navigationBarHidden(true)
         .preferredColorScheme(.dark)
-        .onAppear { appState.isRideActive = true }
+        .onAppear {
+            appState.isRideActive = true
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
         .onDisappear {
             appState.isRideActive = false
+            UIApplication.shared.isIdleTimerDisabled = false
             vm.teardown()
         }
         .task { await loadAndSetup() }
-        .onChange(of: vm.routeVersion) { _, _ in
-            // Show full route overview until the first location update arrives
-            guard vm.locationTick == 0 else { return }
-            if !vm.routeCoordinates.isEmpty {
-                let poly = MKPolyline(coordinates: vm.routeCoordinates, count: vm.routeCoordinates.count)
-                let rect = poly.boundingMapRect
-                cameraPosition = .rect(rect.insetBy(dx: -rect.width * 0.15, dy: -rect.height * 0.15))
-            } else if let dest = vm.destinationCoordinate {
-                cameraPosition = .region(MKCoordinateRegion(
-                    center: dest,
-                    span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
-                ))
-            }
-        }
-        .onChange(of: vm.locationTick) { old, new in
-            guard let coord = vm.userLocation else { return }
-            let isFirstFix = old == 0
-            let isMoving = vm.mySpeedKmh > 2.0
-            let idleSeconds = Date().timeIntervalSince(lastInteractionDate)
-            // Resume auto-follow only on first GPS fix, or when moving AND 3 s since last touch
-            let shouldFollow = isFirstFix || (isMoving && idleSeconds >= 3.0)
-            if isFreeLooking && shouldFollow { isFreeLooking = false }
-            guard shouldFollow else { return }
-            withAnimation(isFirstFix ? .easeInOut(duration: 1.5) : .linear(duration: 0.3)) {
-                cameraPosition = .camera(MapCamera(
-                    centerCoordinate: coord,
-                    distance: navCameraDistance,
-                    heading: vm.userHeading,
-                    pitch: 55
-                ))
-            }
-        }
-        .sheet(isPresented: $showRegroup) {
-            RegroupBottomSheet(
-                selectedReason: $regroupReason,
-                onBroadcast: {
-                    vm.broadcastRegroup(reason: regroupReason)
-                    showRegroup = false
-                },
-                isBroadcasting: false
-            )
-            .presentationDetents([.large])
-        }
-        .navigationDestination(isPresented: $vm.showSummary) {
-            RideSummaryView(rideId: rideId, rideTitle: appState.currentRide?.title, isPostRide: true)
-        }
-        .alert("Couldn't End Ride", isPresented: $showEndError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(vm.endError ?? "An error occurred.")
-        }
-        .onChange(of: vm.endError) { _, err in
-            if err != nil { showEndError = true }
-        }
+        .onChange(of: vm.routeVersion) { _, _ in handleRouteVersionChanged() }
+        .onChange(of: vm.locationTick) { old, _ in handleLocationTickChanged(wasZero: old == 0) }
     }
 
     // MARK: - Load
@@ -464,17 +586,65 @@ struct RideNavigationView: View {
     // MARK: - Map
 
     private var mapLayer: some View {
-        Map(position: $cameraPosition, content: mapContent)
-            .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
-            .ignoresSafeArea()
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 10)
-                    .onChanged { _ in onMapInteraction() }
-            )
-            .simultaneousGesture(
-                MagnifyGesture()
-                    .onChanged { _ in onMapInteraction() }
-            )
+        Map(position: $cameraPosition) {
+            if let coord = vm.userLocation {
+                Annotation("", coordinate: coord, anchor: .center) {
+                    ConvoyLocationPin(heading: vm.userHeading)
+                }
+            }
+
+            if !vm.rerouteCoordinates.isEmpty {
+                MapPolyline(coordinates: vm.rerouteCoordinates)
+                    .stroke(
+                        Color(red: 1.0, green: 0.6, blue: 0.15),
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round, dash: [10, 6])
+                    )
+            }
+
+            if !vm.routeCoordinates.isEmpty {
+                MapPolyline(coordinates: vm.routeCoordinates)
+                    .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+            }
+
+            ForEach(vm.riders.filter { !$0.isMe }) { rider in
+                Annotation(rider.name, coordinate: rider.coordinate, anchor: .bottom) {
+                    LiveRiderPin(rider: rider, isSelected: selectedRiderId == rider.id)
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedRiderId = (selectedRiderId == rider.id) ? nil : rider.id
+                            }
+                        }
+                }
+            }
+
+            ForEach(vm.middleWaypoints, id: \.order) { wp in
+                Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
+                    WaypointPin(name: wp.name)
+                }
+            }
+
+            if let coord = vm.destinationCoordinate {
+                Annotation("", coordinate: coord, anchor: .bottom) {
+                    DestinationPin(name: destinationName)
+                }
+            }
+
+            if let regroup = vm.activeRegroup {
+                Annotation("", coordinate: CLLocationCoordinate2D(latitude: regroup.lat, longitude: regroup.lng), anchor: .bottom) {
+                    RegroupPin(type: regroup.type)
+                }
+            }
+        }
+        .mapStyle(.standard(elevation: .flat))
+        .ignoresSafeArea()
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 10)
+                .onChanged { _ in onMapInteraction() }
+        )
+        .simultaneousGesture(
+            MagnifyGesture()
+                .onChanged { _ in onMapInteraction() }
+        )
     }
 
     private func onMapInteraction() {
@@ -496,62 +666,49 @@ struct RideNavigationView: View {
         }
     }
 
-    @MapContentBuilder
-    private func mapContent() -> some MapContent {
-        reroutePolyline
-        routePolyline
-        riderAnnotations
-        waypointAnnotations
-    }
-
-    @MapContentBuilder
-    private var reroutePolyline: some MapContent {
-        if !vm.rerouteCoordinates.isEmpty {
-            MapPolyline(coordinates: vm.rerouteCoordinates)
-                .stroke(
-                    Color(red: 1.0, green: 0.6, blue: 0.15),
-                    style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round, dash: [10, 6])
-                )
-        }
-    }
-
-    @MapContentBuilder
-    private var routePolyline: some MapContent {
+    private func handleRouteVersionChanged() {
+        guard vm.locationTick == 0 else { return }
         if !vm.routeCoordinates.isEmpty {
-            MapPolyline(coordinates: vm.routeCoordinates)
-                .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+            let poly = MKPolyline(coordinates: vm.routeCoordinates, count: vm.routeCoordinates.count)
+            let padded = poly.boundingMapRect.insetBy(dx: -poly.boundingMapRect.width * 0.15, dy: -poly.boundingMapRect.height * 0.15)
+            let region = MKCoordinateRegion(padded)
+            let spanMeters = max(
+                region.span.latitudeDelta * 111_000,
+                region.span.longitudeDelta * 111_000 * cos(region.center.latitude * .pi / 180)
+            )
+            cameraPosition = .camera(MapCamera(centerCoordinate: region.center, distance: spanMeters * 0.9, heading: 0, pitch: 0))
+        } else if let dest = vm.destinationCoordinate {
+            cameraPosition = .camera(MapCamera(centerCoordinate: dest, distance: 50_000, heading: 0, pitch: 0))
         }
     }
 
-    @MapContentBuilder
-    private var riderAnnotations: some MapContent {
-        ForEach(vm.riders.filter { !$0.isMe }) { rider in
-            Annotation(rider.name, coordinate: rider.coordinate, anchor: .bottom) {
-                LiveRiderPin(rider: rider, isSelected: selectedRiderId == rider.id)
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            selectedRiderId = (selectedRiderId == rider.id) ? nil : rider.id
-                        }
-                    }
-            }
+    private func handleLocationTickChanged(wasZero: Bool) {
+        guard let coord = vm.userLocation else { return }
+        let isMoving = vm.mySpeedKmh > 2.0
+        let idleSeconds = Date().timeIntervalSince(lastInteractionDate)
+        let shouldFollow = wasZero || (isMoving && idleSeconds >= 3.0)
+        if isFreeLooking && shouldFollow { isFreeLooking = false }
+        guard shouldFollow else { return }
+        withAnimation(wasZero ? .easeInOut(duration: 1.5) : .linear(duration: 0.3)) {
+            cameraPosition = .camera(MapCamera(centerCoordinate: coord, distance: navCameraDistance, heading: vm.userHeading, pitch: 0))
         }
     }
 
-    @MapContentBuilder
-    private var waypointAnnotations: some MapContent {
-        if let coord = vm.startCoordinate {
-            Annotation("", coordinate: coord, anchor: .center) { StartPin() }
+    private func handleRegroupChanged(_ regroup: RegroupEvent?) {
+        guard let regroup else { return }
+        isFreeLooking = true
+        lastInteractionDate = Date()
+        withAnimation(.easeInOut(duration: 0.8)) {
+            cameraPosition = .camera(MapCamera(
+                centerCoordinate: CLLocationCoordinate2D(latitude: regroup.lat, longitude: regroup.lng),
+                distance: 600,
+                heading: 0,
+                pitch: 0
+            ))
         }
-        ForEach(vm.middleWaypoints, id: \.order) { wp in
-            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
-                WaypointPin(name: wp.name)
-            }
-        }
-        if let coord = vm.destinationCoordinate {
-            Annotation("", coordinate: coord, anchor: .bottom) { DestinationPin(name: destinationName) }
-        }
-        if let coord = vm.userLocation {
-            Annotation("", coordinate: coord, anchor: .center) { NavUserArrow() }
+        Task {
+            try? await Task.sleep(for: .seconds(5))
+            resumeNavigation()
         }
     }
 
@@ -580,7 +737,57 @@ struct RideNavigationView: View {
                 .animation(.spring(), value: vm.showSplitAlert)
             }
 
+            if vm.showRegroupToast, let regroup = vm.activeRegroup {
+                RegroupToastBanner(type: regroup.type)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(), value: vm.showRegroupToast)
+                    .task {
+                        try? await Task.sleep(for: .seconds(4))
+                        withAnimation { vm.showRegroupToast = false }
+                    }
+            }
+
+            if vm.showRegroupResolvedToast {
+                RegroupResolvedBanner()
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(), value: vm.showRegroupResolvedToast)
+            }
+
             Spacer()
+
+            if isFreeLooking {
+                Button(action: resumeNavigation) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("RESUME")
+                            .font(.system(size: 10, weight: .black, design: .monospaced))
+                            .tracking(1.2)
+                    }
+                    .foregroundColor(Color.onPrimaryFixed)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(Color.primaryFixed)
+                    .clipShape(Capsule())
+                    .shadow(color: Color.primaryFixed.opacity(0.55), radius: 10)
+                }
+                .transition(.scale.combined(with: .opacity))
+                .animation(.spring(response: 0.35), value: isFreeLooking)
+                .padding(.bottom, 8)
+            }
+
+            if vm.activeRegroup != nil {
+                arrivedButton
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(), value: vm.activeRegroup != nil)
+            }
+
             bottomControls
         }
     }
@@ -631,49 +838,9 @@ struct RideNavigationView: View {
             }
             .padding(.horizontal, 20)
 
-            turnBanner
             leaderboardStrip
         }
         .padding(.top, 8)
-    }
-
-    @ViewBuilder
-    private var turnBanner: some View {
-        if !vm.currentInstruction.isEmpty {
-            HStack(spacing: 14) {
-                Image(systemName: maneuverIcon(for: vm.currentInstruction))
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Color.primaryFixed.opacity(0.18))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primaryFixed.opacity(0.4), lineWidth: 1))
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(vm.currentInstruction)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color.onSurface)
-                        .lineLimit(2)
-
-                    if vm.distanceToNextTurnMeters > 0 {
-                        Text(vm.distanceToNextTurnMeters >= 1000
-                             ? String(format: "in %.1f km", vm.distanceToNextTurnMeters / 1000)
-                             : String(format: "in %.0f m", vm.distanceToNextTurnMeters))
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.primaryFixed)
-                    }
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.outlineVariant.opacity(0.25), lineWidth: 1))
-            .padding(.horizontal, 20)
-            .transition(.move(edge: .top).combined(with: .opacity))
-            .animation(.spring(response: 0.4), value: vm.currentInstruction)
-        }
     }
 
     private func maneuverIcon(for instruction: String) -> String {
@@ -714,32 +881,6 @@ struct RideNavigationView: View {
                 }
             }
         }
-    }
-
-    private var freelookOverlay: some View {
-        VStack {
-            Spacer()
-            if isFreeLooking {
-                Button(action: resumeNavigation) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "location.fill")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("RESUME")
-                            .font(.system(size: 10, weight: .black, design: .monospaced))
-                            .tracking(1.2)
-                    }
-                    .foregroundColor(Color.onPrimaryFixed)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
-                    .background(Color.primaryFixed)
-                    .clipShape(Capsule())
-                    .shadow(color: Color.primaryFixed.opacity(0.55), radius: 10)
-                }
-                .transition(.scale.combined(with: .opacity))
-                .padding(.bottom, 160)
-            }
-        }
-        .animation(.spring(response: 0.35), value: isFreeLooking)
     }
 
     private var offRouteBanner: some View {
@@ -827,6 +968,33 @@ struct RideNavigationView: View {
         .disabled(vm.isEnding)
     }
 
+    // MARK: - Arrived Button
+
+    private var arrivedButton: some View {
+        Button(action: {
+            if !vm.hasMarkedArrived { vm.markArrivedAtRegroup() }
+        }) {
+            HStack(spacing: 10) {
+                Image(systemName: vm.hasMarkedArrived ? "clock.fill" : "checkmark.circle.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                Text(vm.hasMarkedArrived ? "WAITING FOR OTHERS..." : "MARK AS ARRIVED")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+            }
+            .foregroundColor(vm.hasMarkedArrived ? Color.onSurfaceVariant : Color.onPrimaryFixed)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(vm.hasMarkedArrived ? Color.surfaceContainerHigh : Color.primaryFixed)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(
+                vm.hasMarkedArrived ? Color.outlineVariant.opacity(0.4) : Color.clear,
+                lineWidth: 1
+            ))
+        }
+        .disabled(vm.hasMarkedArrived)
+        .animation(.spring(response: 0.3), value: vm.hasMarkedArrived)
+    }
+
     // MARK: - Right Stat Pills
 
     private var rightStatPills: some View {
@@ -846,6 +1014,11 @@ struct RideNavigationView: View {
                         value: vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--",
                         unit: "KM"
                     )
+                    if !vm.currentInstruction.isEmpty {
+                        turnPill
+                            .transition(.scale.combined(with: .opacity))
+                            .animation(.spring(response: 0.4), value: vm.currentInstruction)
+                    }
                 }
                 .padding(.trailing, 14)
             }
@@ -853,6 +1026,32 @@ struct RideNavigationView: View {
         }
         .padding(.top, 180)
         .padding(.bottom, 220)
+    }
+
+    private var turnPill: some View {
+        let dist = vm.distanceToNextTurnMeters
+        let distText = dist >= 1000
+            ? String(format: "%.1fkm", dist / 1000)
+            : String(format: "%.0fm", dist)
+
+        return VStack(spacing: 4) {
+            Image(systemName: maneuverIcon(for: vm.currentInstruction))
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Color.primaryFixed)
+            if dist > 0 {
+                Text("in \(distText)")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(Color.onSurface)
+                    .lineLimit(1)
+            }
+        }
+        .frame(width: 72, height: dist > 0 ? 56 : 44)
+        .background(Color.surfaceContainerHigh.opacity(0.88))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.primaryFixed.opacity(0.45), lineWidth: 1.5)
+        )
     }
 }
 
@@ -1021,28 +1220,27 @@ struct LiveLeaderboardCard: View {
 
 // MARK: - Destination Pin
 
-// MARK: - Nav User Arrow
+// MARK: - Convoy Location Pin
 
-struct NavUserArrow: View {
+struct ConvoyLocationPin: View {
+    let heading: Double
+
     var body: some View {
         ZStack {
-            // Outer glow ring
             Circle()
-                .fill(Color(red: 0.0, green: 0.48, blue: 1.0).opacity(0.25))
-                .frame(width: 48, height: 48)
-            // Arrow body
-            ZStack {
-                Circle()
-                    .fill(Color(red: 0.0, green: 0.48, blue: 1.0))
-                    .frame(width: 28, height: 28)
-                    .overlay(Circle().stroke(Color.white, lineWidth: 2.5))
-                    .shadow(color: .black.opacity(0.3), radius: 4)
-                Image(systemName: "arrowtriangle.up.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
-                    .offset(y: -1)
-            }
+                .fill(Color.primaryFixed.opacity(0.22))
+                .frame(width: 46, height: 46)
+            Circle()
+                .fill(Color.primaryFixed)
+                .frame(width: 24, height: 24)
+                .overlay(Circle().stroke(Color.white, lineWidth: 3))
+                .shadow(color: Color.primaryFixed.opacity(0.9), radius: 10)
+            Image(systemName: "arrowtriangle.up.fill")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(Color.onPrimaryFixed)
+                .offset(y: -1)
         }
+        .rotationEffect(.degrees(heading))
     }
 }
 
@@ -1146,6 +1344,145 @@ struct NavStatPill: View {
         .background(Color.surfaceContainerHigh.opacity(0.88))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.outlineVariant.opacity(0.2), lineWidth: 1))
+    }
+}
+
+// MARK: - Regroup Pin
+
+struct RegroupPin: View {
+    let type: String
+
+    private var icon: String {
+        switch type {
+        case "FUEL":   return "fuelpump.fill"
+        case "FOOD":   return "fork.knife"
+        case "SCENIC": return "camera.fill"
+        default:       return "hand.raised.fill"
+        }
+    }
+
+    private var accentColor: Color {
+        switch type {
+        case "FUEL":   return Color(red: 1.0, green: 0.63, blue: 0.0)   // amber
+        case "FOOD":   return Color(red: 1.0, green: 0.43, blue: 0.0)   // orange
+        case "SCENIC": return Color(red: 0.01, green: 0.61, blue: 0.9)  // sky blue
+        default:       return Color(red: 0.48, green: 0.11, blue: 0.64) // purple
+        }
+    }
+
+    private var label: String {
+        switch type {
+        case "FUEL":   return "FUEL STOP"
+        case "FOOD":   return "FOOD STOP"
+        case "SCENIC": return "SCENIC STOP"
+        default:       return "STOP"
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 2) {
+            ZStack {
+                Circle()
+                    .fill(Color.surfaceDim)
+                    .frame(width: 40, height: 40)
+                    .overlay(Circle().stroke(accentColor, lineWidth: 2.5))
+                    .shadow(color: accentColor.opacity(0.5), radius: 8)
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(accentColor)
+            }
+            Triangle().fill(accentColor).frame(width: 8, height: 5).offset(y: -1)
+            Text(label)
+                .font(.system(size: 7, weight: .black, design: .monospaced))
+                .foregroundColor(Color.onSurface)
+                .tracking(0.5)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Color.surfaceContainerHigh.opacity(0.92))
+                .clipShape(Capsule())
+        }
+    }
+}
+
+// MARK: - Regroup Toast Banner
+
+struct RegroupToastBanner: View {
+    let type: String
+
+    private var icon: String {
+        switch type {
+        case "FUEL":   return "fuelpump.fill"
+        case "FOOD":   return "fork.knife"
+        case "SCENIC": return "camera.fill"
+        default:       return "hand.raised.fill"
+        }
+    }
+
+    private var accentColor: Color {
+        switch type {
+        case "FUEL":   return Color(red: 1.0, green: 0.63, blue: 0.0)
+        case "FOOD":   return Color(red: 1.0, green: 0.43, blue: 0.0)
+        case "SCENIC": return Color(red: 0.01, green: 0.61, blue: 0.9)
+        default:       return Color(red: 0.48, green: 0.11, blue: 0.64)
+        }
+    }
+
+    private var label: String {
+        switch type {
+        case "FUEL":   return "Fuel Stop"
+        case "FOOD":   return "Food Stop"
+        case "SCENIC": return "Scenic Stop"
+        default:       return "Stop"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(accentColor)
+                .frame(width: 36, height: 36)
+                .background(accentColor.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("REGROUP CALLED")
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .foregroundColor(accentColor)
+                    .tracking(1)
+                Text("Head to the \(label)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color.onSurface)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(accentColor.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(accentColor.opacity(0.5), lineWidth: 1.5))
+    }
+}
+
+// MARK: - Regroup Resolved Banner
+
+struct RegroupResolvedBanner: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(Color.tertiaryFixed)
+                .frame(width: 36, height: 36)
+                .background(Color.tertiaryFixed.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            Text("Regroup complete · Everyone arrived")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Color.tertiaryFixed)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.tertiaryFixed.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.tertiaryFixed.opacity(0.5), lineWidth: 1.5))
     }
 }
 

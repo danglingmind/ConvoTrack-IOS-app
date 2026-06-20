@@ -8,6 +8,7 @@ import Combine
 @MainActor
 final class LobbyViewModel: ObservableObject {
     @Published var participants: [RideParticipant] = []
+    @Published var onlineUserIds: Set<String> = []
     @Published var myStatus = "WAITING"   // optimistic local ready state
     @Published var isStarting = false
     @Published var socketConnected = false
@@ -40,6 +41,8 @@ final class LobbyViewModel: ObservableObject {
             // Roster snapshot from server — use it to seed the list if REST failed
             if self.participants.isEmpty { self.participants = participants }
             if self.leaderId.isEmpty { self.leaderId = leaderId }
+            // Replace with authoritative snapshot — anyone missing here is offline
+            self.onlineUserIds = Set(participants.map { $0.userId })
         }
 
         socket.onParticipantJoined = { [weak self] participant in
@@ -47,10 +50,16 @@ final class LobbyViewModel: ObservableObject {
             if !self.participants.contains(where: { $0.userId == participant.userId }) {
                 self.participants.append(participant)
             }
+            self.onlineUserIds.insert(participant.userId)
         }
 
         socket.onParticipantLeft = { [weak self] userId in
             self?.participants.removeAll { $0.userId == userId }
+            self?.onlineUserIds.remove(userId)
+        }
+
+        socket.onParticipantOffline = { [weak self] userId in
+            self?.onlineUserIds.remove(userId)
         }
 
         socket.onParticipantReady = { [weak self] userId in
@@ -64,6 +73,9 @@ final class LobbyViewModel: ObservableObject {
             try? await Task.sleep(for: .milliseconds(400))
             socket.joinRoom(rideId: rideId)
             self.socketConnected = true
+            if !self.myUserId.isEmpty {
+                self.onlineUserIds.insert(self.myUserId)
+            }
         }
     }
 
@@ -304,7 +316,7 @@ struct RideLobbyView: View {
                         let name = isMe ? (myClerkName ?? participant.name) : participant.name
                         let status = isMe ? vm.myStatus : participant.status
                         Button(action: { showRiderDetail = true }) {
-                            ParticipantRiderRow(participant: participant, nameOverride: name, statusOverride: status)
+                            ParticipantRiderRow(participant: participant, nameOverride: name, statusOverride: status, isOnline: vm.onlineUserIds.contains(participant.userId))
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
@@ -494,6 +506,7 @@ struct ParticipantRiderRow: View {
     let participant: RideParticipant
     var nameOverride: String? = nil
     var statusOverride: String? = nil
+    var isOnline: Bool = false
 
     private var displayName: String { nameOverride ?? participant.name }
     private var displayStatus: String { statusOverride ?? participant.status }
@@ -521,7 +534,7 @@ struct ParticipantRiderRow: View {
                 }
 
                 Circle()
-                    .fill(isReady ? Color.primaryFixed : Color.surfaceVariant)
+                    .fill(isOnline ? Color.tertiaryFixed : Color.surfaceVariant)
                     .frame(width: 14, height: 14)
                     .overlay(Circle().stroke(Color.surfaceDim, lineWidth: 2))
             }

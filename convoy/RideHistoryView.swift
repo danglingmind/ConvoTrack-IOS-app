@@ -1,16 +1,20 @@
 import SwiftUI
 
 struct RideHistoryView: View {
+    @EnvironmentObject private var appState: AppState
     @State private var rides: [HistoryRide] = []
     @State private var isLoading = true
     @State private var selectedRide: HistoryRide? = nil
     @State private var showSummary = false
+    @State private var showLobby = false
+
+    private var completedRides: [HistoryRide] { rides.filter { $0.status == "COMPLETED" } }
 
     private var totalDistanceKm: Double {
-        rides.reduce(0) { $0 + $1.distanceMeters / 1000 }
+        completedRides.reduce(0) { $0 + $1.distanceMeters / 1000 }
     }
     private var avgSpeedKmh: Double {
-        let speeds = rides.compactMap { $0.avgSpeedKmh }
+        let speeds = completedRides.compactMap { $0.avgSpeedKmh }
         guard !speeds.isEmpty else { return 0 }
         return speeds.reduce(0, +) / Double(speeds.count)
     }
@@ -36,7 +40,7 @@ struct RideHistoryView: View {
                                     unit: "KM"
                                 )
                                 FloatingStatPill(
-                                    label: "COMPLETED",
+                                    label: "TOTAL",
                                     value: "\(rides.count)",
                                     unit: nil
                                 )
@@ -53,10 +57,7 @@ struct RideHistoryView: View {
                             } else {
                                 VStack(spacing: 16) {
                                     ForEach(rides) { ride in
-                                        Button(action: {
-                                            selectedRide = ride
-                                            showSummary = true
-                                        }) {
+                                        Button(action: { handleTap(ride) }) {
                                             RideHistoryCard(ride: ride)
                                         }
                                         .buttonStyle(.plain)
@@ -76,7 +77,15 @@ struct RideHistoryView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $showSummary) {
-            RideSummaryView(rideId: selectedRide?.rideId, rideTitle: selectedRide?.title, fallback: selectedRide)
+            if let ride = selectedRide {
+                RideSummaryView(rideId: ride.rideId, rideTitle: ride.title, fallback: ride)
+            }
+        }
+        .navigationDestination(isPresented: $showLobby) {
+            RideLobbyView()
+        }
+        .onChange(of: appState.popToRoot) { _, shouldPop in
+            if shouldPop { showLobby = false }
         }
         .task { await loadHistory() }
     }
@@ -86,16 +95,27 @@ struct RideHistoryView: View {
             Image(systemName: "flag.slash")
                 .font(.system(size: 48))
                 .foregroundColor(Color.onSurfaceVariant.opacity(0.4))
-            Text("No completed rides yet")
+            Text("No rides yet")
                 .font(.headlineMd)
                 .foregroundColor(Color.onSurfaceVariant)
-            Text("Your ride history will appear here after you complete your first convoy.")
+            Text("Your ride history will appear here after you create or join your first convoy.")
                 .font(.bodyMd)
                 .foregroundColor(Color.onSurfaceVariant.opacity(0.6))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
         .padding(.top, 40)
+    }
+
+    private func handleTap(_ ride: HistoryRide) {
+        selectedRide = ride
+        if ride.status == "COMPLETED" {
+            showSummary = true
+        } else {
+            appState.currentRideId = ride.rideId
+            if let code = ride.inviteCode { appState.inviteCode = code }
+            showLobby = true
+        }
     }
 
     private func loadHistory() async {
@@ -108,23 +128,24 @@ struct RideHistoryCard: View {
     let ride: HistoryRide
 
     var dateLabel: String {
-        guard let iso = ride.endedAt,
-              let date = ISO8601DateFormatter().date(from: iso) else { return "--" }
+        let iso = ride.endedAt ?? ride.startedAt ?? ride.createdAt
+        guard let iso, let date = ISO8601DateFormatter().date(from: iso) else { return "--" }
         let f = DateFormatter()
         f.dateFormat = "dd MMM yyyy"
         return f.string(from: date).uppercased()
     }
 
     var timeLabel: String {
-        guard let iso = ride.startedAt,
-              let date = ISO8601DateFormatter().date(from: iso) else { return "" }
+        let iso = ride.startedAt ?? ride.createdAt
+        guard let iso, let date = ISO8601DateFormatter().date(from: iso) else { return "" }
         let f = DateFormatter()
         f.dateFormat = "hh:mm a"
         return f.string(from: date)
     }
 
     var distanceLabel: String {
-        String(format: "%.1f KM", ride.distanceMeters / 1000)
+        guard ride.distanceMeters > 0 else { return "--" }
+        return String(format: "%.1f KM", ride.distanceMeters / 1000)
     }
 
     var durationLabel: String {
@@ -135,6 +156,21 @@ struct RideHistoryCard: View {
 
     var speedLabel: String {
         ride.avgSpeedKmh.map { String(format: "%.0f KM/H", $0) } ?? "--"
+    }
+
+    var statusColor: Color {
+        switch ride.status {
+        case "LOBBY":           return Color.primaryFixed
+        case "ACTIVE", "PAUSED": return Color.tertiaryFixed
+        default:                return Color.tertiaryFixedDim
+        }
+    }
+
+    var statusBgColor: Color {
+        switch ride.status {
+        case "LOBBY":           return Color.onPrimaryContainer
+        default:                return Color.onTertiaryContainer
+        }
     }
 
     var body: some View {
@@ -150,15 +186,15 @@ struct RideHistoryCard: View {
                     )
                     .overlay(LinearGradient(colors: [.clear, Color.surfaceDim], startPoint: .top, endPoint: .bottom))
 
-                Text("COMPLETED")
+                Text(ride.status)
                     .font(.labelCaps)
-                    .foregroundColor(Color.tertiaryFixedDim)
+                    .foregroundColor(statusColor)
                     .tracking(1)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.onTertiaryContainer.opacity(0.2))
+                    .background(statusBgColor.opacity(0.2))
                     .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.tertiaryFixedDim.opacity(0.3), lineWidth: 1))
+                    .overlay(Capsule().stroke(statusColor.opacity(0.3), lineWidth: 1))
                     .padding(12)
             }
 
@@ -170,22 +206,32 @@ struct RideHistoryCard: View {
                             Circle().fill(Color.outlineVariant).frame(width: 4, height: 4)
                             Text(timeLabel).font(.labelCaps).foregroundColor(Color.onSurfaceVariant)
                         }
+                        if ride.isLeader == true {
+                            Circle().fill(Color.outlineVariant).frame(width: 4, height: 4)
+                            Text("LEADER").font(.labelCaps).foregroundColor(Color.primaryFixed)
+                        }
                     }
                     Text(ride.title).font(.headlineMd).foregroundColor(Color.onSurface)
                     HStack(spacing: 20) {
                         MetricSmall(label: "DISTANCE", value: distanceLabel)
-                        MetricSmall(label: "DURATION", value: durationLabel)
-                        MetricSmall(label: "AVG SPEED", value: speedLabel)
+                        if ride.status == "COMPLETED" {
+                            MetricSmall(label: "DURATION", value: durationLabel)
+                            MetricSmall(label: "AVG SPEED", value: speedLabel)
+                        }
                     }
                 }
                 Spacer()
-                Image(systemName: "chevron.right").foregroundColor(Color.outline)
+                Image(systemName: ride.status == "COMPLETED" ? "chevron.right" : "arrow.right.circle")
+                    .foregroundColor(ride.status == "COMPLETED" ? Color.outline : statusColor)
             }
             .padding(16)
         }
         .background(Color.surfaceContainerHigh.opacity(0.7))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(
+            ride.status == "COMPLETED" ? Color.outlineVariant.opacity(0.4) : statusColor.opacity(0.25),
+            lineWidth: 1
+        ))
     }
 }
 
@@ -203,4 +249,5 @@ struct MetricSmall: View {
 
 #Preview {
     RideHistoryView()
+        .environmentObject(AppState())
 }

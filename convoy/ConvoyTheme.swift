@@ -76,6 +76,8 @@ extension Font {
     static let bodyMd = Font.system(size: 16, weight: .regular)
     static let labelCaps = Font.system(size: 12, weight: .bold, design: .monospaced)
     static let dataMono = Font.system(size: 14, weight: .medium, design: .monospaced)
+    static let toggleLabel = Font.system(size: 13, weight: .semibold)
+    static let captionMd = Font.system(size: 12, weight: .regular)
 }
 
 // MARK: - View Modifiers

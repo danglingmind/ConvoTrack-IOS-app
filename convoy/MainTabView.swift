@@ -18,7 +18,9 @@ struct MainTabView: View {
                 case .track:
                     HomeView(activeTab: $activeTab, showJoinRide: $showJoinRide)
                 case .profile:
-                    ProfileView(activeTab: $activeTab)
+                    NavigationStack {
+                        ProfileView(activeTab: $activeTab)
+                    }
                 }
             }
 

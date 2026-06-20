@@ -11,11 +11,14 @@ final class SocketClient {
     var onStateUpdate: ((RideStateUpdate) -> Void)?
     var onParticipantJoined: ((RideParticipant) -> Void)?
     var onParticipantLeft: ((String) -> Void)?
+    var onParticipantOffline: ((String) -> Void)?
     var onParticipantReady: ((String) -> Void)?
     var onLobbyRoster: (([RideParticipant], String) -> Void)?
     var onSplitDetected: (([String: Any]) -> Void)?
     var onSplitResolved: (() -> Void)?
     var onEmergencyStarted: (([String: Any]) -> Void)?
+    var onRegroupStarted: ((RegroupEvent) -> Void)?
+    var onRegroupResolved: ((String) -> Void)?   // regroupId
 
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -29,15 +32,15 @@ final class SocketClient {
 
     func connect(token: String) {
         let url = URL(string: "https://convoy-backend-hx3c.onrender.com")!
-        // token passes via socket.auth as expected by backend Clerk middleware
         manager = SocketManager(socketURL: url, config: [
             .log(false),
             .compress,
-            .connectParams(["auth": ["token": token]])
         ])
         socket = manager?.defaultSocket
         registerHandlers()
-        socket?.connect()
+        // connect(withPayload:) sends the dict as socket.io CONNECT packet auth,
+        // which maps to socket.handshake.auth on the server — required by Clerk middleware.
+        socket?.connect(withPayload: ["token": token])
     }
 
     func disconnect() {
@@ -82,12 +85,26 @@ final class SocketClient {
 
     // MARK: - Emit: Regroup / Emergency
 
-    func emitRegroup(rideId: String, type: String, lat: Double, lng: Double) {
-        socket?.emit("ride:regroup", ["rideId": rideId, "type": type, "lat": lat, "lng": lng])
+    func emitRegroup(rideId: String, type: String, lat: Double, lng: Double,
+                     completion: @escaping (String?) -> Void) {
+        let payload: [String: Any] = ["rideId": rideId, "type": type, "lat": lat, "lng": lng]
+        socket?.emitWithAck("ride:regroup", payload).timingOut(after: 5) { data in
+            guard let dict = data.first as? [String: Any],
+                  let ok = dict["ok"] as? Bool, ok,
+                  let regroupId = dict["regroupId"] as? String else {
+                completion(nil)
+                return
+            }
+            completion(regroupId)
+        }
     }
 
     func emitEmergency(rideId: String, lat: Double, lng: Double, message: String) {
         socket?.emit("ride:emergency", ["rideId": rideId, "lat": lat, "lng": lng, "message": message])
+    }
+
+    func emitRegroupArrived(rideId: String, regroupId: String) {
+        socket?.emit("ride:regroup_arrived", ["rideId": rideId, "regroupId": regroupId])
     }
 
     // MARK: - Incoming Event Handlers
@@ -115,6 +132,12 @@ final class SocketClient {
             guard let dict = data.first as? [String: Any],
                   let userId = dict["userId"] as? String else { return }
             DispatchQueue.main.async { self?.onParticipantLeft?(userId) }
+        }
+
+        socket.on("ride:participant_offline") { [weak self] data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let userId = dict["userId"] as? String else { return }
+            DispatchQueue.main.async { self?.onParticipantOffline?(userId) }
         }
 
         socket.on("ride:participant_ready") { [weak self] data, _ in
@@ -145,6 +168,20 @@ final class SocketClient {
         socket.on("ride:emergency_started") { [weak self] data, _ in
             guard let dict = data.first as? [String: Any] else { return }
             DispatchQueue.main.async { self?.onEmergencyStarted?(dict) }
+        }
+
+        socket.on("ride:regroup_started") { [weak self] data, _ in
+            guard let self,
+                  let dict = data.first as? [String: Any],
+                  let json = try? JSONSerialization.data(withJSONObject: dict),
+                  let event = try? self.decoder.decode(RegroupEvent.self, from: json) else { return }
+            DispatchQueue.main.async { self.onRegroupStarted?(event) }
+        }
+
+        socket.on("ride:regroup_resolved") { [weak self] data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let regroupId = dict["regroupId"] as? String else { return }
+            DispatchQueue.main.async { self?.onRegroupResolved?(regroupId) }
         }
     }
 }

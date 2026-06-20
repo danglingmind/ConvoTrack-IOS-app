@@ -99,12 +99,31 @@ private struct StopSearchField: View {
                         Image(systemName: "mappin.circle.fill")
                             .foregroundColor(Color.primaryFixed)
                             .font(.system(size: 16))
-                        Text(item.name ?? "")
-                            .font(.bodyMd).foregroundColor(Color.onSurface)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name ?? "")
+                                .font(.bodyMd)
+                                .foregroundColor(Color.onSurface)
+                                .lineLimit(1)
+                            let locality = [item.placemark.subLocality, item.placemark.locality]
+                                .compactMap { $0 }.joined(separator: ", ")
+                            if !locality.isEmpty {
+                                Text(locality)
+                                    .font(.captionMd)
+                                    .foregroundColor(Color.onSurfaceVariant)
+                                    .lineLimit(1)
+                            }
+                        }
                         Spacer()
+                        if let userLoc = LocationService.shared.lastLocation,
+                           let itemLoc = item.placemark.location {
+                            let dist = userLoc.distance(from: itemLoc)
+                            Text(dist < 1000 ? "\(Int(dist)) m" : String(format: "%.1f km", dist / 1000))
+                                .font(.dataMono)
+                                .foregroundColor(Color.onSurfaceVariant)
+                        }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 12)
                 }
                 .buttonStyle(.plain)
 
@@ -124,8 +143,16 @@ private struct StopSearchField: View {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
         request.resultTypes = [.pointOfInterest, .address]
+        if let userLoc = LocationService.shared.lastLocation {
+            request.region = MKCoordinateRegion(
+                center: userLoc.coordinate,
+                latitudinalMeters: 50_000,
+                longitudinalMeters: 50_000
+            )
+        }
         do {
             let response = try await MKLocalSearch(request: request).start()
+            guard !Task.isCancelled else { return }
             results = response.mapItems
         } catch {
             results = []
@@ -192,8 +219,6 @@ struct CreateRideView: View {
 
                 ScrollView {
                     VStack(spacing: 24) {
-                        Color.clear.frame(height: 8)
-
                         // Ride title
                         VStack(alignment: .leading, spacing: 8) {
                             Text("RIDE TITLE")
@@ -217,7 +242,11 @@ struct CreateRideView: View {
                         }
 
                         // Route stops
-                        routeStopsSection
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("ROUTE")
+                                .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
+                            routeStopsSection
+                        }
 
                         // Map + stats
                         routeMapSection
@@ -232,7 +261,7 @@ struct CreateRideView: View {
                                     ProgressView().tint(Color.onPrimaryFixed)
                                 } else {
                                     Text("CREATE RIDE").font(.headlineMd).tracking(4)
-                                    Image(systemName: "sportscourt.fill").font(.system(size: 20))
+                                    Image(systemName: "car.2.fill").font(.system(size: 20))
                                 }
                             }
                             .modifier(LimePrimaryButton())
@@ -241,13 +270,13 @@ struct CreateRideView: View {
                         .opacity(canCreate ? 1 : 0.5)
 
                         Text("READY FOR DEPARTURE")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .font(.labelCaps)
                             .foregroundColor(Color.onSurfaceVariant.opacity(0.4))
                             .tracking(8)
-
-                        Color.clear.frame(height: 40)
                     }
                     .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 48)
                 }
                 .scrollDismissesKeyboard(.interactively)
             .navigationBarBackButtonHidden(true)
@@ -275,10 +304,10 @@ struct CreateRideView: View {
     // MARK: - Route Stops Section
 
     private var routeStopsSection: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 12) {
             // Start
             HStack(alignment: .top, spacing: 12) {
-                stopDot(color: Color.tertiaryFixed, isFirst: true)
+                stopDot(color: Color.tertiaryFixed, hasLabel: true)
                 StopSearchField(
                     label: "START LOCATION",
                     placeholder: "Search start point...",
@@ -292,7 +321,7 @@ struct CreateRideView: View {
             // Middle waypoints
             ForEach($middleStops) { $stop in
                 HStack(alignment: .top, spacing: 12) {
-                    stopDot(color: Color.primaryFixed.opacity(0.6), isFirst: false)
+                    stopDot(color: Color.primaryFixed.opacity(0.6), hasLabel: false)
                     HStack(alignment: .top, spacing: 8) {
                         StopSearchField(
                             label: "",
@@ -309,30 +338,28 @@ struct CreateRideView: View {
                             Image(systemName: "minus.circle.fill")
                                 .font(.system(size: 22))
                                 .foregroundColor(Color.errorColor)
-                                .padding(.top, 34)
+                                .padding(.top, 17)
                         }
                     }
                 }
             }
 
-            // Add stop button
-            HStack(spacing: 12) {
-                Rectangle().fill(Color.outline.opacity(0.2)).frame(width: 2).padding(.leading, 7)
-                Button(action: { middleStops.append(RouteStop()) }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 14))
-                            .foregroundColor(Color.primaryFixed)
-                        Text("ADD STOP")
-                            .font(.labelCaps).foregroundColor(Color.primaryFixed).tracking(2)
-                    }
+            // Add stop — indented to align with field edges (dot 14pt + spacing 12pt = 26pt)
+            Button(action: { middleStops.append(RouteStop()) }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color.primaryFixed)
+                    Text("ADD STOP")
+                        .font(.labelCaps).foregroundColor(Color.primaryFixed).tracking(2)
                 }
-                .padding(.vertical, 8)
             }
+            .padding(.leading, 26)
+            .padding(.vertical, 2)
 
             // End destination
             HStack(alignment: .top, spacing: 12) {
-                stopDot(color: Color.primaryFixed, isFirst: false)
+                stopDot(color: Color.primaryFixed, hasLabel: true)
                 StopSearchField(
                     label: "DESTINATION",
                     placeholder: "Search destination...",
@@ -345,20 +372,14 @@ struct CreateRideView: View {
         }
     }
 
-    private func stopDot(color: Color, isFirst: Bool) -> some View {
-        VStack(spacing: 0) {
-            if !isFirst {
-                Rectangle()
-                    .fill(Color.outline.opacity(0.2))
-                    .frame(width: 2)
-                    .frame(height: 20)
-            }
-            Circle()
-                .fill(color)
-                .frame(width: 16, height: 16)
-                .overlay(Circle().stroke(Color.surfaceDim, lineWidth: 2))
-                .padding(.top, isFirst ? 34 : 0)
-        }
+    // hasLabel: true  → label (~24pt) + 56pt field; pad dot to center in the field below the label
+    // hasLabel: false → 56pt field only; pad dot to center in the field
+    private func stopDot(color: Color, hasLabel: Bool) -> some View {
+        Circle()
+            .fill(color)
+            .frame(width: 14, height: 14)
+            .overlay(Circle().stroke(Color.surfaceDim, lineWidth: 2))
+            .padding(.top, hasLabel ? 45 : 21)
     }
 
     // MARK: - Route Map Section
@@ -375,13 +396,8 @@ struct CreateRideView: View {
     }
 
     private var routeMapHeader: some View {
-        HStack {
-            Text("ROUTE PREVIEW")
-                .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
-            Spacer()
-            Text(distanceText)
-                .font(.labelCaps).foregroundColor(Color.primaryFixed).tracking(2)
-        }
+        Text("ROUTE PREVIEW")
+            .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
     }
 
     private var routeMapCanvas: some View {
@@ -441,7 +457,7 @@ struct CreateRideView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("Max Riders").font(.bodyLg).foregroundColor(Color.onSurface)
-                Text("Maximum group size").font(.system(size: 12)).foregroundColor(Color.onSurfaceVariant)
+                Text("Maximum group size").font(.labelCaps).foregroundColor(Color.onSurfaceVariant)
             }
             Spacer()
             HStack(spacing: 16) {
@@ -655,7 +671,7 @@ struct RouteStatCard: View {
         HStack(spacing: 12) {
             Image(systemName: icon).font(.system(size: 20)).foregroundColor(Color.primaryFixed)
             VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(Color.onSurfaceVariant).tracking(1)
+                Text(label).font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
                 Text(value).font(.headlineMd).foregroundColor(Color.onSurface)
             }
         }

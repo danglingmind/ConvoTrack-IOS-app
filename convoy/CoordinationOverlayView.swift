@@ -1,4 +1,5 @@
 import SwiftUI
+import MapKit
 
 struct CoordinationOverlayView: View {
     @Environment(\.dismiss) private var dismiss
@@ -129,7 +130,7 @@ struct CoordinationOverlayView: View {
         .sheet(isPresented: $showRegroupSheet) {
             RegroupBottomSheet(
                 selectedReason: $selectedReason,
-                onBroadcast: {
+                onBroadcast: { _ in
                     broadcasting = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                         showRegroupSheet = false
@@ -241,111 +242,301 @@ struct GroupSplitAlert: View {
 struct RegroupBottomSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var selectedReason: CoordinationOverlayView.RegroupReason?
-    let onBroadcast: () -> Void
+    let onBroadcast: (CLLocationCoordinate2D?) -> Void
     let isBroadcasting: Bool
+
+    private enum LocationMode { case myPosition, searchedLocation }
+
+    @State private var locationMode: LocationMode = .myPosition
+    @State private var locationQuery = ""
+    @State private var locationResults: [MKMapItem] = []
+    @State private var pickedLocation: (name: String, coordinate: CLLocationCoordinate2D)? = nil
+    @State private var searchTask: Task<Void, Never>? = nil
+
+    private var broadcastBlocked: Bool {
+        isBroadcasting || selectedReason == nil || (locationMode == .searchedLocation && pickedLocation == nil)
+    }
 
     var body: some View {
         ZStack {
             Color.surfaceDim.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Handle
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.outlineVariant.opacity(0.4))
-                    .frame(width: 64, height: 5)
-                    .padding(.top, 12)
-                    .padding(.bottom, 24)
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Handle
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.outlineVariant.opacity(0.4))
+                        .frame(width: 64, height: 5)
+                        .padding(.top, 12)
+                        .padding(.bottom, 24)
 
-                HStack {
-                    HStack(spacing: 12) {
-                        Image(systemName: "flag.fill").font(.system(size: 32)).foregroundColor(Color.primaryFixed)
-                        Text("REGROUP").font(.headlineLg).foregroundColor(Color.primaryFixed)
+                    HStack {
+                        HStack(spacing: 12) {
+                            Image(systemName: "flag.fill").font(.system(size: 32)).foregroundColor(Color.primaryFixed)
+                            Text("REGROUP").font(.headlineLg).foregroundColor(Color.primaryFixed)
+                        }
+                        Spacer()
+                        Text("COORD_REQ_09")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.onSurfaceVariant)
+                            .tracking(1)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.surfaceContainerHigh)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
                     }
-                    Spacer()
-                    Text("COORD_REQ_09")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color.onSurfaceVariant)
-                        .tracking(1)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.surfaceContainerHigh)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                }
-                .padding(.horizontal, 20)
-
-                Text("Select a reason for the broadcast:")
-                    .font(.bodyLg)
-                    .foregroundColor(Color.onSurfaceVariant)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .padding(.bottom, 24)
 
-                // Reason Grid
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach(CoordinationOverlayView.RegroupReason.allCases, id: \.self) { reason in
-                        Button(action: { selectedReason = reason }) {
-                            VStack(spacing: 10) {
-                                Image(systemName: reason.icon)
-                                    .font(.system(size: 28))
-                                    .foregroundColor(reason.isEmergency ? Color.errorColor : Color.primaryFixed)
-                                Text(reason.rawValue)
-                                    .font(.labelCaps)
-                                    .foregroundColor(reason.isEmergency ? Color.errorColor : Color.onSurface)
-                                    .tracking(1)
+                    Text("Select a reason for the broadcast:")
+                        .font(.bodyLg)
+                        .foregroundColor(Color.onSurfaceVariant)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .padding(.bottom, 24)
+
+                    // Reason Grid
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        ForEach(CoordinationOverlayView.RegroupReason.allCases, id: \.self) { reason in
+                            Button(action: { selectedReason = reason }) {
+                                VStack(spacing: 10) {
+                                    Image(systemName: reason.icon)
+                                        .font(.system(size: 28))
+                                        .foregroundColor(reason.isEmergency ? Color.errorColor : Color.primaryFixed)
+                                    Text(reason.rawValue)
+                                        .font(.labelCaps)
+                                        .foregroundColor(reason.isEmergency ? Color.errorColor : Color.onSurface)
+                                        .tracking(1)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(20)
+                                .background(
+                                    reason.isEmergency
+                                    ? Color.errorContainer.opacity(0.1)
+                                    : Color(hex: "1c1c1c")
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(
+                                            selectedReason == reason
+                                            ? Color.primaryFixed
+                                            : (reason.isEmergency ? Color.errorColor.opacity(0.4) : Color.outlineVariant.opacity(0.3)),
+                                            lineWidth: selectedReason == reason ? 2 : 1
+                                        )
+                                )
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(20)
-                            .background(
-                                reason.isEmergency
-                                ? Color.errorContainer.opacity(0.1)
-                                : Color(hex: "1c1c1c")
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(
-                                        selectedReason == reason
-                                        ? Color.primaryFixed
-                                        : (reason.isEmergency ? Color.errorColor.opacity(0.4) : Color.outlineVariant.opacity(0.3)),
-                                        lineWidth: selectedReason == reason ? 2 : 1
-                                    )
-                            )
                         }
                     }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
 
-                // Broadcast Button
-                Button(action: onBroadcast) {
-                    HStack(spacing: 12) {
-                        Image(systemName: isBroadcasting ? "arrow.clockwise" : "dot.radiowaves.left.and.right")
-                            .font(.system(size: 24))
-                        Text(isBroadcasting ? "TRANSMITTING..." : "Broadcast Regroup")
-                            .font(.headlineMd)
+                    // Location Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("MEET LOCATION")
+                            .font(.labelCaps)
+                            .foregroundColor(Color.onSurfaceVariant)
+                            .tracking(2)
+
+                        // Mode toggle
+                        HStack(spacing: 0) {
+                            Button(action: {
+                                searchTask?.cancel()
+                                locationMode = .myPosition
+                                pickedLocation = nil
+                                locationQuery = ""
+                                locationResults = []
+                            }) {
+                                Text("My Position")
+                                    .font(.toggleLabel)
+                                    .foregroundColor(locationMode == .myPosition ? Color.onPrimaryFixed : Color.onSurfaceVariant)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(locationMode == .myPosition ? Color.primaryFixed : Color.clear)
+                            }
+                            Button(action: { locationMode = .searchedLocation }) {
+                                Text("Search Location")
+                                    .font(.toggleLabel)
+                                    .foregroundColor(locationMode == .searchedLocation ? Color.onPrimaryFixed : Color.onSurfaceVariant)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(locationMode == .searchedLocation ? Color.primaryFixed : Color.clear)
+                            }
+                        }
+                        .background(Color.surfaceContainerHigh)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                        if locationMode == .searchedLocation {
+                            if let picked = pickedLocation {
+                                // Confirmed location chip
+                                HStack(spacing: 12) {
+                                    Image(systemName: "mappin.circle.fill")
+                                        .foregroundColor(Color.primaryFixed)
+                                        .font(.system(size: 16))
+                                    Text(picked.name)
+                                        .font(.bodyMd)
+                                        .foregroundColor(Color.onSurface)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Button(action: {
+                                        pickedLocation = nil
+                                        locationQuery = ""
+                                        locationResults = []
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
+                                            .font(.system(size: 18))
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(Color.surfaceContainerHigh)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primaryFixed.opacity(0.4), lineWidth: 1))
+                            } else {
+                                // Search field
+                                VStack(spacing: 0) {
+                                    HStack(spacing: 0) {
+                                        Image(systemName: "magnifyingglass")
+                                            .foregroundColor(Color.outline.opacity(0.6))
+                                            .font(.system(size: 16))
+                                            .padding(.leading, 16)
+                                        TextField("Search for a meet location...", text: $locationQuery)
+                                            .font(.bodyMd)
+                                            .foregroundColor(Color.onSurface)
+                                            .tint(Color.primaryFixed)
+                                            .padding(.leading, 12)
+                                            .padding(.trailing, 16)
+                                            .frame(height: 48)
+                                            .onChange(of: locationQuery) { _, newValue in
+                                                searchTask?.cancel()
+                                                guard newValue.count >= 2 else { locationResults = []; return }
+                                                searchTask = Task {
+                                                    try? await Task.sleep(for: .milliseconds(300))
+                                                    guard !Task.isCancelled else { return }
+                                                    await performLocationSearch(newValue)
+                                                }
+                                            }
+                                    }
+                                    .background(Color.surfaceContainerHigh)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outline.opacity(0.3), lineWidth: 1))
+
+                                    if !locationResults.isEmpty {
+                                        locationSearchResults
+                                    }
+                                }
+                            }
+                        }
                     }
-                    .modifier(LimePrimaryButton())
-                    .frame(height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: Color.primaryFixed.opacity(0.4), radius: 20)
-                }
-                .padding(.horizontal, 20)
-                .disabled(isBroadcasting)
-                .opacity(isBroadcasting ? 0.8 : 1)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
 
-                Button(action: { dismiss() }) {
-                    Text("Cancel Request")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color.onSurfaceVariant)
-                        .tracking(8)
+                    // Broadcast Button
+                    Button(action: {
+                        onBroadcast(locationMode == .myPosition ? nil : pickedLocation?.coordinate)
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: isBroadcasting ? "arrow.clockwise" : "dot.radiowaves.left.and.right")
+                                .font(.system(size: 24))
+                            Text(isBroadcasting ? "TRANSMITTING..." : "Broadcast Regroup")
+                                .font(.headlineMd)
+                        }
+                        .modifier(LimePrimaryButton())
+                        .frame(height: 64)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: Color.primaryFixed.opacity(0.4), radius: 20)
+                        .contentShape(Rectangle())
+                    }
+                    .padding(.horizontal, 20)
+                    .disabled(broadcastBlocked)
+                    .opacity(broadcastBlocked ? 0.5 : 1)
+
+                    Button(action: { dismiss() }) {
+                        Text("Cancel Request")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.onSurfaceVariant)
+                            .tracking(8)
+                    }
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
                 }
-                .padding(.top, 16)
-                .padding(.bottom, 40)
             }
         }
         .presentationDragIndicator(.visible)
         .preferredColorScheme(.dark)
+    }
+
+    private var locationSearchResults: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(locationResults.prefix(4).enumerated()), id: \.offset) { index, item in
+                Button(action: {
+                    pickedLocation = (name: item.name ?? "", coordinate: item.placemark.coordinate)
+                    locationQuery = item.name ?? ""
+                    locationResults = []
+                }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundColor(Color.primaryFixed)
+                            .font(.system(size: 16))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name ?? "")
+                                .font(.bodyMd)
+                                .foregroundColor(Color.onSurface)
+                                .lineLimit(1)
+                            let locality = [item.placemark.subLocality, item.placemark.locality]
+                                .compactMap { $0 }.joined(separator: ", ")
+                            if !locality.isEmpty {
+                                Text(locality)
+                                    .font(.captionMd)
+                                    .foregroundColor(Color.onSurfaceVariant)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer()
+                        if let userLoc = LocationService.shared.lastLocation,
+                           let itemLoc = item.placemark.location {
+                            let dist = userLoc.distance(from: itemLoc)
+                            Text(dist < 1000 ? "\(Int(dist)) m" : String(format: "%.1f km", dist / 1000))
+                                .font(.dataMono)
+                                .foregroundColor(Color.onSurfaceVariant)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+
+                if index < min(locationResults.count, 4) - 1 {
+                    Divider().background(Color.outline.opacity(0.2)).padding(.leading, 44)
+                }
+            }
+        }
+        .background(Color.surfaceContainerHighest)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outline.opacity(0.3), lineWidth: 1))
+        .padding(.top, 4)
+    }
+
+    @MainActor
+    private func performLocationSearch(_ query: String) async {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        request.resultTypes = [.pointOfInterest, .address]
+        if let userLoc = LocationService.shared.lastLocation {
+            request.region = MKCoordinateRegion(
+                center: userLoc.coordinate,
+                latitudinalMeters: 50_000,
+                longitudinalMeters: 50_000
+            )
+        }
+        do {
+            let response = try await MKLocalSearch(request: request).start()
+            guard !Task.isCancelled else { return }
+            locationResults = response.mapItems
+        } catch {
+            locationResults = []
+        }
     }
 }
 

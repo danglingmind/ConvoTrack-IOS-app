@@ -15,14 +15,26 @@ final class LocationService: NSObject {
 
     private let manager = CLLocationManager()
     private(set) var lastLocation: CLLocation?
+    private var oneTimeLocationCallbacks: [(CLLocation?) -> Void] = []
 
     private override init() {
         super.init()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.distanceFilter = kCLDistanceFilterNone
+        manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        manager.distanceFilter = 5          // fire every 5 m; ~0.15 s at 120 km/h
         manager.pausesLocationUpdatesAutomatically = false
         UIDevice.current.isBatteryMonitoringEnabled = true
+    }
+
+    // MARK: - One-shot location
+
+    func requestCurrentLocation(completion: @escaping (CLLocation?) -> Void) {
+        if let last = lastLocation {
+            completion(last)
+            return
+        }
+        oneTimeLocationCallbacks.append(completion)
+        manager.requestLocation()
     }
 
     // MARK: - Permission
@@ -62,6 +74,13 @@ extension LocationService: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         lastLocation = location
+
+        if !oneTimeLocationCallbacks.isEmpty {
+            let callbacks = oneTimeLocationCallbacks
+            oneTimeLocationCallbacks.removeAll()
+            Task { @MainActor in callbacks.forEach { $0(location) } }
+        }
+
         guard let del = delegate else { return }
         let battery = Double(UIDevice.current.batteryLevel).clamped(to: 0...1)
         let signal = signalStrength()
@@ -78,6 +97,11 @@ extension LocationService: CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        if !oneTimeLocationCallbacks.isEmpty {
+            let callbacks = oneTimeLocationCallbacks
+            oneTimeLocationCallbacks.removeAll()
+            Task { @MainActor in callbacks.forEach { $0(nil) } }
+        }
         print("[LocationService] \(error.localizedDescription)")
     }
 
