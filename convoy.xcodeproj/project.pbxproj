@@ -15,9 +15,22 @@
 		9CF0CB642FC7603A00B3CF92 /* convoy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = convoy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AA0011223344556677889900 /* Exceptions for "convoy" folder in "convoy" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9CF0CB632FC7603A00B3CF92 /* convoy */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		9CF0CB662FC7603A00B3CF92 /* convoy */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AA0011223344556677889900 /* Exceptions for "convoy" folder in "convoy" target */,
+			);
 			path = convoy;
 			sourceTree = "<group>";
 		};
@@ -266,15 +279,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NJ5P2B5WZJ;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Convoy tracks your location during rides to share your position with the group, even when the app is in the background.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Convoy uses your location to show your position to other riders in the convoy.";
-				INFOPLIST_KEY_UIBackgroundModes = location;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = convoy/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -301,15 +307,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NJ5P2B5WZJ;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Convoy tracks your location during rides to share your position with the group, even when the app is in the background.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Convoy uses your location to show your position to other riders in the convoy.";
-				INFOPLIST_KEY_UIBackgroundModes = location;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = convoy/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

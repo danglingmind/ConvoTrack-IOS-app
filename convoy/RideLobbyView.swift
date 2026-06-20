@@ -153,6 +153,18 @@ struct RideLobbyView: View {
     }
     private var inviteCode: String { appState.inviteCode ?? "" }
 
+    private var deepLinkURL: URL? {
+        guard !inviteCode.isEmpty else { return nil }
+        return URL(string: "convoy://join/\(inviteCode)")
+    }
+
+    private var shareItems: [Any] {
+        guard let url = deepLinkURL else {
+            return ["Join my convoy ride!"]
+        }
+        return [url, "Join my convoy ride! Tap to open in Convoy: convoy://join/\(inviteCode)"]
+    }
+
     private var myClerkName: String? {
         let parts = [clerk.user?.firstName, clerk.user?.lastName]
             .compactMap { $0 }.filter { !$0.isEmpty }
@@ -173,30 +185,43 @@ struct RideLobbyView: View {
                     Color.clear.frame(height: 120)
                 }
             }
+            .ignoresSafeArea(edges: .top)
+
+            VStack {
+                HStack(spacing: 12) {
+                    Button(action: {
+                        vm.disconnect()
+                        dismiss()
+                    }) {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.black.opacity(0.4))
+                            .clipShape(Circle())
+                    }
+                    Text(rideTitle)
+                        .font(.bodyLg)
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 4)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                Spacer()
+            }
 
             bottomBar
         }
         .navigationBarBackButtonHidden(true)
-        .navigationTitle(rideTitle)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(action: {
-                    vm.disconnect()
-                    dismiss()
-                }) {
-                    Image(systemName: "arrow.left").foregroundColor(Color.primaryFixed)
-                }
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $showNavigation) {
             RideNavigationView(rideId: vm.rideId)
         }
         .background(
             ShareSheetPresenter(
                 isPresented: $showShareSheet,
-                items: inviteCode.isEmpty
-                    ? ["Join my convoy ride!"]
-                    : ["Join my convoy ride! Use code: \(inviteCode)"]
+                items: shareItems
             )
             .frame(width: 0, height: 0)
         )
@@ -221,13 +246,20 @@ struct RideLobbyView: View {
             Map(position: $mapPosition, content: lobbyMapContent)
                 .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
                 .allowsHitTesting(false)
-                .frame(maxWidth: .infinity, minHeight: 360)
+                .frame(maxWidth: .infinity, minHeight: 420)
+
+            LinearGradient(
+                colors: [Color.black.opacity(0.45), .clear],
+                startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: 120)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             LinearGradient(
                 colors: [Color.surfaceDim, Color.surfaceDim.opacity(0.55), .clear],
                 startPoint: .bottom, endPoint: .top
             )
-            .frame(height: 360)
+            .frame(height: 420)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -247,7 +279,7 @@ struct RideLobbyView: View {
                 .padding(.bottom, 24)
             }
         }
-        .frame(height: 360)
+        .frame(height: 420)
     }
 
     @MapContentBuilder
@@ -621,6 +653,24 @@ struct QRCodeModal: View {
     @Environment(\.dismiss) private var dismiss
     var inviteCode: String = ""
 
+    private var deepLinkURL: String {
+        "convoy://join/\(inviteCode)"
+    }
+
+    private var qrImage: UIImage? {
+        guard !inviteCode.isEmpty,
+              let data = deepLinkURL.data(using: .isoLatin1),
+              let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        filter.setValue(data, forKey: "inputMessage")
+        filter.setValue("H", forKey: "inputCorrectionLevel")
+        guard let ciImage = filter.outputImage else { return nil }
+        let scale = UIScreen.main.scale * 10
+        let scaled = ciImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+
     var body: some View {
         ZStack {
             Color.surfaceDim.opacity(0.95).ignoresSafeArea()
@@ -633,8 +683,20 @@ struct QRCodeModal: View {
                     }
                 }
                 Text("JOIN CONVOY").font(.headlineMd).foregroundColor(Color.primaryFixed).tracking(2)
-                RoundedRectangle(cornerRadius: 16).fill(Color.white).frame(width: 256, height: 256)
-                    .overlay(Image(systemName: "qrcode").font(.system(size: 200)).foregroundColor(Color.surfaceContainerLowest))
+
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16).fill(Color.white).frame(width: 256, height: 256)
+                    if let img = qrImage {
+                        Image(uiImage: img)
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 220, height: 220)
+                    } else {
+                        ProgressView().tint(Color.surfaceContainerLowest)
+                    }
+                }
+
                 if !inviteCode.isEmpty {
                     VStack(spacing: 4) {
                         Text("INVITE CODE").font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)

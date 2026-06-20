@@ -122,7 +122,7 @@ struct RideSummaryView: View {
                             .foregroundColor(.white)
                             .fontWeight(.bold)
                         if let s = summary {
-                            Text("\(formatDistance(s.distanceMeters)) · \(formatDuration(s.durationSeconds))")
+                            Text("\(formatDistance(s.distanceMeters)) km · \(formatDuration(s.durationSeconds)) \(durationUnit(s.durationSeconds))")
                                 .font(.bodyMd)
                                 .foregroundColor(Color.onSurfaceVariant)
                         }
@@ -150,7 +150,7 @@ struct RideSummaryView: View {
             MetricCard(
                 label: "DURATION",
                 value: formatDuration(s.durationSeconds),
-                unit: "HRS",
+                unit: durationUnit(s.durationSeconds),
                 isPrimary: false
             )
             MetricCard(
@@ -180,11 +180,8 @@ struct RideSummaryView: View {
             )
             MetricCard(
                 label: "DURATION",
-                value: f.durationSeconds.map { s in
-                    let h = s / 3600; let m = (s % 3600) / 60
-                    return String(format: "%d:%02d", h, m)
-                } ?? "--",
-                unit: "HRS",
+                value: f.durationSeconds.map { formatDuration($0) } ?? "--",
+                unit: f.durationSeconds.map { durationUnit($0) } ?? "",
                 isPrimary: false
             )
             MetricCard(
@@ -357,9 +354,16 @@ struct RideSummaryView: View {
     }
 
     private func formatDuration(_ seconds: Int) -> String {
+        if seconds < 3600 {
+            return "\(seconds / 60)"
+        }
         let h = seconds / 3600
         let m = (seconds % 3600) / 60
         return String(format: "%d:%02d", h, m)
+    }
+
+    private func durationUnit(_ seconds: Int) -> String {
+        seconds < 3600 ? "MIN" : "HRS"
     }
 
     private func roleLabel(_ p: SummaryParticipant) -> String {
@@ -380,15 +384,23 @@ struct MetricCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(label).font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(1)
+            Text(label)
+                .font(.labelCaps)
+                .foregroundColor(Color.onSurfaceVariant)
+                .tracking(1)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Spacer(minLength: 0)
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text(value)
                     .font(.displayMetrics)
                     .foregroundColor(isError ? Color.errorColor : (isPrimary ? Color.primaryFixed : Color.onSurface))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                 Text(unit).font(.labelCaps).foregroundColor(Color.onSurfaceVariant.opacity(isError ? 0.7 : 1))
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 110, maxHeight: 110, alignment: .leading)
         .padding(16)
         .background(Color.surfaceContainerLow)
         .clipShape(RoundedRectangle(cornerRadius: 12))

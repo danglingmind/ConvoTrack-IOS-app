@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct JoinRideView: View {
+    var prefillCode: String? = nil
+
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
 
@@ -10,6 +12,7 @@ struct JoinRideView: View {
     @State private var isJoining = false
     @State private var errorMessage: String? = nil
     @State private var showError = false
+    @State private var showScanner = false
 
     private var normalizedCode: String {
         String(inviteCode.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
@@ -69,6 +72,12 @@ struct JoinRideView: View {
         }
         .presentationDragIndicator(.visible)
         .preferredColorScheme(.dark)
+        .task {
+            if let code = prefillCode, !code.isEmpty {
+                inviteCode = code
+                await lookupCode(code)
+            }
+        }
         .alert("Couldn't Join", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -231,7 +240,7 @@ struct JoinRideView: View {
                     .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(4)
             }
 
-            Button(action: {}) {
+            Button(action: { showScanner = true }) {
                 ZStack {
                     Color.surfaceContainerLow
                     QRCornerBrackets()
@@ -246,6 +255,12 @@ struct JoinRideView: View {
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant, lineWidth: 2))
                 .frame(maxWidth: 280)
                 .frame(maxWidth: .infinity)
+            }
+            .sheet(isPresented: $showScanner) {
+                QRScannerSheet { code in
+                    inviteCode = code
+                    Task { await lookupCode(code) }
+                }
             }
         }
     }

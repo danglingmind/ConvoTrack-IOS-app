@@ -4,6 +4,7 @@ import ClerkKit
 struct MainTabView: View {
     @State private var activeTab: ConvoyBottomNav.Tab = .track
     @State private var showJoinRide = false
+    @State private var deepLinkCode: String? = nil
     @StateObject private var appState = AppState()
     @Environment(Clerk.self) private var clerk
 
@@ -31,9 +32,14 @@ struct MainTabView: View {
         .environmentObject(appState)
         .ignoresSafeArea(edges: .bottom)
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $showJoinRide) {
-            JoinRideView()
+        .sheet(isPresented: $showJoinRide, onDismiss: { deepLinkCode = nil }) {
+            JoinRideView(prefillCode: deepLinkCode)
                 .environmentObject(appState)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .convoyJoinRide)) { note in
+            guard let code = note.userInfo?["code"] as? String else { return }
+            deepLinkCode = code
+            showJoinRide = true
         }
         .task {
             guard let user = clerk.user else { return }

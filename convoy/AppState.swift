@@ -20,6 +20,9 @@ class AppState: ObservableObject {
         }
     }
 
+    // Set when the app is opened via a convoy://join/CODE deep link
+    @Published var pendingInviteCode: String? = nil
+
     @Published var inviteCode: String? = nil {
         didSet {
             if let code = inviteCode {
