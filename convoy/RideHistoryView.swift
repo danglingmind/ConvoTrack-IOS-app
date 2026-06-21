@@ -33,24 +33,32 @@ struct RideHistoryView: View {
                                 .tint(Color.primaryFixed)
                                 .padding(.top, 40)
                         } else {
-                            HStack(spacing: 8) {
-                                FloatingStatPill(
-                                    label: "DISTANCE",
-                                    value: String(format: "%.0f", totalDistanceKm),
-                                    unit: "KM"
-                                )
-                                FloatingStatPill(
-                                    label: "TOTAL",
-                                    value: "\(rides.count)",
-                                    unit: nil
-                                )
-                                FloatingStatPill(
-                                    label: "AVG SPEED",
-                                    value: avgSpeedKmh > 0 ? String(format: "%.0f", avgSpeedKmh) : "--",
-                                    unit: "km/h"
-                                )
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("LIFETIME STATS")
+                                    .font(.labelCaps)
+                                    .foregroundColor(Color.onSurfaceVariant)
+                                    .tracking(1)
+                                    .padding(.horizontal, 20)
+
+                                HStack(spacing: 8) {
+                                    FloatingStatPill(
+                                        label: "DISTANCE",
+                                        value: String(format: "%.0f", totalDistanceKm),
+                                        unit: "KM"
+                                    )
+                                    FloatingStatPill(
+                                        label: "TOTAL RIDES",
+                                        value: "\(rides.count)",
+                                        unit: nil
+                                    )
+                                    FloatingStatPill(
+                                        label: "AVG SPEED",
+                                        value: avgSpeedKmh > 0 ? String(format: "%.0f", avgSpeedKmh) : "--",
+                                        unit: "km/h"
+                                    )
+                                }
+                                .padding(.horizontal, 20)
                             }
-                            .padding(.horizontal, 20)
 
                             if rides.isEmpty {
                                 emptyState

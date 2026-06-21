@@ -8,10 +8,7 @@ struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
 @State private var units = "Metric"
     @State private var mapStyle = "Dark"
-    @State private var recentRides: [HistoryRide] = []
     @State private var isSigningOut = false
-    @State private var selectedRide: HistoryRide? = nil
-    @State private var showSummary = false
 
     private var displayName: String {
         let parts = [clerk.user?.firstName, clerk.user?.lastName]
@@ -57,35 +54,6 @@ struct ProfileView: View {
                             PrefCard(icon: "map", label: "MAP STYLE", value: mapStyle) { mapStyle = mapStyle == "Dark" ? "Satellite" : "Dark" }
                         }
 
-                    }
-                    .padding(.horizontal, 20)
-
-                    // Ride History
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("RIDE HISTORY").font(.labelCaps).foregroundColor(Color.primaryFixed).tracking(4)
-                            Spacer()
-                            Button(action: { activeTab = .flagged }) {
-                                Text("VIEW ALL").font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
-                            }
-                        }
-                        .padding(.horizontal, 4)
-
-                        if recentRides.isEmpty {
-                            Text("No rides yet")
-                                .font(.bodyMd)
-                                .foregroundColor(Color.onSurfaceVariant.opacity(0.6))
-                                .padding(.vertical, 12)
-                        } else {
-                            VStack(spacing: 12) {
-                                ForEach(recentRides.prefix(2)) { ride in
-                                    Button(action: { handleRideTap(ride) }) {
-                                        ProfileRideRow(ride: ride)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
                     }
                     .padding(.horizontal, 20)
 
@@ -160,102 +128,6 @@ struct ProfileView: View {
             .padding(.horizontal, 20)
             .frame(minHeight: 56)
         }
-        .navigationDestination(isPresented: $showSummary) {
-            if let ride = selectedRide {
-                RideSummaryView(rideId: ride.rideId, rideTitle: ride.title, fallback: ride)
-            }
-        }
-        .task { recentRides = (try? await APIClient.shared.getMyRides()) ?? [] }
-    }
-
-    private func handleRideTap(_ ride: HistoryRide) {
-        selectedRide = ride
-        if ride.status == "COMPLETED" {
-            showSummary = true
-        } else {
-            appState.currentRideId = ride.rideId
-            if let code = ride.inviteCode { appState.inviteCode = code }
-            activeTab = .track
-        }
-    }
-}
-
-// MARK: - Profile Ride Row
-
-struct ProfileRideRow: View {
-    let ride: HistoryRide
-
-    var subtitleLabel: String {
-        var parts: [String] = []
-        if ride.distanceMeters > 0 {
-            parts.append(String(format: "%.0f KM", ride.distanceMeters / 1000))
-        }
-        let iso = ride.endedAt ?? ride.startedAt ?? ride.createdAt
-        if let iso, let date = ISO8601DateFormatter().date(from: iso) {
-            let f = DateFormatter()
-            f.dateFormat = "dd MMM yyyy"
-            parts.append(f.string(from: date).uppercased())
-        }
-        return parts.joined(separator: " • ")
-    }
-
-    var statusColor: Color {
-        switch ride.status {
-        case "LOBBY":             return Color.primaryFixed
-        case "ACTIVE", "PAUSED": return Color.tertiaryFixed
-        default:                  return Color.tertiaryFixedDim
-        }
-    }
-
-    var statusBgColor: Color {
-        switch ride.status {
-        case "LOBBY": return Color.onPrimaryContainer
-        default:      return Color.onTertiaryContainer
-        }
-    }
-
-    var statusLabel: String {
-        switch ride.status {
-        case "LOBBY":   return "In Lobby"
-        case "ACTIVE":  return "Active"
-        case "PAUSED":  return "Paused"
-        default:        return "Completed"
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.surfaceContainerLow)
-                    .frame(width: 48, height: 48)
-                Image(systemName: "road.lanes")
-                    .font(.system(size: 20))
-                    .foregroundColor(Color.primaryFixed.opacity(0.6))
-            }
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(ride.title).font(.bodyLg).foregroundColor(Color.onSurface)
-                Text(subtitleLabel).font(.dataMono).foregroundColor(Color.onSurfaceVariant)
-            }
-
-            Spacer()
-
-            HStack(spacing: 6) {
-                Circle().fill(statusColor).frame(width: 6, height: 6)
-                Text(statusLabel).font(.labelCaps).foregroundColor(statusColor).tracking(1)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(statusBgColor.opacity(0.2))
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(statusColor.opacity(0.3), lineWidth: 1))
-        }
-        .padding(16)
-        .background(Color.surfaceContainerHigh.opacity(0.8))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
     }
 }
 
