@@ -106,6 +106,7 @@ struct ConvoyTopBar: View {
     let title: String
     var showBack: Bool = false
     var onBack: (() -> Void)? = nil
+    var transparent: Bool = false
 
     var body: some View {
         HStack {
@@ -135,8 +136,8 @@ struct ConvoyTopBar: View {
         }
         .padding(.horizontal, 20)
         .frame(height: 56)
-        .background(Color.surfaceContainer.opacity(0.9))
-        .overlay(Rectangle().frame(height: 0.5).foregroundColor(Color.outlineVariant.opacity(0.4)), alignment: .bottom)
+        .background(transparent ? Color.clear : Color.surfaceContainer.opacity(0.9))
+        .overlay(transparent ? nil : Rectangle().frame(height: 0.5).foregroundColor(Color.outlineVariant.opacity(0.4)), alignment: .bottom)
     }
 }
 

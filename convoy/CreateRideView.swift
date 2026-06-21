@@ -15,9 +15,11 @@ private struct StopSearchField: View {
     let label: String
     let placeholder: String
     let icon: String
+    let fieldID: String
     @Binding var text: String
     @Binding var mapItem: MKMapItem?
     var onSelect: (() -> Void)? = nil
+    var onResultsAppeared: ((String) -> Void)? = nil
 
     @State private var results: [MKMapItem] = []
     @State private var searchTask: Task<Void, Never>?
@@ -32,58 +34,72 @@ private struct StopSearchField: View {
                     .padding(.bottom, 8)
             }
 
-            ZStack(alignment: .leading) {
-                Image(systemName: icon)
-                    .font(.system(size: 18))
-                    .foregroundColor(mapItem != nil ? Color.primaryFixed : Color.outline.opacity(0.5))
-                    .padding(.leading, 16)
-
-                TextField(placeholder, text: $text)
-                    .font(.bodyLg)
-                    .foregroundColor(Color.onSurface)
-                    .padding(.leading, 48)
-                    .padding(.trailing, mapItem != nil ? 48 : 16)
-                    .frame(height: 56)
-                    .tint(Color.primaryFixed)
-
-                if mapItem != nil {
-                    HStack {
-                        Spacer()
-                        Button(action: { text = ""; mapItem = nil; results = [] }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
-                                .font(.system(size: 18))
-                        }
-                        .padding(.trailing, 16)
-                    }
+            if mapItem != nil {
+                confirmedRow
+            } else {
+                searchRow
+                if !results.isEmpty {
+                    dropdownResults
+                        .id(fieldID + "_results")
                 }
-            }
-            .background(Color.surfaceContainerHigh)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(mapItem != nil ? Color.primaryFixed.opacity(0.5) : Color.outline.opacity(0.3), lineWidth: 1)
-            )
-            .onChange(of: text) { _, newValue in
-                // If user edits away from the confirmed name, clear selection so search reopens
-                if let item = mapItem, newValue != (item.name ?? "") {
-                    mapItem = nil
-                }
-                guard mapItem == nil else { results = []; return }
-
-                searchTask?.cancel()
-                guard newValue.count >= 2 else { results = []; return }
-                searchTask = Task {
-                    try? await Task.sleep(for: .milliseconds(300))
-                    guard !Task.isCancelled else { return }
-                    await performSearch(newValue)
-                }
-            }
-
-            if !results.isEmpty && mapItem == nil {
-                dropdownResults
             }
         }
+        .onChange(of: results) { _, newResults in
+            if !newResults.isEmpty {
+                onResultsAppeared?(fieldID + "_results")
+            }
+        }
+    }
+
+    private var confirmedRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundColor(Color.primaryFixed)
+            Text(mapItem?.name ?? "")
+                .font(.bodyMd)
+                .foregroundColor(Color.onSurface)
+                .lineLimit(1)
+            Spacer()
+            Button(action: { text = ""; mapItem = nil; results = [] }) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
+                    .font(.system(size: 18))
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 48)
+        .background(Color.surfaceContainerHigh)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primaryFixed.opacity(0.5), lineWidth: 1))
+    }
+
+    private var searchRow: some View {
+        HStack(spacing: 0) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(Color.outline.opacity(0.6))
+                .font(.system(size: 16))
+                .padding(.leading, 16)
+            TextField(placeholder, text: $text)
+                .font(.bodyMd)
+                .foregroundColor(Color.onSurface)
+                .tint(Color.primaryFixed)
+                .padding(.leading, 12)
+                .padding(.trailing, 16)
+                .frame(height: 48)
+                .onChange(of: text) { _, newValue in
+                    searchTask?.cancel()
+                    guard newValue.count >= 2 else { results = []; return }
+                    searchTask = Task {
+                        try? await Task.sleep(for: .milliseconds(300))
+                        guard !Task.isCancelled else { return }
+                        await performSearch(newValue)
+                    }
+                }
+        }
+        .background(Color.surfaceContainerHigh)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outline.opacity(0.3), lineWidth: 1))
     }
 
     private var dropdownResults: some View {
@@ -185,6 +201,8 @@ struct CreateRideView: View {
     @State private var errorMessage: String?
     @State private var showError = false
 
+    @State private var scrollTarget: String? = nil
+
     private var distanceText: String {
         guard routeDistance > 0 else { return "--" }
         return String(format: "%.1f KM", routeDistance / 1000)
@@ -218,6 +236,7 @@ struct CreateRideView: View {
                 .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
 
                 ScrollView {
+                ScrollViewReader { proxy in
                     VStack(spacing: 24) {
                         // Ride title
                         VStack(alignment: .leading, spacing: 8) {
@@ -277,6 +296,14 @@ struct CreateRideView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
                     .padding(.bottom, 48)
+                    .onChange(of: scrollTarget) { _, target in
+                        guard let target else { return }
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            proxy.scrollTo(target, anchor: .bottom)
+                        }
+                        scrollTarget = nil
+                    }
+                }
                 }
                 .scrollDismissesKeyboard(.interactively)
             .navigationBarBackButtonHidden(true)
@@ -312,9 +339,11 @@ struct CreateRideView: View {
                     label: "START LOCATION",
                     placeholder: "Search start point...",
                     icon: "location.fill",
+                    fieldID: "start",
                     text: $startStop.text,
                     mapItem: $startStop.mapItem,
-                    onSelect: { Task { await recalculateRoute() } }
+                    onSelect: { Task { await recalculateRoute() } },
+                    onResultsAppeared: { id in scrollTarget = id }
                 )
             }
 
@@ -327,9 +356,11 @@ struct CreateRideView: View {
                             label: "",
                             placeholder: "Search stop...",
                             icon: "mappin",
+                            fieldID: "stop_\(stop.id)",
                             text: $stop.text,
                             mapItem: $stop.mapItem,
-                            onSelect: { Task { await recalculateRoute() } }
+                            onSelect: { Task { await recalculateRoute() } },
+                            onResultsAppeared: { id in scrollTarget = id }
                         )
                         Button(action: {
                             middleStops.removeAll { $0.id == stop.id }
@@ -338,7 +369,7 @@ struct CreateRideView: View {
                             Image(systemName: "minus.circle.fill")
                                 .font(.system(size: 22))
                                 .foregroundColor(Color.errorColor)
-                                .padding(.top, 17)
+                                .padding(.top, 13)
                         }
                     }
                 }
@@ -364,22 +395,24 @@ struct CreateRideView: View {
                     label: "DESTINATION",
                     placeholder: "Search destination...",
                     icon: "flag.checkered",
+                    fieldID: "destination",
                     text: $endStop.text,
                     mapItem: $endStop.mapItem,
-                    onSelect: { Task { await recalculateRoute() } }
+                    onSelect: { Task { await recalculateRoute() } },
+                    onResultsAppeared: { id in scrollTarget = id }
                 )
             }
         }
     }
 
-    // hasLabel: true  → label (~24pt) + 56pt field; pad dot to center in the field below the label
-    // hasLabel: false → 56pt field only; pad dot to center in the field
+    // hasLabel: true  → label (~20pt) + 48pt field; center dot in the field row
+    // hasLabel: false → 48pt field only; center dot in the field
     private func stopDot(color: Color, hasLabel: Bool) -> some View {
         Circle()
             .fill(color)
             .frame(width: 14, height: 14)
             .overlay(Circle().stroke(Color.surfaceDim, lineWidth: 2))
-            .padding(.top, hasLabel ? 45 : 21)
+            .padding(.top, hasLabel ? 37 : 17)
     }
 
     // MARK: - Route Map Section

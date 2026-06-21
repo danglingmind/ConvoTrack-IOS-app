@@ -6,8 +6,7 @@ struct ProfileView: View {
     @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
-    @State private var notificationsEnabled = true
-    @State private var units = "Metric"
+@State private var units = "Metric"
     @State private var mapStyle = "Dark"
     @State private var recentRides: [HistoryRide] = []
     @State private var isSigningOut = false
@@ -45,52 +44,6 @@ struct ProfileView: View {
                 VStack(spacing: 16) {
                     Color.clear.frame(height: 72)
 
-                    // Profile Hero
-                    HStack(spacing: 20) {
-                        ZStack(alignment: .bottomTrailing) {
-                            Circle()
-                                .fill(Color.surfaceContainer)
-                                .frame(width: 88, height: 88)
-                                .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
-                                .overlay(
-                                    AsyncImage(url: avatarUrl) { img in
-                                        img.resizable().scaledToFill()
-                                    } placeholder: {
-                                        Text(String(displayName.prefix(1)).uppercased())
-                                            .font(.system(size: 32, weight: .bold))
-                                            .foregroundColor(Color.primaryFixed)
-                                    }
-                                    .clipShape(Circle())
-                                )
-
-                            ZStack {
-                                Circle().fill(Color.primaryFixed).frame(width: 24, height: 24)
-                                Circle().fill(Color.onPrimaryContainer).frame(width: 8, height: 8)
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(displayName)
-                                .font(.headlineLg)
-                                .foregroundColor(Color.onSurface)
-                            HStack(spacing: 8) {
-                                Image(systemName: "motorcycle")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(Color.primaryFixed)
-                                Text("Convoy Rider")
-                                    .font(.bodyLg)
-                                    .foregroundColor(Color.onSurfaceVariant)
-                            }
-                        }
-
-                        Spacer()
-                    }
-                    .padding(16)
-                    .background(Color.surfaceContainerHigh.opacity(0.8))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
-                    .padding(.horizontal, 20)
-
                     // Preferences
                     VStack(alignment: .leading, spacing: 12) {
                         Text("PREFERENCES")
@@ -104,22 +57,6 @@ struct ProfileView: View {
                             PrefCard(icon: "map", label: "MAP STYLE", value: mapStyle) { mapStyle = mapStyle == "Dark" ? "Satellite" : "Dark" }
                         }
 
-                        HStack(spacing: 16) {
-                            Image(systemName: "bell.badge.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(Color.primaryFixed)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("NOTIFICATIONS").font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
-                                Text(notificationsEnabled ? "Enabled" : "Disabled").font(.bodyLg).foregroundColor(Color.onSurface)
-                            }
-                            Spacer()
-                            Toggle("", isOn: $notificationsEnabled)
-                                .tint(Color.primaryFixed)
-                        }
-                        .padding(16)
-                        .background(Color.surfaceContainerHigh.opacity(0.8))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
                     }
                     .padding(.horizontal, 20)
 
@@ -187,7 +124,41 @@ struct ProfileView: View {
             }
             .ignoresSafeArea(edges: .bottom)
 
-            ConvoyTopBar(title: "PROFILE")
+            HStack(alignment: .center, spacing: 12) {
+                ZStack(alignment: .bottomTrailing) {
+                    AsyncImage(url: avatarUrl) { img in
+                        img.resizable().scaledToFill()
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
+                    } placeholder: {
+                        Circle()
+                            .fill(Color.surfaceVariant)
+                            .frame(width: 40, height: 40)
+                            .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
+                            .overlay(
+                                Text(String(displayName.prefix(1)).uppercased())
+                                    .font(.bodyMd).foregroundColor(Color.primaryFixed)
+                            )
+                    }
+                    ZStack {
+                        Circle().fill(Color.primaryFixed).frame(width: 11, height: 11)
+                        Circle().fill(Color.onPrimaryContainer).frame(width: 5, height: 5)
+                    }
+                }
+                Text(displayName)
+                    .font(.headlineMd)
+                    .foregroundColor(Color.onSurface)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color.primaryFixed)
+                    .frame(width: 44, height: 44)
+            }
+            .padding(.horizontal, 20)
+            .frame(minHeight: 56)
         }
         .navigationDestination(isPresented: $showSummary) {
             if let ride = selectedRide {

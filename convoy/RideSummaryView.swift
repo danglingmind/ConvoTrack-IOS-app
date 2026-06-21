@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import CoreImage
 
 struct RideSummaryView: View {
     var rideId: String?
@@ -15,6 +16,10 @@ struct RideSummaryView: View {
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var mapWaypoints: [Waypoint] = []
     @State private var mapPosition: MapCameraPosition = .automatic
+
+    @State private var isGeneratingShare = false
+    @State private var shareSheetItems: [Any] = []
+    @State private var showShareSheet = false
 
     private var effectiveTitle: String {
         rideTitle ?? fallback?.title ?? "Ride Complete"
@@ -70,6 +75,9 @@ struct RideSummaryView: View {
         }
         .task { await loadSummary() }
         .task { await loadRoute() }
+        .sheet(isPresented: $showShareSheet) {
+            SummaryShareSheet(items: shareSheetItems)
+        }
     }
 
     // MARK: - Hero
@@ -240,10 +248,17 @@ struct RideSummaryView: View {
 
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            Button(action: {}) {
+            Button(action: { Task { await generateAndShare() } }) {
                 HStack(spacing: 8) {
-                    Image(systemName: "square.and.arrow.up")
-                    Text("SHARE SUMMARY").font(.bodyLg).fontWeight(.bold)
+                    if isGeneratingShare {
+                        ProgressView()
+                            .tint(Color.onPrimaryContainer)
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    Text(isGeneratingShare ? "GENERATING..." : "SHARE SUMMARY")
+                        .font(.bodyLg).fontWeight(.bold)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
@@ -251,6 +266,7 @@ struct RideSummaryView: View {
                 .foregroundColor(Color.onPrimaryContainer)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
+            .disabled(isGeneratingShare || isLoading)
             Button(action: { finishAndDismiss() }) {
                 Text("DONE")
                     .font(.bodyLg)
@@ -336,6 +352,204 @@ struct RideSummaryView: View {
                 span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
             ))
         }
+    }
+
+    // MARK: - Share
+
+    @MainActor
+    private func generateAndShare() async {
+        guard !isGeneratingShare else { return }
+        isGeneratingShare = true
+        defer { isGeneratingShare = false }
+
+        let mapImg = await generateMapSnapshot(waypoints: mapWaypoints)
+        let qrImg = generateQRCode(from: "https://convoy.app")
+
+        let distStr: String
+        let durStr: String
+        let durUnitStr: String
+        let speedStr: String
+        let count: Int
+
+        if let s = summary {
+            distStr = formatDistance(s.distanceMeters)
+            durStr = formatDuration(s.durationSeconds)
+            durUnitStr = durationUnit(s.durationSeconds)
+            speedStr = s.avgSpeedKmh.map { String(format: "%.0f", $0) } ?? "--"
+            count = s.participants.count
+        } else if let f = fallback {
+            distStr = String(format: "%.1f", f.distanceMeters / 1000)
+            durStr = f.durationSeconds.map { formatDuration($0) } ?? "--"
+            durUnitStr = f.durationSeconds.map { durationUnit($0) } ?? ""
+            speedStr = f.avgSpeedKmh.map { String(format: "%.0f", $0) } ?? "--"
+            count = 0
+        } else {
+            distStr = "--"; durStr = "--"; durUnitStr = ""; speedStr = "--"; count = 0
+        }
+
+        let card = RideSummaryShareCard(
+            rideTitle: effectiveTitle,
+            mapImage: mapImg,
+            distanceKm: distStr,
+            durationFormatted: durStr,
+            durationUnit: durUnitStr,
+            avgSpeedKmh: speedStr,
+            riderCount: count,
+            qrImage: qrImg
+        )
+
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = UIScreen.main.scale
+
+        guard let image = renderer.uiImage else { return }
+        shareSheetItems = [image]
+        showShareSheet = true
+    }
+
+    private func generateMapSnapshot(waypoints: [Waypoint]) async -> UIImage? {
+        guard !routeCoordinates.isEmpty else { return nil }
+        let coords = routeCoordinates
+        let wps = waypoints.sorted { $0.order < $1.order }
+
+        let poly = MKPolyline(coordinates: coords, count: coords.count)
+        let rect = poly.boundingMapRect
+
+        // Asymmetric padding: push route toward top so it clears the text overlay at bottom.
+        // In MKMapRect Y increases southward, so adding more to height = more space south.
+        let expandX = rect.width * 0.28
+        let expandTop = rect.height * 0.12
+        let expandBottom = rect.height * 0.72
+        let paddedRect = MKMapRect(
+            x: rect.minX - expandX,
+            y: rect.minY - expandTop,
+            width: rect.width + expandX * 2,
+            height: rect.height + expandTop + expandBottom
+        )
+
+        // 2× logical size for a sharp result when the image fills 390×700 pt at @2x rendering
+        let s: CGFloat = 2
+        let options = MKMapSnapshotter.Options()
+        options.mapRect = paddedRect
+        options.size = CGSize(width: 390 * s, height: 700 * s)
+        options.pointOfInterestFilter = .excludingAll
+        options.traitCollection = UITraitCollection(userInterfaceStyle: .dark)
+
+        let snapshotter = MKMapSnapshotter(options: options)
+
+        return await withCheckedContinuation { continuation in
+            snapshotter.start { snapshot, _ in
+                guard let snapshot = snapshot else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                let imgSize = snapshot.image.size
+                let rendered = UIGraphicsImageRenderer(size: imgSize).image { _ in
+                    snapshot.image.draw(at: .zero)
+                    guard let ctx = UIGraphicsGetCurrentContext() else { return }
+
+                    let points = coords.map { snapshot.point(for: $0) }
+                    guard let first = points.first else { return }
+
+                    // -- Glow --
+                    ctx.saveGState()
+                    ctx.setStrokeColor(UIColor(red: 202/255, green: 243/255, blue: 0, alpha: 0.2).cgColor)
+                    ctx.setLineWidth(22 * s)
+                    ctx.setLineCap(.round); ctx.setLineJoin(.round)
+                    ctx.move(to: first)
+                    points.dropFirst().forEach { ctx.addLine(to: $0) }
+                    ctx.strokePath()
+                    ctx.restoreGState()
+
+                    // -- Lime route --
+                    ctx.saveGState()
+                    ctx.setStrokeColor(UIColor(red: 202/255, green: 243/255, blue: 0, alpha: 1).cgColor)
+                    ctx.setLineWidth(5 * s)
+                    ctx.setLineCap(.round); ctx.setLineJoin(.round)
+                    ctx.move(to: first)
+                    points.dropFirst().forEach { ctx.addLine(to: $0) }
+                    ctx.strokePath()
+                    ctx.restoreGState()
+
+                    // -- Waypoint pins + labels --
+                    let imgW = imgSize.width
+                    let shadow = NSShadow()
+                    shadow.shadowColor = UIColor.black.withAlphaComponent(0.85)
+                    shadow.shadowBlurRadius = 4 * s
+                    shadow.shadowOffset = .zero
+
+                    for wp in wps {
+                        let coord = CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng)
+                        let pt = snapshot.point(for: coord)
+
+                        let dotColor: UIColor
+                        let dotRadius: CGFloat
+
+                        switch wp.type {
+                        case "START":
+                            dotColor = UIColor(red: 98/255, green: 1.0, blue: 150/255, alpha: 1)
+                            dotRadius = 7 * s
+                        case "DESTINATION":
+                            dotColor = UIColor(red: 202/255, green: 243/255, blue: 0, alpha: 1)
+                            dotRadius = 9 * s
+                        default:
+                            dotColor = UIColor.white.withAlphaComponent(0.9)
+                            dotRadius = 5 * s
+                        }
+
+                        // Dot
+                        ctx.saveGState()
+                        ctx.setFillColor(dotColor.cgColor)
+                        ctx.fillEllipse(in: CGRect(x: pt.x - dotRadius, y: pt.y - dotRadius,
+                                                   width: dotRadius * 2, height: dotRadius * 2))
+                        ctx.setStrokeColor(UIColor(white: 0.1, alpha: 1).cgColor)
+                        ctx.setLineWidth(1.5 * s)
+                        ctx.strokeEllipse(in: CGRect(x: pt.x - dotRadius, y: pt.y - dotRadius,
+                                                     width: dotRadius * 2, height: dotRadius * 2))
+                        ctx.restoreGState()
+
+                        guard !wp.name.isEmpty else { continue }
+
+                        let font = UIFont.boldSystemFont(ofSize: 11 * s)
+                        let labelAttrs: [NSAttributedString.Key: Any] = [
+                            .font: font,
+                            .foregroundColor: UIColor.white,
+                            .shadow: shadow
+                        ]
+                        let text = wp.name as NSString
+                        let textSize = text.size(withAttributes: labelAttrs)
+                        let pad = 5 * s
+                        let pillW = textSize.width + pad * 2
+                        let pillH = textSize.height + pad
+
+                        // Flip to left if near right edge
+                        let labelX: CGFloat = (pt.x + dotRadius + 6 * s + pillW > imgW - 12 * s)
+                            ? pt.x - dotRadius - 6 * s - pillW
+                            : pt.x + dotRadius + 6 * s
+                        let labelY = pt.y - pillH / 2
+
+                        let pillRect = CGRect(x: labelX, y: labelY, width: pillW, height: pillH)
+                        UIColor.black.withAlphaComponent(0.6).setFill()
+                        UIBezierPath(roundedRect: pillRect, cornerRadius: 4 * s).fill()
+
+                        text.draw(at: CGPoint(x: pillRect.minX + pad, y: pillRect.minY + pad / 2),
+                                  withAttributes: labelAttrs)
+                    }
+                }
+                continuation.resume(returning: rendered)
+            }
+        }
+    }
+
+    private func generateQRCode(from string: String) -> UIImage? {
+        guard let data = string.data(using: .utf8),
+              let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        filter.setValue(data, forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        guard let cgImage = CIContext().createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 
     private func finishAndDismiss() {
@@ -461,6 +675,18 @@ struct LeaderboardRow: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
         )
     }
+}
+
+// MARK: - Share Sheet
+
+private struct SummaryShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {

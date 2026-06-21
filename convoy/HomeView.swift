@@ -1,5 +1,6 @@
 import SwiftUI
 import ClerkKit
+import MapKit
 
 enum HomeRoute: Hashable {
     case createRide
@@ -8,8 +9,7 @@ enum HomeRoute: Hashable {
 
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
-    @Environment(Clerk.self) private var clerk
-    @Binding var activeTab: ConvoyBottomNav.Tab
+@Binding var activeTab: ConvoyBottomNav.Tab
     @Binding var showJoinRide: Bool
     @State private var navPath = NavigationPath()
     @State private var recentRides: [HistoryRide] = []
@@ -60,45 +60,6 @@ struct HomeView: View {
 
 
                     VStack(spacing: 32) {
-                        // Greeting
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("STATUS: READY TO RIDE")
-                                    .font(.labelCaps)
-                                    .foregroundColor(Color.onSurfaceVariant)
-                                    .tracking(4)
-                                Text("Hey, \(clerkDisplayName)")
-                                    .font(.headlineLg)
-                                    .foregroundColor(Color.onSurface)
-                            }
-                            Spacer()
-                            ZStack(alignment: .bottomTrailing) {
-                                AsyncImage(url: clerkImageUrl) { phase in
-                                    switch phase {
-                                    case .success(let image):
-                                        image.resizable().scaledToFill()
-                                            .frame(width: 56, height: 56)
-                                            .clipShape(Circle())
-                                            .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
-                                    default:
-                                        Circle()
-                                            .fill(Color.surfaceVariant)
-                                            .frame(width: 56, height: 56)
-                                            .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
-                                            .overlay(
-                                                Text(String(clerkDisplayName.prefix(1)).uppercased())
-                                                    .font(.headlineMd).foregroundColor(Color.primaryFixed)
-                                            )
-                                    }
-                                }
-                                Circle()
-                                    .fill(Color.primaryFixed)
-                                    .frame(width: 14, height: 14)
-                                    .shadow(color: Color.primaryFixed, radius: 4)
-                            }
-                        }
-                        .padding(.horizontal, 20)
-
                         // Action Grid
                         HStack(spacing: 12) {
                             Button(action: { navPath.append(HomeRoute.createRide) }) {
@@ -183,7 +144,19 @@ struct HomeView: View {
             }
             .ignoresSafeArea(edges: .bottom)
 
-            ConvoyTopBar(title: "CONVOY")
+            HStack {
+                Image("AppLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                Spacer()
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color.primaryFixed)
+                    .frame(width: 44, height: 44)
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 56)
         }
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -220,17 +193,7 @@ struct HomeView: View {
         return parts.joined(separator: " · ")
     }
 
-    private var clerkDisplayName: String {
-        let parts = [clerk.user?.firstName, clerk.user?.lastName]
-            .compactMap { $0 }.filter { !$0.isEmpty }
-        let name = parts.joined(separator: " ")
-        return name.isEmpty ? (clerk.user?.username ?? "Rider") : name
-    }
 
-    private var clerkImageUrl: URL? {
-        guard let str = clerk.user?.imageUrl, !str.isEmpty else { return nil }
-        return URL(string: str)
-    }
 
 }
 
@@ -289,6 +252,9 @@ struct ActiveRideSection: View {
 struct ActiveRideCard: View {
     let ride: Ride?
 
+    @State private var routeCoordinates: [CLLocationCoordinate2D] = []
+    @State private var mapPosition: MapCameraPosition = .automatic
+
     private var participantCount: Int { ride?.participants.count ?? 0 }
     private var rideStatus: String {
         guard let s = ride?.status else { return "LOBBY" }
@@ -296,57 +262,131 @@ struct ActiveRideCard: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ZStack(alignment: .topLeading) {
-                LinearGradient(
-                    colors: [Color.primaryFixed.opacity(0.1), Color.surfaceContainerLow],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-                .frame(maxWidth: .infinity, minHeight: 100)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("DESTINATION")
-                        .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
-                    Text(ride?.destinationName ?? "Loading…")
-                        .font(.bodyLg).foregroundColor(Color.onSurface).fontWeight(.bold)
-                }
-                .padding(12)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .padding(12)
-            }
-
-            HStack {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(ride?.title ?? "Loading…")
-                        .font(.headlineMd).foregroundColor(Color.onSurface)
-                    HStack(spacing: 8) {
-                        HStack(spacing: -6) {
-                            ForEach(0..<max(1, min(participantCount, 3)), id: \.self) { _ in
-                                Circle().fill(Color.surfaceVariant).frame(width: 24, height: 24)
-                                    .overlay(Circle().stroke(Color.surfaceContainerHigh, lineWidth: 2))
-                            }
+        ZStack {
+            // Map background
+            if let ride, !ride.waypoints.isEmpty {
+                Map(position: $mapPosition) {
+                    if !routeCoordinates.isEmpty {
+                        MapPolyline(coordinates: routeCoordinates)
+                            .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                    }
+                    Annotation("", coordinate: CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng)) {
+                        ZStack {
+                            Circle().fill(Color.primaryFixed.opacity(0.25)).frame(width: 24, height: 24)
+                            Circle().fill(Color.primaryFixed).frame(width: 10, height: 10)
+                                .shadow(color: Color.primaryFixed, radius: 5)
                         }
-                        Text("\(participantCount) Rider\(participantCount == 1 ? "" : "s") • \(rideStatus)")
-                            .font(.dataMono).foregroundColor(Color.onSurfaceVariant)
                     }
                 }
-                Spacer()
-                Text("RESUME RIDE")
-                    .font(.labelCaps)
-                    .foregroundColor(Color.onPrimaryContainer)
-                    .tracking(1)
-                    .padding(.horizontal, 20).padding(.vertical, 12)
-                    .background(Color.primaryContainer)
+                .allowsHitTesting(false)
+                .colorScheme(.dark)
+                .task(id: ride.id) { await computeRoute(ride) }
+            } else {
+                LinearGradient(
+                    colors: [Color.surfaceContainerHigh, Color.surfaceDim],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+            }
+
+            // Scrim: subtle at top, heavy at bottom for text legibility
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(0.15),
+                    Color.black.opacity(0.55),
+                    Color.black.opacity(0.82)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            // Content
+            VStack(alignment: .leading, spacing: 0) {
+                // Destination chip
+                HStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 13))
+                            .foregroundColor(Color.primaryFixed)
+                        Text(ride?.destinationName ?? "Loading…")
+                            .font(.labelCaps)
+                            .foregroundColor(.white)
+                            .tracking(1)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial)
                     .clipShape(Capsule())
-                    .shadow(color: Color.primaryFixed.opacity(0.3), radius: 12)
+                    Spacer()
+                }
+
+                Spacer()
+
+                // Bottom row
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(ride?.title ?? "Loading…")
+                            .font(.headlineMd)
+                            .foregroundColor(.white)
+                        HStack(spacing: 8) {
+                            HStack(spacing: -6) {
+                                ForEach(0..<max(1, min(participantCount, 3)), id: \.self) { _ in
+                                    Circle()
+                                        .fill(Color.surfaceVariant)
+                                        .frame(width: 22, height: 22)
+                                        .overlay(Circle().stroke(Color.black.opacity(0.4), lineWidth: 1.5))
+                                }
+                            }
+                            Text("\(participantCount) Rider\(participantCount == 1 ? "" : "s") · \(rideStatus)")
+                                .font(.dataMono)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                    Spacer()
+                    Text("RESUME")
+                        .font(.labelCaps)
+                        .foregroundColor(Color.onPrimaryFixed)
+                        .tracking(1)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(Color.primaryFixed)
+                        .clipShape(Capsule())
+                        .shadow(color: Color.primaryFixed.opacity(0.5), radius: 10)
+                }
             }
             .padding(16)
         }
-        .background(Color.surfaceContainerHigh)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primaryFixed.opacity(0.25), lineWidth: 1))
+        .frame(height: 200)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primaryFixed.opacity(0.3), lineWidth: 1))
         .padding(.horizontal, 20)
+    }
+
+    @MainActor
+    private func computeRoute(_ ride: Ride) async {
+        let sorted = ride.waypoints.sorted { $0.order < $1.order }
+        guard sorted.count >= 2 else { return }
+
+        let items = sorted.map {
+            MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)))
+        }
+
+        var allCoords: [CLLocationCoordinate2D] = []
+        for i in 0..<items.count - 1 {
+            let req = MKDirections.Request()
+            req.source = items[i]; req.destination = items[i + 1]; req.transportType = .automobile
+            if let route = try? await MKDirections(request: req).calculate().routes.first {
+                let coords = route.polyline.coordinates
+                allCoords += (i == 0) ? coords : Array(coords.dropFirst())
+            }
+        }
+
+        routeCoordinates = allCoords
+        if !allCoords.isEmpty {
+            let poly = MKPolyline(coordinates: allCoords, count: allCoords.count)
+            let rect = poly.boundingMapRect
+            mapPosition = .rect(rect.insetBy(dx: -rect.width * 0.25, dy: -rect.height * 0.25))
+        }
     }
 }
 

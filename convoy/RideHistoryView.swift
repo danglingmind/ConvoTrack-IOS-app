@@ -73,7 +73,7 @@ struct RideHistoryView: View {
             }
             .ignoresSafeArea(edges: .bottom)
 
-            ConvoyTopBar(title: "RIDE HISTORY")
+            ConvoyTopBar(title: "RIDE HISTORY", transparent: true)
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $showSummary) {
