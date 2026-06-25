@@ -3,6 +3,8 @@ import ClerkKit
 
 @main
 struct convoyApp: App {
+    @StateObject private var membershipStore = MembershipStore()
+
     init() {
         Clerk.configure(publishableKey: "pk_test_d2VsbC1raXdpLTk2LmNsZXJrLmFjY291bnRzLmRldiQ")
     }
@@ -11,8 +13,18 @@ struct convoyApp: App {
         WindowGroup {
             ContentView()
                 .environment(Clerk.shared)
-                .onOpenURL { url in
-                    handleDeepLink(url)
+                .environmentObject(membershipStore)
+                .onOpenURL { url in handleDeepLink(url) }
+                .task {
+                    // Both run in parallel: local StoreKit (works offline) + server plan
+                    async let localCheck: () = membershipStore.refreshEntitlements()
+                    async let remoteCheck = try? APIClient.shared.fetchMe()
+                    let (_, me) = await (localCheck, remoteCheck)
+                    // OR logic: local StoreKit is authoritative — server can only upgrade,
+                    // not downgrade a valid local entitlement.
+                    if let me {
+                        membershipStore.isPremium = membershipStore.isPremium || me.plan.isPremium
+                    }
                 }
         }
     }

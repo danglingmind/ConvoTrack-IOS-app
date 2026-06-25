@@ -5,10 +5,12 @@ struct ProfileView: View {
     @Binding var activeTab: ConvoyBottomNav.Tab
     @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var store: MembershipStore
     @Environment(\.dismiss) private var dismiss
-@State private var units = "Metric"
+    @State private var units = "Metric"
     @State private var mapStyle = "Dark"
     @State private var isSigningOut = false
+    @State private var showMembership = false
 
     private var displayName: String {
         let parts = [clerk.user?.firstName, clerk.user?.lastName]
@@ -40,6 +42,10 @@ struct ProfileView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     Color.clear.frame(height: 72)
+
+                    // Membership Card
+                    membershipCard
+                        .padding(.horizontal, 20)
 
                     // Preferences
                     VStack(alignment: .leading, spacing: 12) {
@@ -91,6 +97,10 @@ struct ProfileView: View {
                 }
             }
             .ignoresSafeArea(edges: .bottom)
+            .sheet(isPresented: $showMembership) {
+                MembershipView()
+                    .environmentObject(store)
+            }
 
             HStack(alignment: .center, spacing: 12) {
                 ZStack(alignment: .bottomTrailing) {
@@ -121,13 +131,104 @@ struct ProfileView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 20))
+                    .font(.iconNav)
                     .foregroundColor(Color.primaryFixed)
                     .frame(width: 44, height: 44)
             }
             .padding(.horizontal, 20)
             .frame(minHeight: 56)
         }
+    }
+}
+
+// MARK: - Membership Card
+
+extension ProfileView {
+    @ViewBuilder
+    var membershipCard: some View {
+        if store.isPremium {
+            premiumStatusCard
+        } else {
+            upgradeCard
+        }
+    }
+
+    private var upgradeCard: some View {
+        Button { showMembership = true } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(Color.primaryFixed.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "crown.fill")
+                        .font(.iconMd)
+                        .foregroundColor(Color.primaryFixed)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("CONVOY PRO")
+                        .font(.labelCaps)
+                        .foregroundColor(Color.primaryFixed)
+                        .tracking(2)
+                    Text("Up to 25 riders · Unlimited rides")
+                        .font(.captionMd)
+                        .foregroundColor(Color.onSurfaceVariant)
+                }
+
+                Spacer()
+
+                Text("UPGRADE")
+                    .font(.labelCaps)
+                    .foregroundColor(Color.onPrimaryFixed)
+                    .tracking(1)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.primaryFixed)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .padding(16)
+            .background(Color.primaryFixed.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primaryFixed.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private var premiumStatusCard: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Color.tertiaryFixed.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(Color.tertiaryFixed)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text("PRO MEMBER")
+                        .font(.labelCaps)
+                        .foregroundColor(Color.tertiaryFixed)
+                        .tracking(2)
+                }
+                if let endsAt = store.premiumEndsAt {
+                    Text("Renews \(endsAt.formatted(.dateTime.month(.abbreviated).day().year()))")
+                        .font(.captionMd)
+                        .foregroundColor(Color.onSurfaceVariant)
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "checkmark.seal.fill")
+                .font(.iconLg)
+                .foregroundColor(Color.tertiaryFixed)
+        }
+        .padding(16)
+        .background(Color.tertiaryFixed.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.tertiaryFixed.opacity(0.25), lineWidth: 1))
     }
 }
 
@@ -143,7 +244,7 @@ struct PrefCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
                 Image(systemName: icon)
-                    .font(.system(size: 22))
+                    .font(.iconLg)
                     .foregroundColor(Color.primaryFixed)
                 Spacer()
                 VStack(alignment: .leading, spacing: 2) {

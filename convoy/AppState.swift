@@ -7,7 +7,6 @@ class AppState: ObservableObject {
     @Published var currentUser: ConvoyUser? = nil
     @Published var currentRide: Ride? = nil
     @Published var liveRideState: RideStateUpdate? = nil
-
     // Persisted across launches — survives app kill/rebuild
     @Published var currentRideId: String? = nil {
         didSet {

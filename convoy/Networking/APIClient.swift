@@ -130,4 +130,15 @@ final class APIClient {
         let body = try encoder.encode(Body(name: name, avatarUrl: avatarUrl))
         try await fetchVoid("/users/me", method: "PATCH", body: body)
     }
+
+    // MARK: - Membership Endpoints
+
+    func fetchMe() async throws -> UserMeResponse {
+        return try await fetch("/users/me")
+    }
+
+    func activateMembership(signedTransaction: String) async throws -> ActivateMembershipResponse {
+        let body = try encoder.encode(ActivateMembershipRequest(signedTransaction: signedTransaction))
+        return try await fetch("/memberships/activate", method: "POST", body: body)
+    }
 }

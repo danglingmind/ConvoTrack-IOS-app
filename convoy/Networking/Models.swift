@@ -172,6 +172,34 @@ struct HistoryRide: Codable, Identifiable {
     let compactnessScore: Double?
 }
 
+// MARK: - Membership
+
+struct MembershipPlanInfo: Codable {
+    let code: String
+    let isPremium: Bool
+    let maxRidersPerRide: Int
+    let monthlyLimit: Int?
+    let rideHistoryDays: Int
+    let analyticsEnabled: Bool
+    let endsAt: String?
+}
+
+struct UserMeResponse: Codable {
+    let userId: String
+    let name: String
+    let avatarUrl: String?
+    let plan: MembershipPlanInfo
+}
+
+struct ActivateMembershipRequest: Codable {
+    let signedTransaction: String
+}
+
+struct ActivateMembershipResponse: Codable {
+    let ok: Bool
+    let plan: MembershipPlanInfo
+}
+
 // MARK: - API Errors
 
 struct APIError: Codable {

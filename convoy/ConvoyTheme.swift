@@ -78,6 +78,15 @@ extension Font {
     static let dataMono = Font.system(size: 14, weight: .medium, design: .monospaced)
     static let toggleLabel = Font.system(size: 13, weight: .semibold)
     static let captionMd = Font.system(size: 12, weight: .regular)
+
+    // Icon sizes — use these on Image(systemName:) instead of inline .font(.system(...))
+    static let iconXS   = Font.system(size: 14, weight: .semibold)
+    static let iconSm   = Font.system(size: 15)
+    static let iconMd   = Font.system(size: 18)
+    static let iconNav  = Font.system(size: 20)
+    static let iconLg   = Font.system(size: 22)
+    static let iconXL   = Font.system(size: 32)
+    static let iconHero = Font.system(size: 44, weight: .bold)
 }
 
 // MARK: - View Modifiers
@@ -175,46 +184,42 @@ struct FloatingStatPill: View {
 struct ConvoyBottomNav: View {
     enum Tab { case flagged, track, profile }
     @Binding var activeTab: Tab
+    @Namespace private var tabAnimation
 
     var body: some View {
         HStack(spacing: 0) {
-            navItem(icon: "house.and.flag", label: "FLAGGED", tab: .flagged)
-            Spacer()
-            navItem(icon: "location.north.fill", label: "TRACK", tab: .track, isPrimary: true)
-            Spacer()
-            navItem(icon: "person", label: "PROFILE", tab: .profile)
+            navItem(icon: "house.and.flag", tab: .flagged)
+            navItem(icon: "location.north.fill", tab: .track)
+            navItem(icon: "person", tab: .profile)
         }
-        .padding(.horizontal, 32)
+        .padding(.horizontal, 48)
         .frame(height: 80)
         .background(Color.surfaceContainerLowest.opacity(0.95))
         .overlay(Rectangle().frame(height: 0.5).foregroundColor(Color.outlineVariant.opacity(0.5)), alignment: .top)
     }
 
-    private func navItem(icon: String, label: String, tab: Tab, isPrimary: Bool = false) -> some View {
-        Button(action: { activeTab = tab }) {
-            if isPrimary {
-                VStack(spacing: 2) {
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .medium))
-                    Text(label)
-                        .font(.labelCaps)
-                        .tracking(1)
-                }
-                .foregroundColor(Color.onPrimaryFixed)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 10)
-                .background(Color.primaryFixed)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-            } else {
-                VStack(spacing: 2) {
-                    Image(systemName: icon)
-                        .font(.system(size: 22))
-                    Text(label)
-                        .font(.labelCaps)
-                        .tracking(1)
-                }
-                .foregroundColor(activeTab == tab ? Color.primaryFixed : Color.onSurfaceVariant.opacity(0.6))
+    private func navItem(icon: String, tab: Tab) -> some View {
+        let isActive = activeTab == tab
+        return Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                activeTab = tab
             }
+        } label: {
+            Image(systemName: icon)
+                .font(.iconLg)
+                .foregroundColor(isActive ? Color.onPrimaryFixed : Color.onSurfaceVariant.opacity(0.6))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background {
+                    if isActive {
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.primaryFixed)
+                            .matchedGeometryEffect(id: "activePill", in: tabAnimation)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isActive)
         }
+        .buttonStyle(.plain)
     }
 }

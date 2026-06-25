@@ -180,10 +180,14 @@ private struct StopSearchField: View {
 
 struct CreateRideView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var membershipStore: MembershipStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var rideTitle = ""
-    @State private var maxRiders = 10
+    @State private var maxRiders = 5
+    @State private var showMembership = false
+
+    private var riderCap: Int { membershipStore.isPremium ? 25 : 5 }
 
     // Route stops — start + optional middle waypoints + destination
     @State private var startStop = RouteStop()
@@ -324,6 +328,13 @@ struct CreateRideView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "An unknown error occurred.")
+            }
+            .sheet(isPresented: $showMembership) {
+                MembershipView().environmentObject(membershipStore)
+            }
+            .onAppear {
+                // Clamp to plan limit in case default exceeds it (e.g. free tier = 5)
+                maxRiders = min(maxRiders, riderCap)
             }
         }
     }
@@ -483,31 +494,66 @@ struct CreateRideView: View {
     // MARK: - Max Riders Row
 
     private var maxRidersRow: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle().fill(Color.primaryContainer.opacity(0.2)).frame(width: 44, height: 44)
-                Image(systemName: "person.3.fill").font(.system(size: 18)).foregroundColor(Color.primaryFixed)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Max Riders").font(.bodyLg).foregroundColor(Color.onSurface)
-                Text("Maximum group size").font(.labelCaps).foregroundColor(Color.onSurfaceVariant)
-            }
-            Spacer()
+        VStack(spacing: 6) {
             HStack(spacing: 16) {
-                Button(action: { if maxRiders > 2 { maxRiders -= 1 } }) {
-                    Image(systemName: "minus.circle.fill").font(.system(size: 24)).foregroundColor(Color.primaryFixed)
+                ZStack {
+                    Circle().fill(Color.primaryContainer.opacity(0.2)).frame(width: 44, height: 44)
+                    Image(systemName: "person.3.fill").font(.iconMd).foregroundColor(Color.primaryFixed)
                 }
-                Text("\(maxRiders)").font(.headlineMd).foregroundColor(Color.onSurface).frame(minWidth: 28)
-                Button(action: { if maxRiders < 50 { maxRiders += 1 } }) {
-                    Image(systemName: "plus.circle.fill").font(.system(size: 24)).foregroundColor(Color.primaryFixed)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Max Riders").font(.bodyLg).foregroundColor(Color.onSurface)
+                    Text("Maximum group size").font(.labelCaps).foregroundColor(Color.onSurfaceVariant)
                 }
+                Spacer()
+                HStack(spacing: 16) {
+                    Button(action: { if maxRiders > 2 { maxRiders -= 1 } }) {
+                        Image(systemName: "minus.circle.fill").font(.iconLg).foregroundColor(Color.primaryFixed)
+                    }
+                    Text("\(maxRiders)").font(.headlineMd).foregroundColor(Color.onSurface).frame(minWidth: 28)
+                    Button(action: {
+                        if maxRiders < riderCap {
+                            maxRiders += 1
+                        } else if !membershipStore.isPremium {
+                            showMembership = true
+                        }
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.iconLg)
+                            .foregroundColor(atRiderCap ? Color.primaryFixed.opacity(0.35) : Color.primaryFixed)
+                    }
+                }
+            }
+            .padding(16)
+            .background(Color.surfaceContainer)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outline.opacity(0.2), lineWidth: 1))
+
+            if atRiderCap {
+                Button { showMembership = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "crown.fill").font(.iconXS)
+                        Text("Pro unlocks up to 25 riders")
+                            .font(.labelCaps)
+                            .tracking(0.5)
+                        Spacer()
+                        Text("UPGRADE →")
+                            .font(.labelCaps)
+                            .tracking(1)
+                    }
+                    .foregroundColor(Color.primaryFixed)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.primaryFixed.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primaryFixed.opacity(0.25), lineWidth: 1))
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(16)
-        .background(Color.surfaceContainer)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outline.opacity(0.2), lineWidth: 1))
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: atRiderCap)
     }
+
+    private var atRiderCap: Bool { maxRiders >= riderCap && !membershipStore.isPremium }
 
     // MARK: - Route Calculation
 

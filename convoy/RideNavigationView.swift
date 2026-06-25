@@ -512,6 +512,7 @@ struct RideNavigationView: View {
     @State private var showEndError = false
     @State private var isFreeLooking: Bool = false
     @State private var lastInteractionDate: Date = .distantPast
+    @State private var isNavigationActive: Bool = false
 
     private var destinationName: String { appState.currentRide?.destinationName ?? "Destination" }
 
@@ -666,31 +667,52 @@ struct RideNavigationView: View {
         }
     }
 
+    private func beginNavigation() {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            isNavigationActive = true
+        }
+        guard let coord = vm.userLocation else { return }
+        // Cinematic transition: zoom in to the user's position and tilt to driving perspective
+        withAnimation(.easeInOut(duration: 1.8)) {
+            cameraPosition = .camera(MapCamera(
+                centerCoordinate: coord,
+                distance: navCameraDistance,
+                heading: vm.userHeading,
+                pitch: 55
+            ))
+        }
+    }
+
     private func handleRouteVersionChanged() {
-        guard vm.locationTick == 0 else { return }
+        guard !isNavigationActive else { return }
         if !vm.routeCoordinates.isEmpty {
             let poly = MKPolyline(coordinates: vm.routeCoordinates, count: vm.routeCoordinates.count)
-            let padded = poly.boundingMapRect.insetBy(dx: -poly.boundingMapRect.width * 0.15, dy: -poly.boundingMapRect.height * 0.15)
-            let region = MKCoordinateRegion(padded)
-            let spanMeters = max(
-                region.span.latitudeDelta * 111_000,
-                region.span.longitudeDelta * 111_000 * cos(region.center.latitude * .pi / 180)
-            )
-            cameraPosition = .camera(MapCamera(centerCoordinate: region.center, distance: spanMeters * 0.9, heading: 0, pitch: 0))
+            let rect = poly.boundingMapRect
+            cameraPosition = .rect(rect.insetBy(dx: -rect.width * 0.2, dy: -rect.height * 0.2))
         } else if let dest = vm.destinationCoordinate {
-            cameraPosition = .camera(MapCamera(centerCoordinate: dest, distance: 50_000, heading: 0, pitch: 0))
+            cameraPosition = .region(MKCoordinateRegion(
+                center: dest,
+                span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
+            ))
         }
     }
 
     private func handleLocationTickChanged(wasZero: Bool) {
         guard let coord = vm.userLocation else { return }
+        // Don't reposition camera while in route-preview mode
+        guard isNavigationActive else { return }
         let isMoving = vm.mySpeedKmh > 2.0
         let idleSeconds = Date().timeIntervalSince(lastInteractionDate)
         let shouldFollow = wasZero || (isMoving && idleSeconds >= 3.0)
         if isFreeLooking && shouldFollow { isFreeLooking = false }
         guard shouldFollow else { return }
         withAnimation(wasZero ? .easeInOut(duration: 1.5) : .linear(duration: 0.3)) {
-            cameraPosition = .camera(MapCamera(centerCoordinate: coord, distance: navCameraDistance, heading: vm.userHeading, pitch: 0))
+            cameraPosition = .camera(MapCamera(
+                centerCoordinate: coord,
+                distance: navCameraDistance,
+                heading: vm.userHeading,
+                pitch: 55
+            ))
         }
     }
 
@@ -718,48 +740,50 @@ struct RideNavigationView: View {
         VStack(spacing: 0) {
             topBar
 
-            if vm.isOffRoute {
-                offRouteBanner
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .animation(.spring(), value: vm.isOffRoute)
-            }
+            if isNavigationActive {
+                if vm.isOffRoute {
+                    offRouteBanner
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .animation(.spring(), value: vm.isOffRoute)
+                }
 
-            if vm.showSplitAlert {
-                GroupSplitAlert(
-                    onIgnore: { withAnimation(.spring()) { vm.showSplitAlert = false } },
-                    onRegroup: { showRegroup = true }
-                )
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .transition(.scale.combined(with: .opacity))
-                .animation(.spring(), value: vm.showSplitAlert)
-            }
-
-            if vm.showRegroupToast, let regroup = vm.activeRegroup {
-                RegroupToastBanner(type: regroup.type)
+                if vm.showSplitAlert {
+                    GroupSplitAlert(
+                        onIgnore: { withAnimation(.spring()) { vm.showSplitAlert = false } },
+                        onRegroup: { showRegroup = true }
+                    )
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .animation(.spring(), value: vm.showRegroupToast)
-                    .task {
-                        try? await Task.sleep(for: .seconds(4))
-                        withAnimation { vm.showRegroupToast = false }
-                    }
-            }
+                    .transition(.scale.combined(with: .opacity))
+                    .animation(.spring(), value: vm.showSplitAlert)
+                }
 
-            if vm.showRegroupResolvedToast {
-                RegroupResolvedBanner()
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .animation(.spring(), value: vm.showRegroupResolvedToast)
+                if vm.showRegroupToast, let regroup = vm.activeRegroup {
+                    RegroupToastBanner(type: regroup.type)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .animation(.spring(), value: vm.showRegroupToast)
+                        .task {
+                            try? await Task.sleep(for: .seconds(4))
+                            withAnimation { vm.showRegroupToast = false }
+                        }
+                }
+
+                if vm.showRegroupResolvedToast {
+                    RegroupResolvedBanner()
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .animation(.spring(), value: vm.showRegroupResolvedToast)
+                }
             }
 
             Spacer()
 
-            if isFreeLooking {
+            if isFreeLooking && isNavigationActive {
                 Button(action: resumeNavigation) {
                     HStack(spacing: 6) {
                         Image(systemName: "location.fill")
@@ -780,7 +804,7 @@ struct RideNavigationView: View {
                 .padding(.bottom, 8)
             }
 
-            if vm.activeRegroup != nil {
+            if vm.activeRegroup != nil && isNavigationActive {
                 arrivedButton
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
@@ -788,15 +812,76 @@ struct RideNavigationView: View {
                     .animation(.spring(), value: vm.activeRegroup != nil)
             }
 
-            bottomControls
+            if isNavigationActive {
+                bottomControls
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                navigationPreviewBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(.easeInOut(duration: 0.4), value: isNavigationActive)
+    }
+
+    private var navigationPreviewBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .overlay(Color.outlineVariant.opacity(0.25))
+
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(destinationName.uppercased())
+                        .font(.system(size: 12, weight: .black, design: .monospaced))
+                        .foregroundColor(Color.onSurface)
+                        .lineLimit(1)
+                        .tracking(0.3)
+                    Text(vm.myDistanceToGoalKm > 0
+                         ? String(format: "%.1f km away", vm.myDistanceToGoalKm)
+                         : "Calculating route...")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color.onSurfaceVariant)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(vm.etaString)
+                        .font(.system(size: 22, weight: .black, design: .monospaced))
+                        .foregroundColor(Color.onSurface)
+                    Text("ETA")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color.onSurfaceVariant)
+                        .tracking(1.5)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 14)
+
+            Button(action: beginNavigation) {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                        .font(.system(size: 20, weight: .bold))
+                    Text("START NAVIGATION")
+                        .font(.headlineMd)
+                        .tracking(-0.5)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .background(Color.primaryFixed)
+                .foregroundColor(Color.onPrimaryFixed)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(color: Color.primaryFixed.opacity(0.4), radius: 16, y: 4)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 44)
+        }
+        .background(Color.surfaceDim)
     }
 
     // MARK: - Top Bar
 
     private var topBar: some View {
-        VStack(spacing: 10) {
-            HStack(alignment: .center) {
+        VStack(spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
                 Button(action: { dismiss() }) {
                     Image(systemName: "arrow.left")
                         .font(.system(size: 17, weight: .semibold))
@@ -806,41 +891,93 @@ struct RideNavigationView: View {
                         .clipShape(Circle())
                         .overlay(Circle().stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
                 }
-                Spacer()
-                HStack(spacing: 8) {
-                    HStack(spacing: 7) {
-                        Image(systemName: "trophy.fill")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(Color.primaryFixed)
-                        Text(vm.myRank > 0 ? "RANK \(vm.myRank)" : "RANK --")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.primaryFixed)
-                            .tracking(1.5)
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.25), lineWidth: 1))
 
-                    HStack(spacing: 7) {
-                        Circle().fill(Color.primaryFixed).frame(width: 7, height: 7)
-                            .shadow(color: Color.primaryFixed, radius: 5)
-                        Text(vm.riderCount > 0 ? "\(vm.riderCount) RIDERS LIVE" : "-- RIDERS LIVE")
+                if isNavigationActive {
+                    turnInstructionCard
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("TO")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.onSurfaceVariant)
+                            .tracking(1.5)
+                        Text(destinationName)
+                            .font(.bodyLg)
+                            .foregroundColor(Color.onSurface)
+                            .lineLimit(1)
+                    }
+                    .transition(.opacity)
+                    Spacer()
+                }
+
+                if isNavigationActive {
+                    HStack(spacing: 6) {
+                        Circle().fill(Color.primaryFixed).frame(width: 6, height: 6)
+                            .shadow(color: Color.primaryFixed, radius: 4)
+                        Text(vm.riderCount > 0 ? "\(vm.riderCount)" : "--")
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(Color.primaryFixed)
-                            .tracking(1.5)
                     }
-                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(.ultraThinMaterial)
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.25), lineWidth: 1))
+                    .transition(.opacity)
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
+            .animation(.easeInOut(duration: 0.35), value: isNavigationActive)
 
-            leaderboardStrip
+            if isNavigationActive {
+                leaderboardStrip
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
         .padding(.top, 8)
+        .animation(.easeInOut(duration: 0.35), value: isNavigationActive)
+    }
+
+    private var turnInstructionCard: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.primaryFixed)
+                    .frame(width: 46, height: 46)
+                Image(systemName: vm.currentInstruction.isEmpty
+                      ? "arrow.up"
+                      : maneuverIcon(for: vm.currentInstruction))
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(Color.onPrimaryFixed)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                let dist = vm.distanceToNextTurnMeters
+                let distText: String = {
+                    if dist <= 0 { return "" }
+                    return dist >= 1000
+                        ? String(format: "in %.1f km", dist / 1000)
+                        : String(format: "in %.0f m", dist)
+                }()
+                if !distText.isEmpty {
+                    Text(distText)
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .foregroundColor(Color.primaryFixed)
+                        .tracking(0.3)
+                }
+                Text(vm.currentInstruction.isEmpty ? "Follow route" : vm.currentInstruction)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Color.onSurface)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primaryFixed.opacity(0.3), lineWidth: 1))
     }
 
     private func maneuverIcon(for instruction: String) -> String {
@@ -1002,56 +1139,29 @@ struct RideNavigationView: View {
             Spacer()
             HStack {
                 Spacer()
-                VStack(spacing: 9) {
-                    NavStatPill(
-                        label: "SPEED",
-                        value: vm.mySpeedKmh > 0 ? String(format: "%.0f", vm.mySpeedKmh) : "--",
-                        unit: "KM/H"
-                    )
-                    NavStatPill(label: "ETA", value: vm.etaString, unit: nil)
-                    NavStatPill(
-                        label: "DIST",
-                        value: vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--",
-                        unit: "KM"
-                    )
-                    if !vm.currentInstruction.isEmpty {
-                        turnPill
-                            .transition(.scale.combined(with: .opacity))
-                            .animation(.spring(response: 0.4), value: vm.currentInstruction)
+                if isNavigationActive {
+                    VStack(spacing: 9) {
+                        NavStatPill(
+                            label: "SPEED",
+                            value: vm.mySpeedKmh > 0 ? String(format: "%.0f", vm.mySpeedKmh) : "--",
+                            unit: "KM/H"
+                        )
+                        NavStatPill(label: "ETA", value: vm.etaString, unit: nil)
+                        NavStatPill(
+                            label: "DIST",
+                            value: vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--",
+                            unit: "KM"
+                        )
                     }
+                    .padding(.trailing, 14)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
                 }
-                .padding(.trailing, 14)
             }
             Spacer()
         }
         .padding(.top, 180)
         .padding(.bottom, 220)
-    }
-
-    private var turnPill: some View {
-        let dist = vm.distanceToNextTurnMeters
-        let distText = dist >= 1000
-            ? String(format: "%.1fkm", dist / 1000)
-            : String(format: "%.0fm", dist)
-
-        return VStack(spacing: 4) {
-            Image(systemName: maneuverIcon(for: vm.currentInstruction))
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(Color.primaryFixed)
-            if dist > 0 {
-                Text("in \(distText)")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color.onSurface)
-                    .lineLimit(1)
-            }
-        }
-        .frame(width: 72, height: dist > 0 ? 56 : 44)
-        .background(Color.surfaceContainerHigh.opacity(0.88))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.primaryFixed.opacity(0.45), lineWidth: 1.5)
-        )
+        .animation(.easeInOut(duration: 0.4), value: isNavigationActive)
     }
 }
 

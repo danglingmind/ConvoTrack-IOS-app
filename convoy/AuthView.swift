@@ -3,6 +3,7 @@ import ClerkKit
 
 struct AuthView: View {
     @Environment(Clerk.self) private var clerk
+    @EnvironmentObject private var membershipStore: MembershipStore
     @State private var navigateToMain = false
     @State private var appeared = false
     @State private var isSigningIn = false
@@ -31,6 +32,7 @@ struct AuthView: View {
         }
         .fullScreenCover(isPresented: $navigateToMain) {
             MainTabView()
+                .environmentObject(membershipStore)
         }
         .alert("Sign In Failed", isPresented: $showError) {
             Button("OK", role: .cancel) {}
