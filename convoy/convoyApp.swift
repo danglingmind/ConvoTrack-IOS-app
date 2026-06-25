@@ -1,11 +1,13 @@
 import SwiftUI
 import ClerkKit
+import GoogleMaps
 
 @main
 struct convoyApp: App {
     @StateObject private var membershipStore = MembershipStore()
 
     init() {
+        GoogleMapsConfig.initialize()
         Clerk.configure(publishableKey: "pk_test_d2VsbC1raXdpLTk2LmNsZXJrLmFjY291bnRzLmRldiQ")
     }
 

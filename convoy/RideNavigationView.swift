@@ -1,7 +1,7 @@
 import SwiftUI
-import MapKit
 import ClerkKit
 import Combine
+import CoreLocation
 
 // MARK: - Display Models
 
@@ -319,37 +319,34 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private func calculateRoute(from waypoints: [Waypoint]) async {
         let sorted = waypoints.sorted { $0.order < $1.order }
         guard sorted.count >= 2 else { return }
-        let items = sorted.map {
-            MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)))
-        }
+
         var allCoords: [CLLocationCoordinate2D] = []
         var totalTime: TimeInterval = 0
         var steps: [NavStep] = []
-        for i in 0..<items.count - 1 {
-            let req = MKDirections.Request()
-            req.source = items[i]; req.destination = items[i + 1]; req.transportType = .automobile
-            if let route = try? await MKDirections(request: req).calculate().routes.first {
-                let coords = route.polyline.coordinates
-                allCoords += (i == 0) ? coords : Array(coords.dropFirst())
-                totalTime += route.expectedTravelTime
-                for step in route.steps {
-                    let instr = step.instructions.trimmingCharacters(in: .whitespaces)
-                    guard !instr.isEmpty, let end = step.polyline.coordinates.last else { continue }
-                    steps.append(NavStep(instruction: instr, endCoordinate: end, distanceMeters: step.distance))
-                }
+
+        for i in 0..<sorted.count - 1 {
+            let origin = CLLocationCoordinate2D(latitude: sorted[i].lat,   longitude: sorted[i].lng)
+            let dest   = CLLocationCoordinate2D(latitude: sorted[i+1].lat, longitude: sorted[i+1].lng)
+            guard let result = try? await GoogleDirectionsService.route(from: origin, to: dest) else { continue }
+            allCoords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
+            totalTime += result.durationSeconds
+            for step in result.steps {
+                guard !step.instruction.isEmpty else { continue }
+                steps.append(NavStep(instruction: step.instruction, endCoordinate: step.endCoordinate, distanceMeters: step.distanceMeters))
             }
         }
+
         navSteps = steps
         currentStepIndex = 0
         if let first = navSteps.first {
-            currentInstruction = first.instruction
+            currentInstruction       = first.instruction
             distanceToNextTurnMeters = first.distanceMeters
         }
-        routeCoordinates = allCoords
+        routeCoordinates        = allCoords
         routeExpectedTravelTime = totalTime
         currentRouteSegmentIndex = 0
-        consecutiveOffCount = 0
-        consecutiveOnCount = 0
+        consecutiveOffCount      = 0
+        consecutiveOnCount       = 0
         routeVersion += 1
     }
 
@@ -410,13 +407,9 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     }
 
     private func calculateReroute(from origin: CLLocationCoordinate2D, to target: CLLocationCoordinate2D) async {
-        let req = MKDirections.Request()
-        req.source = MKMapItem(placemark: MKPlacemark(coordinate: origin))
-        req.destination = MKMapItem(placemark: MKPlacemark(coordinate: target))
-        req.transportType = .automobile
-        if let route = try? await MKDirections(request: req).calculate().routes.first,
+        if let result = try? await GoogleDirectionsService.route(from: origin, to: target),
            !Task.isCancelled {
-            rerouteCoordinates = route.polyline.coordinates
+            rerouteCoordinates = result.coordinates
         }
         isRerouteInFlight = false
     }
@@ -504,7 +497,7 @@ struct RideNavigationView: View {
     @EnvironmentObject private var appState: AppState
     @StateObject private var vm = NavigationViewModel()
 
-    @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var cameraCommand: MapCameraCommand? = nil
     @State private var selectedRiderId: String? = nil
     @State private var showRegroup = false
     @State private var regroupReason: CoordinationOverlayView.RegroupReason? = nil
@@ -515,14 +508,6 @@ struct RideNavigationView: View {
     @State private var isNavigationActive: Bool = false
 
     private var destinationName: String { appState.currentRide?.destinationName ?? "Destination" }
-
-    private var navCameraDistance: Double {
-        switch vm.mySpeedKmh {
-        case ..<20:  return 400
-        case ..<60:  return 700
-        default:     return 1000
-        }
-    }
 
     var body: some View {
         coreView
@@ -586,66 +571,39 @@ struct RideNavigationView: View {
 
     // MARK: - Map
 
-    private var mapLayer: some View {
-        Map(position: $cameraPosition) {
-            if let coord = vm.userLocation {
-                Annotation("", coordinate: coord, anchor: .center) {
-                    ConvoyLocationPin(heading: vm.userHeading)
-                }
-            }
-
-            if !vm.rerouteCoordinates.isEmpty {
-                MapPolyline(coordinates: vm.rerouteCoordinates)
-                    .stroke(
-                        Color(red: 1.0, green: 0.6, blue: 0.15),
-                        style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round, dash: [10, 6])
-                    )
-            }
-
-            if !vm.routeCoordinates.isEmpty {
-                MapPolyline(coordinates: vm.routeCoordinates)
-                    .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-            }
-
-            ForEach(vm.riders.filter { !$0.isMe }) { rider in
-                Annotation(rider.name, coordinate: rider.coordinate, anchor: .bottom) {
-                    LiveRiderPin(rider: rider, isSelected: selectedRiderId == rider.id)
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedRiderId = (selectedRiderId == rider.id) ? nil : rider.id
-                            }
-                        }
-                }
-            }
-
-            ForEach(vm.middleWaypoints, id: \.order) { wp in
-                Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
-                    WaypointPin(name: wp.name)
-                }
-            }
-
-            if let coord = vm.destinationCoordinate {
-                Annotation("", coordinate: coord, anchor: .bottom) {
-                    DestinationPin(name: destinationName)
-                }
-            }
-
-            if let regroup = vm.activeRegroup {
-                Annotation("", coordinate: CLLocationCoordinate2D(latitude: regroup.lat, longitude: regroup.lng), anchor: .bottom) {
-                    RegroupPin(type: regroup.type)
-                }
-            }
+    private var navMapPins: [MapPin] {
+        var pins: [MapPin] = []
+        if let coord = vm.userLocation {
+            pins.append(MapPin(id: "me", coordinate: coord, style: .userLocation(heading: vm.userHeading), anchorBottom: false))
         }
-        .mapStyle(.standard(elevation: .flat))
+        for rider in vm.riders.filter({ !$0.isMe }) {
+            pins.append(MapPin(id: rider.id, coordinate: rider.coordinate,
+                               style: .rider(name: rider.name, avatarUrl: rider.avatarUrl,
+                                             isMe: false, rank: rider.rank,
+                                             isSelected: selectedRiderId == rider.id)))
+        }
+        for wp in vm.middleWaypoints {
+            pins.append(MapPin(id: "wp_\(wp.order)", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .waypoint(name: wp.name)))
+        }
+        if let coord = vm.destinationCoordinate {
+            pins.append(MapPin(id: "dest", coordinate: coord, style: .destination(name: destinationName)))
+        }
+        if let regroup = vm.activeRegroup {
+            pins.append(MapPin(id: "regroup", coordinate: CLLocationCoordinate2D(latitude: regroup.lat, longitude: regroup.lng), style: .regroup(type: regroup.type)))
+        }
+        return pins
+    }
+
+    private var mapLayer: some View {
+        GoogleMapView(
+            routeCoords:   vm.routeCoordinates,
+            rerouteCoords: vm.rerouteCoordinates,
+            pins:          navMapPins,
+            cameraCommand: cameraCommand,
+            isInteractive: true,
+            onInteraction: onMapInteraction
+        )
         .ignoresSafeArea()
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 10)
-                .onChanged { _ in onMapInteraction() }
-        )
-        .simultaneousGesture(
-            MagnifyGesture()
-                .onChanged { _ in onMapInteraction() }
-        )
     }
 
     private func onMapInteraction() {
@@ -653,81 +611,64 @@ struct RideNavigationView: View {
         if !isFreeLooking { isFreeLooking = true }
     }
 
+    private var navZoom: Float {
+        switch vm.mySpeedKmh {
+        case ..<20:  return 17.5
+        case ..<60:  return 16.5
+        default:     return 16.0
+        }
+    }
+
     private func resumeNavigation() {
         isFreeLooking = false
         lastInteractionDate = .distantPast
         guard let coord = vm.userLocation else { return }
-        withAnimation(.easeInOut(duration: 0.8)) {
-            cameraPosition = .camera(MapCamera(
-                centerCoordinate: coord,
-                distance: navCameraDistance,
-                heading: vm.userHeading,
-                pitch: 55
-            ))
-        }
+        cameraCommand = MapCameraCommand(
+            id: UUID(),
+            action: .navigate(lat: coord.latitude, lng: coord.longitude,
+                              zoom: navZoom, bearing: vm.userHeading, tilt: 50, animated: true)
+        )
     }
 
     private func beginNavigation() {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-            isNavigationActive = true
-        }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { isNavigationActive = true }
         guard let coord = vm.userLocation else { return }
-        // Cinematic transition: zoom in to the user's position and tilt to driving perspective
-        withAnimation(.easeInOut(duration: 1.8)) {
-            cameraPosition = .camera(MapCamera(
-                centerCoordinate: coord,
-                distance: navCameraDistance,
-                heading: vm.userHeading,
-                pitch: 55
-            ))
-        }
+        cameraCommand = MapCameraCommand(
+            id: UUID(),
+            action: .navigate(lat: coord.latitude, lng: coord.longitude,
+                              zoom: navZoom, bearing: vm.userHeading, tilt: 50, animated: true)
+        )
     }
 
     private func handleRouteVersionChanged() {
         guard !isNavigationActive else { return }
         if !vm.routeCoordinates.isEmpty {
-            let poly = MKPolyline(coordinates: vm.routeCoordinates, count: vm.routeCoordinates.count)
-            let rect = poly.boundingMapRect
-            cameraPosition = .rect(rect.insetBy(dx: -rect.width * 0.2, dy: -rect.height * 0.2))
+            cameraCommand = MapCameraCommand.fitRoute(vm.routeCoordinates, padding: 60)
         } else if let dest = vm.destinationCoordinate {
-            cameraPosition = .region(MKCoordinateRegion(
-                center: dest,
-                span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
-            ))
+            cameraCommand = MapCameraCommand.focus(lat: dest.latitude, lng: dest.longitude, zoom: 11)
         }
     }
 
     private func handleLocationTickChanged(wasZero: Bool) {
         guard let coord = vm.userLocation else { return }
-        // Don't reposition camera while in route-preview mode
         guard isNavigationActive else { return }
-        let isMoving = vm.mySpeedKmh > 2.0
+        let isMoving    = vm.mySpeedKmh > 2.0
         let idleSeconds = Date().timeIntervalSince(lastInteractionDate)
         let shouldFollow = wasZero || (isMoving && idleSeconds >= 3.0)
         if isFreeLooking && shouldFollow { isFreeLooking = false }
         guard shouldFollow else { return }
-        withAnimation(wasZero ? .easeInOut(duration: 1.5) : .linear(duration: 0.3)) {
-            cameraPosition = .camera(MapCamera(
-                centerCoordinate: coord,
-                distance: navCameraDistance,
-                heading: vm.userHeading,
-                pitch: 55
-            ))
-        }
+        cameraCommand = MapCameraCommand(
+            id: UUID(),
+            action: .navigate(lat: coord.latitude, lng: coord.longitude,
+                              zoom: navZoom, bearing: vm.userHeading, tilt: 50, animated: !wasZero)
+        )
     }
 
     private func handleRegroupChanged(_ regroup: RegroupEvent?) {
         guard let regroup else { return }
         isFreeLooking = true
         lastInteractionDate = Date()
-        withAnimation(.easeInOut(duration: 0.8)) {
-            cameraPosition = .camera(MapCamera(
-                centerCoordinate: CLLocationCoordinate2D(latitude: regroup.lat, longitude: regroup.lng),
-                distance: 600,
-                heading: 0,
-                pitch: 0
-            ))
-        }
+        cameraCommand = MapCameraCommand.focus(lat: regroup.lat, lng: regroup.lng, zoom: 15)
         Task {
             try? await Task.sleep(for: .seconds(5))
             resumeNavigation()

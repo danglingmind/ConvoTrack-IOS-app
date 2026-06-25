@@ -1,6 +1,6 @@
 import SwiftUI
+import CoreLocation
 import ClerkKit
-import MapKit
 
 enum HomeRoute: Hashable {
     case createRide
@@ -253,7 +253,7 @@ struct ActiveRideCard: View {
     let ride: Ride?
 
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
-    @State private var mapPosition: MapCameraPosition = .automatic
+    @State private var cameraCommand: MapCameraCommand? = nil
 
     private var participantCount: Int { ride?.participants.count ?? 0 }
     private var rideStatus: String {
@@ -265,21 +265,18 @@ struct ActiveRideCard: View {
         ZStack {
             // Map background
             if let ride, !ride.waypoints.isEmpty {
-                Map(position: $mapPosition) {
-                    if !routeCoordinates.isEmpty {
-                        MapPolyline(coordinates: routeCoordinates)
-                            .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                    }
-                    Annotation("", coordinate: CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng)) {
-                        ZStack {
-                            Circle().fill(Color.primaryFixed.opacity(0.25)).frame(width: 24, height: 24)
-                            Circle().fill(Color.primaryFixed).frame(width: 10, height: 10)
-                                .shadow(color: Color.primaryFixed, radius: 5)
-                        }
-                    }
-                }
-                .allowsHitTesting(false)
-                .colorScheme(.dark)
+                let destPin = MapPin(
+                    id: "dest",
+                    coordinate: CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng),
+                    style: .simpleDot(color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1), size: 10),
+                    anchorBottom: false
+                )
+                GoogleMapView(
+                    routeCoords:   routeCoordinates,
+                    pins:          [destPin],
+                    cameraCommand: cameraCommand,
+                    isInteractive: false
+                )
                 .task(id: ride.id) { await computeRoute(ride) }
             } else {
                 LinearGradient(
@@ -367,25 +364,18 @@ struct ActiveRideCard: View {
         let sorted = ride.waypoints.sorted { $0.order < $1.order }
         guard sorted.count >= 2 else { return }
 
-        let items = sorted.map {
-            MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)))
-        }
-
         var allCoords: [CLLocationCoordinate2D] = []
-        for i in 0..<items.count - 1 {
-            let req = MKDirections.Request()
-            req.source = items[i]; req.destination = items[i + 1]; req.transportType = .automobile
-            if let route = try? await MKDirections(request: req).calculate().routes.first {
-                let coords = route.polyline.coordinates
-                allCoords += (i == 0) ? coords : Array(coords.dropFirst())
+        for i in 0..<sorted.count - 1 {
+            let origin = CLLocationCoordinate2D(latitude: sorted[i].lat,     longitude: sorted[i].lng)
+            let dest   = CLLocationCoordinate2D(latitude: sorted[i+1].lat,   longitude: sorted[i+1].lng)
+            if let result = try? await GoogleDirectionsService.route(from: origin, to: dest) {
+                allCoords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
             }
         }
 
         routeCoordinates = allCoords
         if !allCoords.isEmpty {
-            let poly = MKPolyline(coordinates: allCoords, count: allCoords.count)
-            let rect = poly.boundingMapRect
-            mapPosition = .rect(rect.insetBy(dx: -rect.width * 0.25, dy: -rect.height * 0.25))
+            cameraCommand = MapCameraCommand.fitRoute(allCoords, padding: 48)
         }
     }
 }

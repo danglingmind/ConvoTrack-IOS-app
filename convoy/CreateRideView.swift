@@ -1,12 +1,12 @@
 import SwiftUI
-import MapKit
+import CoreLocation
 
 // MARK: - Route Stop Model
 
 private struct RouteStop: Identifiable {
     let id = UUID()
     var text: String = ""
-    var mapItem: MKMapItem? = nil
+    var place: PlaceResult? = nil
 }
 
 // MARK: - Stop Search Field
@@ -17,11 +17,11 @@ private struct StopSearchField: View {
     let icon: String
     let fieldID: String
     @Binding var text: String
-    @Binding var mapItem: MKMapItem?
+    @Binding var place: PlaceResult?
     var onSelect: (() -> Void)? = nil
     var onResultsAppeared: ((String) -> Void)? = nil
 
-    @State private var results: [MKMapItem] = []
+    @State private var results: [PlaceResult] = []
     @State private var searchTask: Task<Void, Never>?
 
     var body: some View {
@@ -34,7 +34,7 @@ private struct StopSearchField: View {
                     .padding(.bottom, 8)
             }
 
-            if mapItem != nil {
+            if place != nil {
                 confirmedRow
             } else {
                 searchRow
@@ -56,12 +56,12 @@ private struct StopSearchField: View {
             Image(systemName: icon)
                 .font(.system(size: 16))
                 .foregroundColor(Color.primaryFixed)
-            Text(mapItem?.name ?? "")
+            Text(place?.name ?? "")
                 .font(.bodyMd)
                 .foregroundColor(Color.onSurface)
                 .lineLimit(1)
             Spacer()
-            Button(action: { text = ""; mapItem = nil; results = [] }) {
+            Button(action: { text = ""; place = nil; results = [] }) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
                     .font(.system(size: 18))
@@ -93,7 +93,7 @@ private struct StopSearchField: View {
                     searchTask = Task {
                         try? await Task.sleep(for: .milliseconds(300))
                         guard !Task.isCancelled else { return }
-                        await performSearch(newValue)
+                        results = await GooglePlacesService.search(query: newValue, near: LocationService.shared.lastLocation)
                     }
                 }
         }
@@ -106,8 +106,8 @@ private struct StopSearchField: View {
         VStack(spacing: 0) {
             ForEach(Array(results.prefix(4).enumerated()), id: \.offset) { index, item in
                 Button(action: {
-                    text = item.name ?? ""
-                    mapItem = item
+                    text = item.name
+                    place = item
                     results = []
                     onSelect?()
                 }) {
@@ -116,23 +116,20 @@ private struct StopSearchField: View {
                             .foregroundColor(Color.primaryFixed)
                             .font(.system(size: 16))
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(item.name ?? "")
+                            Text(item.name)
                                 .font(.bodyMd)
                                 .foregroundColor(Color.onSurface)
                                 .lineLimit(1)
-                            let locality = [item.placemark.subLocality, item.placemark.locality]
-                                .compactMap { $0 }.joined(separator: ", ")
-                            if !locality.isEmpty {
-                                Text(locality)
+                            if let addr = item.formattedAddress, !addr.isEmpty {
+                                Text(addr)
                                     .font(.captionMd)
                                     .foregroundColor(Color.onSurfaceVariant)
                                     .lineLimit(1)
                             }
                         }
                         Spacer()
-                        if let userLoc = LocationService.shared.lastLocation,
-                           let itemLoc = item.placemark.location {
-                            let dist = userLoc.distance(from: itemLoc)
+                        if let userLoc = LocationService.shared.lastLocation {
+                            let dist = userLoc.distance(from: item.location)
                             Text(dist < 1000 ? "\(Int(dist)) m" : String(format: "%.1f km", dist / 1000))
                                 .font(.dataMono)
                                 .foregroundColor(Color.onSurfaceVariant)
@@ -152,27 +149,6 @@ private struct StopSearchField: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outline.opacity(0.3), lineWidth: 1))
         .padding(.top, 4)
-    }
-
-    @MainActor
-    private func performSearch(_ query: String) async {
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = query
-        request.resultTypes = [.pointOfInterest, .address]
-        if let userLoc = LocationService.shared.lastLocation {
-            request.region = MKCoordinateRegion(
-                center: userLoc.coordinate,
-                latitudinalMeters: 50_000,
-                longitudinalMeters: 50_000
-            )
-        }
-        do {
-            let response = try await MKLocalSearch(request: request).start()
-            guard !Task.isCancelled else { return }
-            results = response.mapItems
-        } catch {
-            results = []
-        }
     }
 }
 
@@ -198,7 +174,7 @@ struct CreateRideView: View {
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var routeDistance: Double = 0
     @State private var routeDuration: TimeInterval = 0
-    @State private var mapPosition: MapCameraPosition = .automatic
+    @State private var cameraCommand: MapCameraCommand? = nil
 
     // API state
     @State private var isCreating = false
@@ -220,17 +196,17 @@ struct CreateRideView: View {
 
     private var canCreate: Bool {
         !rideTitle.trimmingCharacters(in: .whitespaces).isEmpty
-            && startStop.mapItem != nil
-            && endStop.mapItem != nil
+            && startStop.place != nil
+            && endStop.place != nil
             && !isCreating
     }
 
     // All confirmed stops in order for route calc and annotations
-    private var confirmedStops: [MKMapItem] {
-        var stops: [MKMapItem] = []
-        if let s = startStop.mapItem { stops.append(s) }
-        stops += middleStops.compactMap { $0.mapItem }
-        if let e = endStop.mapItem { stops.append(e) }
+    private var confirmedStops: [PlaceResult] {
+        var stops: [PlaceResult] = []
+        if let s = startStop.place { stops.append(s) }
+        stops += middleStops.compactMap { $0.place }
+        if let e = endStop.place { stops.append(e) }
         return stops
     }
 
@@ -352,7 +328,7 @@ struct CreateRideView: View {
                     icon: "location.fill",
                     fieldID: "start",
                     text: $startStop.text,
-                    mapItem: $startStop.mapItem,
+                    place: $startStop.place,
                     onSelect: { Task { await recalculateRoute() } },
                     onResultsAppeared: { id in scrollTarget = id }
                 )
@@ -369,7 +345,7 @@ struct CreateRideView: View {
                             icon: "mappin",
                             fieldID: "stop_\(stop.id)",
                             text: $stop.text,
-                            mapItem: $stop.mapItem,
+                            place: $stop.place,
                             onSelect: { Task { await recalculateRoute() } },
                             onResultsAppeared: { id in scrollTarget = id }
                         )
@@ -408,7 +384,7 @@ struct CreateRideView: View {
                     icon: "flag.checkered",
                     fieldID: "destination",
                     text: $endStop.text,
-                    mapItem: $endStop.mapItem,
+                    place: $endStop.place,
                     onSelect: { Task { await recalculateRoute() } },
                     onResultsAppeared: { id in scrollTarget = id }
                 )
@@ -457,26 +433,22 @@ struct CreateRideView: View {
     }
 
     private var routeMap: some View {
-        Map(position: $mapPosition) {
-            if !routeCoordinates.isEmpty {
-                MapPolyline(coordinates: routeCoordinates)
-                    .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-            }
-            ForEach(Array(confirmedStops.enumerated()), id: \.offset) { index, item in
-                let isEnd = index == confirmedStops.count - 1
-                let dotColor: Color = isEnd ? .primaryFixed : (index == 0 ? .tertiaryFixed : Color.primaryFixed.opacity(0.6))
-                let dotSize: CGFloat = isEnd ? 16 : 12
-                let coord = item.location.coordinate
-                Annotation("", coordinate: coord, anchor: .center) {
-                    Circle()
-                        .fill(dotColor)
-                        .frame(width: dotSize, height: dotSize)
-                        .overlay(Circle().stroke(Color.surfaceDim, lineWidth: 2))
-                }
-            }
+        let stopPins: [MapPin] = confirmedStops.enumerated().map { index, stop in
+            let isEnd   = index == confirmedStops.count - 1
+            let color: UIColor = isEnd
+                ? UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1)
+                : (index == 0 ? UIColor(red: 0.384, green: 1, blue: 0.588, alpha: 1)
+                              : UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 0.6))
+            let size: CGFloat = isEnd ? 16 : 12
+            return MapPin(id: "stop_\(index)", coordinate: stop.coordinate,
+                          style: .simpleDot(color: color, size: size), anchorBottom: false)
         }
-        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
-        .allowsHitTesting(false)
+        return GoogleMapView(
+            routeCoords:   routeCoordinates,
+            pins:          stopPins,
+            cameraCommand: cameraCommand,
+            isInteractive: false
+        )
     }
 
     private var routeMapPlaceholder: some View {
@@ -562,13 +534,10 @@ struct CreateRideView: View {
         let stops = confirmedStops
         guard stops.count >= 2 else {
             routeCoordinates = []
-            routeDistance = 0
-            routeDuration = 0
+            routeDistance    = 0
+            routeDuration    = 0
             if let first = stops.first {
-                mapPosition = .region(MKCoordinateRegion(
-                    center: first.location.coordinate,
-                    span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
-                ))
+                cameraCommand = MapCameraCommand.focus(lat: first.coordinate.latitude, lng: first.coordinate.longitude, zoom: 13)
             }
             return
         }
@@ -578,31 +547,20 @@ struct CreateRideView: View {
         var totalTime: TimeInterval = 0
 
         for i in 0..<stops.count - 1 {
-            let req = MKDirections.Request()
-            req.source = stops[i]
-            req.destination = stops[i + 1]
-            req.transportType = .automobile
             do {
-                let resp = try await MKDirections(request: req).calculate()
-                guard let segment = resp.routes.first else { continue }
-                let coords = segment.polyline.coordinates
-                // Avoid duplicate junction point between segments
-                allCoords += (i == 0) ? coords : Array(coords.dropFirst())
-                totalDist += segment.distance
-                totalTime += segment.expectedTravelTime
+                let result = try await GoogleDirectionsService.route(from: stops[i].coordinate, to: stops[i+1].coordinate)
+                allCoords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
+                totalDist += result.distanceMeters
+                totalTime += result.durationSeconds
             } catch { continue }
         }
 
         routeCoordinates = allCoords
-        routeDistance = totalDist
-        routeDuration = totalTime
+        routeDistance    = totalDist
+        routeDuration    = totalTime
 
         if !allCoords.isEmpty {
-            let poly = MKPolyline(coordinates: allCoords, count: allCoords.count)
-            let rect = poly.boundingMapRect
-            let padX = rect.width * 0.15
-            let padY = rect.height * 0.15
-            mapPosition = .rect(rect.insetBy(dx: -padX, dy: -padY))
+            cameraCommand = MapCameraCommand.fitRoute(allCoords, padding: 40)
         }
     }
 
@@ -610,29 +568,29 @@ struct CreateRideView: View {
 
     @MainActor
     private func createRide() async {
-        guard let start = startStop.mapItem, let dest = endStop.mapItem else { return }
+        guard let start = startStop.place, let dest = endStop.place else { return }
         isCreating = true
         defer { isCreating = false }
 
-        let destCoord = dest.location.coordinate
-        let encodedPolyline = encodePolyline(routeCoordinates)
+        let destCoord       = dest.coordinate
+        let encodedPolyline = GoogleDirectionsService.encodePolyline(routeCoordinates)
 
         // Build ordered waypoints: START → WAYPOINT* → DESTINATION
         var waypoints: [CreateWaypoint] = []
-        let startCoord = start.location.coordinate
+        let startCoord = start.coordinate
         waypoints.append(CreateWaypoint(
             order: 0,
-            name: start.name ?? startStop.text,
+            name: start.name,
             type: "START",
             lat: startCoord.latitude,
             lng: startCoord.longitude
         ))
         for stop in middleStops {
-            guard let item = stop.mapItem else { continue }
-            let c = item.location.coordinate
+            guard let place = stop.place else { continue }
+            let c = place.coordinate
             waypoints.append(CreateWaypoint(
                 order: waypoints.count,
-                name: item.name ?? stop.text,
+                name: place.name,
                 type: "WAYPOINT",
                 lat: c.latitude,
                 lng: c.longitude
@@ -640,7 +598,7 @@ struct CreateRideView: View {
         }
         waypoints.append(CreateWaypoint(
             order: waypoints.count,
-            name: dest.name ?? endStop.text,
+            name: dest.name,
             type: "DESTINATION",
             lat: destCoord.latitude,
             lng: destCoord.longitude
@@ -648,7 +606,7 @@ struct CreateRideView: View {
 
         let body = CreateRideRequest(
             title: rideTitle.trimmingCharacters(in: .whitespaces),
-            destinationName: dest.name ?? endStop.text,
+            destinationName: dest.name,
             destinationLat: destCoord.latitude,
             destinationLng: destCoord.longitude,
             distanceMeters: routeDistance,
@@ -667,44 +625,6 @@ struct CreateRideView: View {
             errorMessage = error.localizedDescription
             showError = true
         }
-    }
-}
-
-// MARK: - Google Polyline Encoding
-
-private func encodePolyline(_ coordinates: [CLLocationCoordinate2D]) -> String {
-    var result = ""
-    var prevLat = 0
-    var prevLng = 0
-    for coord in coordinates {
-        let lat = Int(round(coord.latitude * 1e5))
-        let lng = Int(round(coord.longitude * 1e5))
-        result += encodePolylineValue(lat - prevLat)
-        result += encodePolylineValue(lng - prevLng)
-        prevLat = lat
-        prevLng = lng
-    }
-    return result
-}
-
-private func encodePolylineValue(_ value: Int) -> String {
-    var v = value < 0 ? ~(value << 1) : value << 1
-    var result = ""
-    while v >= 0x20 {
-        result.append(Character(UnicodeScalar((0x20 | (v & 0x1f)) + 63)!))
-        v >>= 5
-    }
-    result.append(Character(UnicodeScalar(v + 63)!))
-    return result
-}
-
-// MARK: - MKPolyline Extension
-
-extension MKPolyline {
-    var coordinates: [CLLocationCoordinate2D] {
-        var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: pointCount)
-        getCoordinates(&coords, range: NSRange(location: 0, length: pointCount))
-        return coords
     }
 }
 

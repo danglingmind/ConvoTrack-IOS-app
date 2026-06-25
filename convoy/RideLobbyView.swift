@@ -1,5 +1,5 @@
 import SwiftUI
-import MapKit
+import CoreLocation
 import ClerkKit
 import Combine
 
@@ -140,7 +140,7 @@ struct RideLobbyView: View {
     @State private var showRiderDetail = false
     @State private var showNavigation = false
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
-    @State private var mapPosition: MapCameraPosition = .automatic
+    @State private var cameraCommand: MapCameraCommand? = nil
     @State private var showStartError = false
 
     // MARK: - Derived
@@ -243,10 +243,13 @@ struct RideLobbyView: View {
 
     private var mapSection: some View {
         ZStack(alignment: .bottom) {
-            Map(position: $mapPosition, content: lobbyMapContent)
-                .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
-                .allowsHitTesting(false)
-                .frame(maxWidth: .infinity, minHeight: 420)
+            GoogleMapView(
+                routeCoords:   routeCoordinates,
+                pins:          lobbyMapPins,
+                cameraCommand: cameraCommand,
+                isInteractive: false
+            )
+            .frame(maxWidth: .infinity, minHeight: 420)
 
             LinearGradient(
                 colors: [Color.black.opacity(0.45), .clear],
@@ -282,33 +285,19 @@ struct RideLobbyView: View {
         .frame(height: 420)
     }
 
-    @MapContentBuilder
-    private func lobbyMapContent() -> some MapContent {
-        if !routeCoordinates.isEmpty {
-            MapPolyline(coordinates: routeCoordinates)
-                .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-        }
-        lobbyWaypointAnnotations
-    }
-
-    @MapContentBuilder
-    private var lobbyWaypointAnnotations: some MapContent {
+    private var lobbyMapPins: [MapPin] {
         let waypoints = appState.currentRide?.waypoints ?? []
+        var pins: [MapPin] = []
         if let wp = waypoints.first(where: { $0.type == "START" }) {
-            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
-                LobbyStartPin()
-            }
+            pins.append(MapPin(id: "start", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .lobbyStart))
         }
-        ForEach(waypoints.filter { $0.type == "WAYPOINT" }, id: \.order) { wp in
-            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
-                WaypointPin(name: wp.name)
-            }
+        for wp in waypoints.filter({ $0.type == "WAYPOINT" }) {
+            pins.append(MapPin(id: "wp_\(wp.order)", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .waypoint(name: wp.name)))
         }
         if let wp = waypoints.first(where: { $0.type == "DESTINATION" }) {
-            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
-                DestinationPin(name: wp.name)
-            }
+            pins.append(MapPin(id: "dest", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .destination(name: wp.name)))
         }
+        return pins
     }
 
     // MARK: - Roster Section
@@ -504,30 +493,20 @@ struct RideLobbyView: View {
         let sorted = waypoints.sorted { $0.order < $1.order }
         guard sorted.count >= 2 else { return }
 
-        let items = sorted.map {
-            MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)))
-        }
-
         var allCoords: [CLLocationCoordinate2D] = []
-        for i in 0..<items.count - 1 {
-            let req = MKDirections.Request()
-            req.source = items[i]; req.destination = items[i + 1]; req.transportType = .automobile
-            if let route = try? await MKDirections(request: req).calculate().routes.first {
-                let coords = route.polyline.coordinates
-                allCoords += (i == 0) ? coords : Array(coords.dropFirst())
+        for i in 0..<sorted.count - 1 {
+            let origin = CLLocationCoordinate2D(latitude: sorted[i].lat,   longitude: sorted[i].lng)
+            let dest   = CLLocationCoordinate2D(latitude: sorted[i+1].lat, longitude: sorted[i+1].lng)
+            if let result = try? await GoogleDirectionsService.route(from: origin, to: dest) {
+                allCoords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
             }
         }
 
         routeCoordinates = allCoords
         if !allCoords.isEmpty {
-            let poly = MKPolyline(coordinates: allCoords, count: allCoords.count)
-            let rect = poly.boundingMapRect
-            mapPosition = .rect(rect.insetBy(dx: -rect.width * 0.2, dy: -rect.height * 0.2))
+            cameraCommand = MapCameraCommand.fitRoute(allCoords, padding: 60)
         } else if let first = sorted.first {
-            mapPosition = .region(MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: first.lat, longitude: first.lng),
-                span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
-            ))
+            cameraCommand = MapCameraCommand.focus(lat: first.lat, lng: first.lng, zoom: 11)
         }
     }
 }

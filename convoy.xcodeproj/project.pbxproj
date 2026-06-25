@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9C47705E2FECD25500056F38 /* GoogleMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 9C47705D2FECD25500056F38 /* GoogleMaps */; };
 		9CF0CB9C2FD0954300B3CF92 /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9CF0CB9B2FD0954300B3CF92 /* ClerkKit */; };
 		9CF0CB9F2FD095A100B3CF92 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = 9CF0CB9E2FD095A100B3CF92 /* SocketIO */; };
 /* End PBXBuildFile section */
@@ -43,6 +44,7 @@
 			files = (
 				9CF0CB9C2FD0954300B3CF92 /* ClerkKit in Frameworks */,
 				9CF0CB9F2FD095A100B3CF92 /* SocketIO in Frameworks */,
+				9C47705E2FECD25500056F38 /* GoogleMaps in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -87,6 +89,7 @@
 			packageProductDependencies = (
 				9CF0CB9B2FD0954300B3CF92 /* ClerkKit */,
 				9CF0CB9E2FD095A100B3CF92 /* SocketIO */,
+				9C47705D2FECD25500056F38 /* GoogleMaps */,
 			);
 			productName = convoy;
 			productReference = 9CF0CB642FC7603A00B3CF92 /* convoy.app */;
@@ -119,6 +122,7 @@
 			packageReferences = (
 				9CF0CB9A2FD0954300B3CF92 /* XCRemoteSwiftPackageReference "clerk-ios" */,
 				9CF0CB9D2FD095A100B3CF92 /* XCRemoteSwiftPackageReference "socket" */,
+				9C47705C2FECD25500056F38 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9CF0CB652FC7603A00B3CF92 /* Products */;
@@ -350,6 +354,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		9C47705C2FECD25500056F38 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googlemaps/ios-maps-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.15.0;
+			};
+		};
 		9CF0CB9A2FD0954300B3CF92 /* XCRemoteSwiftPackageReference "clerk-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/clerk/clerk-ios";
@@ -369,6 +381,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		9C47705D2FECD25500056F38 /* GoogleMaps */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9C47705C2FECD25500056F38 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */;
+			productName = GoogleMaps;
+		};
 		9CF0CB9B2FD0954300B3CF92 /* ClerkKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 9CF0CB9A2FD0954300B3CF92 /* XCRemoteSwiftPackageReference "clerk-ios" */;
