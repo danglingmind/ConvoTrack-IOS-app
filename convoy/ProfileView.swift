@@ -11,6 +11,10 @@ struct ProfileView: View {
     @State private var mapStyle = "Dark"
     @State private var isSigningOut = false
     @State private var showMembership = false
+    @State private var showDeleteAccountConfirm = false
+    @State private var isDeletingAccount = false
+    @State private var deleteError: String?
+    @State private var showDeleteError = false
 
     private var displayName: String {
         let parts = [clerk.user?.firstName, clerk.user?.lastName]
@@ -93,6 +97,27 @@ struct ProfileView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
 
+                    // Delete Account — required by App Store Guideline 5.1.1
+                    Button(action: { showDeleteAccountConfirm = true }) {
+                        HStack(spacing: 8) {
+                            if isDeletingAccount {
+                                ProgressView().tint(Color.errorColor).scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "person.crop.circle.badge.minus")
+                            }
+                            Text(isDeletingAccount ? "DELETING..." : "DELETE ACCOUNT").font(.bodyMd)
+                        }
+                        .foregroundColor(Color.errorColor.opacity(0.7))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(Color.errorContainer.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.2), lineWidth: 1))
+                    }
+                    .disabled(isDeletingAccount || isSigningOut)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+
                     Color.clear.frame(height: 120)
                 }
             }
@@ -100,6 +125,23 @@ struct ProfileView: View {
             .sheet(isPresented: $showMembership) {
                 MembershipView()
                     .environmentObject(store)
+            }
+            .confirmationDialog(
+                "Delete Account",
+                isPresented: $showDeleteAccountConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Account", role: .destructive) {
+                    Task { await deleteAccount() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently delete your account and all ride history. Active subscriptions must be cancelled separately in Settings > Apple ID > Subscriptions. This cannot be undone.")
+            }
+            .alert("Deletion Failed", isPresented: $showDeleteError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(deleteError ?? "An error occurred. Please try again.")
             }
 
             HStack(alignment: .center, spacing: 12) {
@@ -137,6 +179,25 @@ struct ProfileView: View {
             }
             .padding(.horizontal, 20)
             .frame(minHeight: 56)
+        }
+    }
+}
+
+// MARK: - Account Actions
+
+extension ProfileView {
+    func deleteAccount() async {
+        isDeletingAccount = true
+        do {
+            try await clerk.user?.delete()
+            appState.currentRideId = nil
+            appState.inviteCode = nil
+            appState.currentRide = nil
+            dismiss()
+        } catch {
+            deleteError = error.localizedDescription
+            showDeleteError = true
+            isDeletingAccount = false
         }
     }
 }

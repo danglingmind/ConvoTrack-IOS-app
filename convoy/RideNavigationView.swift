@@ -84,7 +84,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var lastBroadcastDate: Date = .distantPast
     private var lastCameraTickDate: Date = .distantPast
     private var remainingStops: [CLLocationCoordinate2D] = []
-    private var rerouteTask: Task<Void, Never>? = nil
+    private var rerouteGeneration = 0          // incremented to invalidate stale results
     private var regroupResolvedToastTask: Task<Void, Never>? = nil
     private var isRerouteInFlight = false
     private var lastRerouteOrigin: CLLocation? = nil
@@ -156,7 +156,6 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     }
 
     func teardown() {
-        rerouteTask?.cancel()
         regroupResolvedToastTask?.cancel()
         LocationService.shared.stop()
         LocationService.shared.delegate = nil
@@ -386,7 +385,6 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         }
 
         if isOffRoute {
-            // Never cancel an in-flight MKDirections request — that was the root bug.
             // Only start a new request when none is running, and refresh every 150 m of
             // travel so the road-following polyline stays current as the user moves.
             guard !isRerouteInFlight else { return }
@@ -395,23 +393,32 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             guard let target = rerouteJoinPoint() ?? remainingStops.first else { return }
             lastRerouteOrigin = location
             isRerouteInFlight = true
+            rerouteGeneration += 1
+            let gen = rerouteGeneration
             let coord = location.coordinate
-            rerouteTask = Task { await self.calculateReroute(from: coord, to: target) }
+            Task { await self.calculateReroute(from: coord, to: target, generation: gen) }
         } else {
-            rerouteTask?.cancel()
-            rerouteTask = nil
+            // Invalidate any in-flight reroute without cancelling — cancellation created
+            // a race where 4 GPS jitter readings cleared the orange path before the
+            // network response arrived.
+            rerouteGeneration += 1
             isRerouteInFlight = false
             lastRerouteOrigin = nil
             if !rerouteCoordinates.isEmpty { rerouteCoordinates = [] }
         }
     }
 
-    private func calculateReroute(from origin: CLLocationCoordinate2D, to target: CLLocationCoordinate2D) async {
-        if let result = try? await GoogleDirectionsService.route(from: origin, to: target),
-           !Task.isCancelled {
+    private func calculateReroute(from origin: CLLocationCoordinate2D, to target: CLLocationCoordinate2D, generation: Int) async {
+        do {
+            let result = try await GoogleDirectionsService.route(from: origin, to: target, trafficAware: false)
+            guard generation == rerouteGeneration else { return }
             rerouteCoordinates = result.coordinates
+        } catch {
+            // Clear lastRerouteOrigin so the next location update retries immediately
+            // rather than waiting for 150 m of movement.
+            if generation == rerouteGeneration { lastRerouteOrigin = nil }
         }
-        isRerouteInFlight = false
+        if generation == rerouteGeneration { isRerouteInFlight = false }
     }
 
     /// Advance `currentRouteSegmentIndex` to the closest upcoming segment, never backwards.
@@ -626,7 +633,7 @@ struct RideNavigationView: View {
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
-                              zoom: navZoom, bearing: vm.userHeading, tilt: 50, animated: true)
+                              zoom: navZoom, bearing: vm.userHeading, tilt: 0, animated: true)
         )
     }
 
@@ -636,7 +643,7 @@ struct RideNavigationView: View {
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
-                              zoom: navZoom, bearing: vm.userHeading, tilt: 50, animated: true)
+                              zoom: navZoom, bearing: vm.userHeading, tilt: 0, animated: true)
         )
     }
 
@@ -660,7 +667,7 @@ struct RideNavigationView: View {
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
-                              zoom: navZoom, bearing: vm.userHeading, tilt: 50, animated: !wasZero)
+                              zoom: navZoom, bearing: vm.userHeading, tilt: 0, animated: !wasZero)
         )
     }
 

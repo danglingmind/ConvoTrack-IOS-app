@@ -8,7 +8,7 @@ struct convoyApp: App {
 
     init() {
         GoogleMapsConfig.initialize()
-        Clerk.configure(publishableKey: "pk_test_d2VsbC1raXdpLTk2LmNsZXJrLmFjY291bnRzLmRldiQ")
+        Clerk.configure(publishableKey: "pk_live_Y2xlcmsuY29udm95LnZ5bmwuaW4k")
     }
 
     var body: some Scene {

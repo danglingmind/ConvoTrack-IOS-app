@@ -294,9 +294,9 @@ struct MembershipView: View {
                     }
                 }
                 Text("·")
-                Link("Terms", destination: URL(string: "https://apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                Link("Terms", destination: URL(string: AppURLs.appleEULA)!)
                 Text("·")
-                Link("Privacy", destination: URL(string: "https://danglingmind.com/privacy")!)
+                Link("Privacy", destination: URL(string: AppURLs.privacyPolicy)!)
             }
             .font(.captionMd)
             .foregroundColor(Color.onSurfaceVariant.opacity(0.38))

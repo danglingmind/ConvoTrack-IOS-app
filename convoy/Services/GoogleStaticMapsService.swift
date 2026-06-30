@@ -47,8 +47,10 @@ enum GoogleStaticMapsService {
 
         components.queryItems = items
         guard let url = components.url,
-              let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
-
+              let (data, urlResponse) = try? await URLSession.shared.data(from: url),
+              (urlResponse as? HTTPURLResponse).map({ (200...299).contains($0.statusCode) }) != false else {
+            return nil
+        }
         return UIImage(data: data)
     }
 }

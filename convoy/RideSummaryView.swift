@@ -344,7 +344,7 @@ struct RideSummaryView: View {
         defer { isGeneratingShare = false }
 
         let mapImg = await generateMapSnapshot(waypoints: mapWaypoints)
-        let qrImg = generateQRCode(from: "https://convoy.app")
+        let qrImg = generateQRCode(from: "https://vynl.in/convoy")
 
         let distStr: String
         let durStr: String

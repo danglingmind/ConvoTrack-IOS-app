@@ -3,6 +3,7 @@ import ClerkKit
 
 struct AuthView: View {
     @Environment(Clerk.self) private var clerk
+    @Environment(\.openURL) private var openURL
     @EnvironmentObject private var membershipStore: MembershipStore
     @State private var navigateToMain = false
     @State private var appeared = false
@@ -135,27 +136,6 @@ struct AuthView: View {
                 action: signInWithApple
             )
 
-            // OR divider
-            HStack(spacing: 16) {
-                Rectangle().fill(Color.outlineVariant.opacity(0.3)).frame(height: 1)
-                Text("OR").font(.labelCaps).foregroundColor(Color.onSurfaceVariant)
-                Rectangle().fill(Color.outlineVariant.opacity(0.3)).frame(height: 1)
-            }
-
-            // Rider ID — ghost: border only, no background, no icon
-            Button(action: { navigateToMain = true }) {
-                Text("Login with Rider ID")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(Color.onSurface)
-                    .frame(height: 48)
-                    .frame(maxWidth: .infinity)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color.outlineVariant.opacity(0.5), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-            .frame(width: 350)
         }
     }
 
@@ -241,14 +221,18 @@ struct AuthView: View {
         VStack(spacing: 20) {
             // TERMS • PRIVACY — naturally centered, no Spacers
             HStack(spacing: 24) {
-                Button("TERMS") {}
+                Button("TERMS") {
+                    openURL(URL(string: AppURLs.appleEULA)!)
+                }
                     .font(.labelCaps)
                     .foregroundColor(Color.onSurfaceVariant)
                     .tracking(4)
                 Circle()
                     .fill(Color.primaryFixed.opacity(0.5))
                     .frame(width: 5, height: 5)
-                Button("PRIVACY") {}
+                Button("PRIVACY") {
+                    openURL(URL(string: AppURLs.privacyPolicy)!)
+                }
                     .font(.labelCaps)
                     .foregroundColor(Color.onSurfaceVariant)
                     .tracking(4)

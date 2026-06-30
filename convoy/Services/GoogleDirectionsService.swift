@@ -20,45 +20,80 @@ struct DirectionsStep {
 
 enum GoogleDirectionsService {
 
+    // trafficAware=true for route planning; false for fast reroute requests (< 500ms)
     static func route(
         from origin: CLLocationCoordinate2D,
-        to destination: CLLocationCoordinate2D
+        to destination: CLLocationCoordinate2D,
+        trafficAware: Bool = true
     ) async throws -> DirectionsResult {
-        var components = URLComponents(string: "https://maps.googleapis.com/maps/api/directions/json")!
-        components.queryItems = [
-            URLQueryItem(name: "origin",      value: "\(origin.latitude),\(origin.longitude)"),
-            URLQueryItem(name: "destination", value: "\(destination.latitude),\(destination.longitude)"),
-            URLQueryItem(name: "mode",        value: "driving"),
-            URLQueryItem(name: "key",         value: GoogleMapsConfig.apiKey)
-        ]
-        guard let url = components.url else { throw URLError(.badURL) }
+        // Routes API v2 — POST, higher-density polylines, traffic-aware
+        let url = URL(string: "https://routes.googleapis.com/directions/v2:computeRoutes")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(GoogleMapsConfig.apiKey, forHTTPHeaderField: "X-Goog-Api-Key")
+        // Only request the fields we actually use to keep response small
+        request.setValue(
+            "routes.legs.distanceMeters,routes.legs.duration," +
+            "routes.legs.steps.distanceMeters,routes.legs.steps.endLocation," +
+            "routes.legs.steps.navigationInstruction,routes.legs.steps.polyline",
+            forHTTPHeaderField: "X-Goog-FieldMask"
+        )
 
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let response  = try JSONDecoder().decode(DirectionsResponse.self, from: data)
+        let body: [String: Any] = [
+            "origin": [
+                "location": ["latLng": ["latitude": origin.latitude, "longitude": origin.longitude]]
+            ],
+            "destination": [
+                "location": ["latLng": ["latitude": destination.latitude, "longitude": destination.longitude]]
+            ],
+            "travelMode": "DRIVE",
+            "routingPreference": trafficAware ? "TRAFFIC_AWARE" : "TRAFFIC_UNAWARE",
+            "polylineQuality": "HIGH_QUALITY",
+            "computeAlternativeRoutes": false,
+            "languageCode": "en-US",
+            "units": "METRIC"
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, urlResponse) = try await URLSession.shared.data(for: request)
+        if let http = urlResponse as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        let response = try JSONDecoder().decode(RoutesResponse.self, from: data)
 
         guard let route = response.routes.first,
               let leg   = route.legs.first else {
             throw URLError(.cannotParseResponse)
         }
 
-        let coords = decodePolyline(route.overviewPolyline.points)
-        let steps = leg.steps.map { step in
-            DirectionsStep(
-                instruction:    stripHTML(step.htmlInstructions),
-                endCoordinate:  CLLocationCoordinate2D(latitude: step.endLocation.lat, longitude: step.endLocation.lng),
-                distanceMeters: Double(step.distance.value)
+        // Stitch per-step HIGH_QUALITY polylines for lane-accurate geometry
+        let coords = leg.steps.flatMap { decodePolyline($0.polyline.encodedPolyline) }
+        let steps: [DirectionsStep] = leg.steps.compactMap { step in
+            guard let end = step.endLocation else { return nil }
+            return DirectionsStep(
+                instruction:    step.navigationInstruction?.instructions ?? "",
+                endCoordinate:  CLLocationCoordinate2D(latitude: end.latLng.latitude,
+                                                       longitude: end.latLng.longitude),
+                distanceMeters: Double(step.distanceMeters ?? 0)
             )
         }
 
         return DirectionsResult(
             coordinates:     coords,
-            distanceMeters:  Double(leg.distance.value),
-            durationSeconds: TimeInterval(leg.duration.value),
+            distanceMeters:  Double(leg.distanceMeters),
+            durationSeconds: parseDuration(leg.duration),
             steps:           steps
         )
     }
 
-    // MARK: - Polyline codec
+    // Routes API duration comes as "123s" or "1.5s"
+    private static func parseDuration(_ raw: String) -> TimeInterval {
+        let s = raw.hasSuffix("s") ? String(raw.dropLast()) : raw
+        return TimeInterval(Double(s) ?? 0)
+    }
+
+    // MARK: - Polyline codec (Google encoded polyline algorithm — unchanged)
 
     static func decodePolyline(_ encoded: String) -> [CLLocationCoordinate2D] {
         var coords: [CLLocationCoordinate2D] = []
@@ -66,33 +101,34 @@ enum GoogleDirectionsService {
         var lat = 0, lng = 0
 
         while index < encoded.endIndex {
-            var shift = 0, result = 0, b: Int
+            var shift = 0, result = 0, b = 0
             repeat {
                 guard index < encoded.endIndex else { break }
-                b = Int(encoded[index].asciiValue! - 63)
+                guard let ascii = encoded[index].asciiValue else { break }
+                b = Int(ascii - 63)
                 index = encoded.index(after: index)
                 result |= (b & 0x1f) << shift
                 shift += 5
             } while b >= 0x20
-
             lat += (result & 1) != 0 ? ~(result >> 1) : result >> 1
-            shift = 0; result = 0
+            shift = 0; result = 0; b = 0
 
             repeat {
                 guard index < encoded.endIndex else { break }
-                b = Int(encoded[index].asciiValue! - 63)
+                guard let ascii = encoded[index].asciiValue else { break }
+                b = Int(ascii - 63)
                 index = encoded.index(after: index)
                 result |= (b & 0x1f) << shift
                 shift += 5
             } while b >= 0x20
-
             lng += (result & 1) != 0 ? ~(result >> 1) : result >> 1
-            coords.append(CLLocationCoordinate2D(latitude: Double(lat) / 1e5, longitude: Double(lng) / 1e5))
+
+            coords.append(CLLocationCoordinate2D(latitude: Double(lat) / 1e5,
+                                                 longitude: Double(lng) / 1e5))
         }
         return coords
     }
 
-    // Encode to Google polyline format (already used in CreateRideView — kept here for single source)
     static func encodePolyline(_ coordinates: [CLLocationCoordinate2D]) -> String {
         var result = ""
         var prevLat = 0, prevLng = 0
@@ -110,55 +146,54 @@ enum GoogleDirectionsService {
         var v = value < 0 ? ~(value << 1) : value << 1
         var result = ""
         while v >= 0x20 {
-            result.append(Character(UnicodeScalar((0x20 | (v & 0x1f)) + 63)!))
+            if let scalar = UnicodeScalar((0x20 | (v & 0x1f)) + 63) {
+                result.append(Character(scalar))
+            }
             v >>= 5
         }
-        result.append(Character(UnicodeScalar(v + 63)!))
+        if let scalar = UnicodeScalar(v + 63) {
+            result.append(Character(scalar))
+        }
         return result
-    }
-
-    private static func stripHTML(_ html: String) -> String {
-        html
-            .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
-            .replacingOccurrences(of: "&nbsp;",  with: " ")
-            .trimmingCharacters(in: .whitespaces)
-            .replacingOccurrences(of: "  +", with: " ", options: .regularExpression)
     }
 }
 
-// MARK: - Response models (private)
+// MARK: - Routes API v2 response models
 
-private struct DirectionsResponse: Decodable {
+private struct RoutesResponse: Decodable {
     let routes: [Route]
 
     struct Route: Decodable {
-        let overviewPolyline: Polyline
         let legs: [Leg]
-        enum CodingKeys: String, CodingKey {
-            case overviewPolyline = "overview_polyline"
-            case legs
-        }
     }
 
-    struct Polyline: Decodable { let points: String }
-
     struct Leg: Decodable {
-        let distance: MeasureValue
-        let duration: MeasureValue
+        let distanceMeters: Int
+        let duration: String
         let steps: [Step]
     }
 
     struct Step: Decodable {
-        let htmlInstructions: String
-        let endLocation: LatLng
-        let distance: MeasureValue
-        enum CodingKeys: String, CodingKey {
-            case htmlInstructions = "html_instructions"
-            case endLocation      = "end_location"
-            case distance
-        }
+        let distanceMeters: Int?
+        let endLocation: EndLocation?
+        let navigationInstruction: NavigationInstruction?
+        let polyline: StepPolyline
     }
 
-    struct LatLng: Decodable { let lat: Double; let lng: Double }
-    struct MeasureValue: Decodable { let value: Int }
+    struct StepPolyline: Decodable {
+        let encodedPolyline: String
+    }
+
+    struct EndLocation: Decodable {
+        let latLng: LatLng
+    }
+
+    struct LatLng: Decodable {
+        let latitude: Double
+        let longitude: Double
+    }
+
+    struct NavigationInstruction: Decodable {
+        let instructions: String
+    }
 }

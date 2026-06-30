@@ -58,7 +58,7 @@ struct MapCameraCommand {
 
     static func follow(lat: Double, lng: Double, speed: Double, bearing: Double, animated: Bool = true) -> MapCameraCommand {
         let zoom: Float = speed < 20 ? 17.5 : (speed < 60 ? 16.5 : 16.0)
-        return MapCameraCommand(id: UUID(), action: .navigate(lat: lat, lng: lng, zoom: zoom, bearing: bearing, tilt: 50, animated: animated))
+        return MapCameraCommand(id: UUID(), action: .navigate(lat: lat, lng: lng, zoom: zoom, bearing: bearing, tilt: 0, animated: animated))
     }
 
     static func focus(lat: Double, lng: Double, zoom: Float = 15, animated: Bool = true) -> MapCameraCommand {
@@ -82,10 +82,11 @@ struct GoogleMapView: UIViewRepresentable {
         let mapView = GMSMapView(frame: .zero, camera: GMSCameraPosition(latitude: 0, longitude: 0, zoom: 2))
         applyDarkStyle(to: mapView)
         mapView.isMyLocationEnabled = false
+        mapView.isTrafficEnabled    = true
         mapView.settings.compassButton  = false
         mapView.settings.myLocationButton = false
         mapView.settings.rotateGestures  = true
-        mapView.settings.tiltGestures    = true
+        mapView.settings.tiltGestures    = false
         mapView.delegate = context.coordinator
         return mapView
     }
@@ -95,8 +96,8 @@ struct GoogleMapView: UIViewRepresentable {
         c.onInteraction = onInteraction
         mapView.isUserInteractionEnabled = isInteractive
 
-        c.applyRoute(routeCoords,   to: mapView, key: &c.routeVersion,   line: &c.routeLine,   color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1),   width: 5, dashed: false)
-        c.applyRoute(rerouteCoords, to: mapView, key: &c.rerouteVersion, line: &c.rerouteLine, color: UIColor(red: 1, green: 0.6, blue: 0.15, alpha: 1), width: 4, dashed: true)
+        c.applyRoute(routeCoords,   to: mapView, key: &c.routeVersion,   line: &c.routeLine,   color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1),   width: 5, dashed: false, zIndex: 100)
+        c.applyRoute(rerouteCoords, to: mapView, key: &c.rerouteVersion, line: &c.rerouteLine, color: UIColor(red: 1, green: 0.6, blue: 0.15, alpha: 1), width: 4, dashed: true,  zIndex: 99)
         c.applyPins(pins, to: mapView)
 
         if let cmd = cameraCommand, cmd.id != c.lastCameraId {
@@ -152,7 +153,8 @@ extension GoogleMapView {
             line: inout GMSPolyline?,
             color: UIColor,
             width: CGFloat,
-            dashed: Bool
+            dashed: Bool,
+            zIndex: Int32 = 0
         ) {
             let newVersion = coords.count
             guard newVersion != key else { return }
@@ -168,10 +170,13 @@ extension GoogleMapView {
             let polyline = GMSPolyline(path: path)
             polyline.strokeWidth = width
             polyline.strokeColor = color
-            polyline.geodesic    = true
+            // geodesic=false: draw straight screen-space segments between the already
+            // road-snapped coordinates. geodesic=true introduces great-circle deviation
+            // which at lane scale can shift the stroke onto the adjacent lane.
+            polyline.geodesic = false
+            polyline.zIndex   = zIndex
 
             if dashed {
-                // Alternate solid/gap spans to simulate dashed line
                 let solidSpan = GMSStyleSpan(style: GMSStrokeStyle.solidColor(color), segments: 3)
                 let gapSpan   = GMSStyleSpan(style: GMSStrokeStyle.solidColor(.clear), segments: 2)
                 polyline.spans = [solidSpan, gapSpan]

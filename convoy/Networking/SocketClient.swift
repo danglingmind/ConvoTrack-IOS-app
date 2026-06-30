@@ -31,8 +31,7 @@ final class SocketClient {
     // MARK: - Lifecycle
 
     func connect(token: String) {
-        let url = URL(string: "https://convoy-backend-hx3c.onrender.com")!
-        manager = SocketManager(socketURL: url, config: [
+        manager = SocketManager(socketURL: AppURLs.backendBaseURL, config: [
             .log(false),
             .compress,
         ])

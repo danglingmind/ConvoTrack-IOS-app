@@ -31,8 +31,9 @@ enum GooglePlacesService {
         }
         components.queryItems = items
         guard let url = components.url,
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let response  = try? JSONDecoder().decode(PlacesResponse.self, from: data) else {
+              let (data, urlResponse) = try? await URLSession.shared.data(from: url),
+              (urlResponse as? HTTPURLResponse).map({ (200...299).contains($0.statusCode) }) != false,
+              let response = try? JSONDecoder().decode(PlacesResponse.self, from: data) else {
             return []
         }
 

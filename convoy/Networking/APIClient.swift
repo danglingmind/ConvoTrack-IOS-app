@@ -21,7 +21,7 @@ enum APIClientError: Error, LocalizedError {
 final class APIClient {
     static let shared = APIClient()
 
-    private let baseURL = URL(string: "https://convoy-backend-hx3c.onrender.com")!
+    private let baseURL = AppURLs.backendBaseURL
 
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
