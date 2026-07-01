@@ -294,7 +294,7 @@ struct MembershipView: View {
                     }
                 }
                 Text("·")
-                Link("Terms", destination: URL(string: AppURLs.appleEULA)!)
+                Link("Terms", destination: URL(string: AppURLs.termsOfService)!)
                 Text("·")
                 Link("Privacy", destination: URL(string: AppURLs.privacyPolicy)!)
             }

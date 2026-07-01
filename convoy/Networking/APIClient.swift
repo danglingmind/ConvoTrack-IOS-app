@@ -96,6 +96,11 @@ final class APIClient {
         return try await fetch("/rides", method: "POST", body: body)
     }
 
+    func updateRide(_ rideId: String, _ request: UpdateRideRequest) async throws {
+        let body = try encoder.encode(request)
+        try await fetchVoid("/rides/\(rideId)", method: "PATCH", body: body)
+    }
+
     func getRide(_ rideId: String) async throws -> Ride {
         return try await fetch("/rides/\(rideId)")
     }

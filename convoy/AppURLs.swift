@@ -5,7 +5,7 @@ import Foundation
 // App Store submission. Apple reviewers click this link — a 404 causes rejection.
 enum AppURLs {
     static let privacyPolicy = "https://vynl.in/convoy/privacy"
-    static let appleEULA = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+    static let termsOfService = "https://vynl.in/convoy/terms"
     // Single source of truth for the backend — used by both APIClient and SocketClient
     static let backendBaseURL = URL(string: "https://convoy-backend-hx3c.onrender.com")!
 }

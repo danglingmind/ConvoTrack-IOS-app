@@ -276,14 +276,6 @@ struct RegroupBottomSheet: View {
                             Text("REGROUP").font(.headlineLg).foregroundColor(Color.primaryFixed)
                         }
                         Spacer()
-                        Text("COORD_REQ_09")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.onSurfaceVariant)
-                            .tracking(1)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.surfaceContainerHigh)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
                     }
                     .padding(.horizontal, 20)
 

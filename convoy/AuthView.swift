@@ -174,6 +174,7 @@ struct AuthView: View {
                     .padding(.leading, 16)
                 }
             }
+            .frame(maxWidth: .infinity)
             .frame(height: 48)
             .background(background)
             .clipShape(RoundedRectangle(cornerRadius: 4))
@@ -222,7 +223,7 @@ struct AuthView: View {
             // TERMS • PRIVACY — naturally centered, no Spacers
             HStack(spacing: 24) {
                 Button("TERMS") {
-                    openURL(URL(string: AppURLs.appleEULA)!)
+                    openURL(URL(string: AppURLs.termsOfService)!)
                 }
                     .font(.labelCaps)
                     .foregroundColor(Color.onSurfaceVariant)

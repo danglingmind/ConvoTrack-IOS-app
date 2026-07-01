@@ -11,7 +11,7 @@ private struct RouteStop: Identifiable {
 
 // MARK: - Stop Search Field
 
-private struct StopSearchField: View {
+struct StopSearchField: View {
     let label: String
     let placeholder: String
     let icon: String

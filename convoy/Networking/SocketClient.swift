@@ -19,6 +19,7 @@ final class SocketClient {
     var onEmergencyStarted: (([String: Any]) -> Void)?
     var onRegroupStarted: ((RegroupEvent) -> Void)?
     var onRegroupResolved: ((String) -> Void)?   // regroupId
+    var onRideUpdated: ((RideUpdatedEvent) -> Void)?
 
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -181,6 +182,14 @@ final class SocketClient {
             guard let dict = data.first as? [String: Any],
                   let regroupId = dict["regroupId"] as? String else { return }
             DispatchQueue.main.async { self?.onRegroupResolved?(regroupId) }
+        }
+
+        socket.on("ride:updated") { [weak self] data, _ in
+            guard let self,
+                  let dict = data.first as? [String: Any],
+                  let json = try? JSONSerialization.data(withJSONObject: dict),
+                  let event = try? self.decoder.decode(RideUpdatedEvent.self, from: json) else { return }
+            DispatchQueue.main.async { self.onRideUpdated?(event) }
         }
     }
 }

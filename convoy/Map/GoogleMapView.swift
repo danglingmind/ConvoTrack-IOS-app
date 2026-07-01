@@ -56,6 +56,10 @@ struct MapCameraCommand {
         MapCameraCommand(id: UUID(), action: .fitCoords(coords, padding: UIEdgeInsets(top: padding, left: padding, bottom: padding, right: padding), animated: animated))
     }
 
+    static func fitRouteInsets(_ coords: [CLLocationCoordinate2D], top: CGFloat, left: CGFloat, bottom: CGFloat, right: CGFloat, animated: Bool = true) -> MapCameraCommand {
+        MapCameraCommand(id: UUID(), action: .fitCoords(coords, padding: UIEdgeInsets(top: top, left: left, bottom: bottom, right: right), animated: animated))
+    }
+
     static func follow(lat: Double, lng: Double, speed: Double, bearing: Double, animated: Bool = true) -> MapCameraCommand {
         let zoom: Float = speed < 20 ? 17.5 : (speed < 60 ? 16.5 : 16.0)
         return MapCameraCommand(id: UUID(), action: .navigate(lat: lat, lng: lng, zoom: zoom, bearing: bearing, tilt: 0, animated: animated))
@@ -69,8 +73,11 @@ struct MapCameraCommand {
 // MARK: - View
 
 struct GoogleMapView: UIViewRepresentable {
-    var routeCoords: [CLLocationCoordinate2D] = []
-    var rerouteCoords: [CLLocationCoordinate2D] = []
+    var routeCoords: [CLLocationCoordinate2D] = []         // active route — bright lime
+    var originalRouteCoords: [CLLocationCoordinate2D] = [] // full planned route — dim
+    /// Ordered stop markers (start → waypoints → destination).
+    /// Used to draw end-caps and curved dotted connectors to polyline endpoints.
+    var stopCoords: [CLLocationCoordinate2D] = []
     var pins: [MapPin] = []
     var cameraCommand: MapCameraCommand? = nil
     var isInteractive: Bool = true
@@ -96,8 +103,9 @@ struct GoogleMapView: UIViewRepresentable {
         c.onInteraction = onInteraction
         mapView.isUserInteractionEnabled = isInteractive
 
-        c.applyRoute(routeCoords,   to: mapView, key: &c.routeVersion,   line: &c.routeLine,   color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1),   width: 5, dashed: false, zIndex: 100)
-        c.applyRoute(rerouteCoords, to: mapView, key: &c.rerouteVersion, line: &c.rerouteLine, color: UIColor(red: 1, green: 0.6, blue: 0.15, alpha: 1), width: 4, dashed: true,  zIndex: 99)
+        c.applyRoute(originalRouteCoords, to: mapView, key: &c.originalRouteVersion, line: &c.originalRouteLine, color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 0.28), width: 3, dashed: false, zIndex: 98)
+        c.applyRoute(routeCoords,         to: mapView, key: &c.routeVersion,         line: &c.routeLine,         color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1),    width: 5, dashed: false, zIndex: 100)
+        c.applyRouteDecorations(routeCoords: routeCoords, originalCoords: originalRouteCoords, stopCoords: stopCoords, to: mapView)
         c.applyPins(pins, to: mapView)
 
         if let cmd = cameraCommand, cmd.id != c.lastCameraId {
@@ -134,15 +142,20 @@ extension GoogleMapView {
     final class Coordinator: NSObject, GMSMapViewDelegate {
         var onInteraction: (() -> Void)?
 
-        var routeLine:   GMSPolyline? = nil
-        var rerouteLine: GMSPolyline? = nil
-        var routeVersion   = 0
-        var rerouteVersion = 0
+        var routeLine:         GMSPolyline? = nil
+        var originalRouteLine: GMSPolyline? = nil
+        var routeVersion         = 0
+        var originalRouteVersion = 0
 
         var markers:       [String: GMSMarker] = [:]
         var pinStyleHashes:[String: Int]        = [:]
 
         var lastCameraId: UUID? = nil
+
+        // Route decorations — end-cap dots and curved dotted connectors
+        var endCapMarkers:    [GMSMarker]   = []
+        var connectorLines:   [GMSPolyline] = []
+        var decorationVersion: Int = 0
 
         // MARK: Route
 
@@ -156,7 +169,18 @@ extension GoogleMapView {
             dashed: Bool,
             zIndex: Int32 = 0
         ) {
-            let newVersion = coords.count
+            // Hash count + first/last coords so two different routes with the same
+            // coordinate count are not mistaken for the same polyline.
+            let newVersion: Int = {
+                guard !coords.isEmpty else { return 0 }
+                var h = Hasher()
+                h.combine(coords.count)
+                h.combine(coords.first!.latitude.bitPattern)
+                h.combine(coords.first!.longitude.bitPattern)
+                h.combine(coords.last!.latitude.bitPattern)
+                h.combine(coords.last!.longitude.bitPattern)
+                return h.finalize()
+            }()
             guard newVersion != key else { return }
             key = newVersion
 
@@ -186,6 +210,135 @@ extension GoogleMapView {
             line = polyline
         }
 
+        // MARK: Route decorations
+
+        func applyRouteDecorations(
+            routeCoords: [CLLocationCoordinate2D],
+            originalCoords: [CLLocationCoordinate2D],
+            stopCoords: [CLLocationCoordinate2D],
+            to mapView: GMSMapView
+        ) {
+            // Version hash over all endpoints so we redraw only on actual changes
+            let newVersion: Int = {
+                var h = Hasher()
+                for coord in [routeCoords.first, routeCoords.last,
+                               originalCoords.first, originalCoords.last,
+                               stopCoords.first, stopCoords.last].compactMap({ $0 }) {
+                    h.combine(coord.latitude.bitPattern)
+                    h.combine(coord.longitude.bitPattern)
+                }
+                h.combine(stopCoords.count)
+                return h.finalize()
+            }()
+            guard newVersion != decorationVersion else { return }
+            decorationVersion = newVersion
+
+            // Clear previous decorations
+            endCapMarkers.forEach { $0.map = nil }
+            endCapMarkers = []
+            connectorLines.forEach { $0.map = nil }
+            connectorLines = []
+
+            // End caps render BELOW stop pins (zIndex 2) so the pin icon sits on top
+            // and the circle peeks out as a visible halo around the pin base.
+            // Stop pins get zIndex 5 (set in applyPins).
+
+            // End caps on original planned route (dim)
+            if let first = originalCoords.first {
+                endCapMarkers.append(endCapMarker(at: first, size: 14, opacity: 0.45, zIndex: 2, to: mapView))
+            }
+            if let last = originalCoords.last {
+                endCapMarkers.append(endCapMarker(at: last,  size: 14, opacity: 0.45, zIndex: 2, to: mapView))
+            }
+
+            // End caps on active route (bright) — always draw both endpoints.
+            // In navigation the route start is the road-projected position, which differs
+            // from the GPS-position user-pin, so it IS clearly visible.
+            if let first = routeCoords.first {
+                endCapMarkers.append(endCapMarker(at: first, size: 16, opacity: 1.0, zIndex: 2, to: mapView))
+            }
+            if let last = routeCoords.last {
+                endCapMarkers.append(endCapMarker(at: last,  size: 16, opacity: 1.0, zIndex: 2, to: mapView))
+            }
+
+            // Curved dotted connectors: first stop → first polyline point, last stop → last polyline point.
+            // No distance threshold — addCurvedConnector's own `guard len > 0` handles the degenerate
+            // case where the stop is exactly on the route endpoint.
+            let baseCoords = originalCoords.isEmpty ? routeCoords : originalCoords
+            if let stopFirst = stopCoords.first, let routeFirst = baseCoords.first {
+                addCurvedConnector(from: stopFirst, to: routeFirst, to: mapView)
+            }
+            if let stopLast = stopCoords.last, let routeLast = baseCoords.last {
+                addCurvedConnector(from: stopLast, to: routeLast, to: mapView)
+            }
+        }
+
+        private func coordDistance(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> CLLocationDistance {
+            CLLocation(latitude: a.latitude, longitude: a.longitude)
+                .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
+        }
+
+        private func endCapMarker(at coord: CLLocationCoordinate2D, size: CGFloat, opacity: CGFloat, zIndex: Int32, to mapView: GMSMapView) -> GMSMarker {
+            let scale = UIScreen.main.scale
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size), format: {
+                let f = UIGraphicsImageRendererFormat(); f.scale = scale; return f
+            }())
+            let image = renderer.image { ctx in
+                let lime = UIColor(red: 0.792, green: 0.953, blue: 0, alpha: opacity)
+                lime.setFill()
+                ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
+                UIColor.white.withAlphaComponent(opacity * 0.9).setStroke()
+                ctx.cgContext.setLineWidth(1.5)
+                ctx.cgContext.strokeEllipse(in: CGRect(x: 0.75, y: 0.75, width: size - 1.5, height: size - 1.5))
+            }
+            let marker = GMSMarker(position: coord)
+            marker.icon         = image
+            marker.groundAnchor = CGPoint(x: 0.5, y: 0.5)
+            marker.zIndex       = zIndex
+            marker.map          = mapView
+            return marker
+        }
+
+        private func addCurvedConnector(from a: CLLocationCoordinate2D, to b: CLLocationCoordinate2D, to mapView: GMSMapView) {
+            // Flat-earth projection (degrees → approx equal-scale space)
+            let cosLat = cos(a.latitude * .pi / 180)
+            let ax = a.longitude * cosLat, ay = a.latitude
+            let bx = b.longitude * cosLat, by = b.latitude
+            let dx = bx - ax, dy = by - ay
+            let len = (dx * dx + dy * dy).squareRoot()
+            guard len > 0 else { return }
+
+            // Perpendicular unit vector (rotated 90° CW for a consistent arc direction)
+            let px = dy / len, py = -dx / len
+
+            // Control point: midpoint + 30% distance in perpendicular direction
+            let offset = len * 0.30
+            let cpx = (ax + bx) / 2 + px * offset
+            let cpy = (ay + by) / 2 + py * offset
+
+            // Sample quadratic bezier at 24 points
+            let path = GMSMutablePath()
+            let steps = 24
+            for i in 0...steps {
+                let t  = Double(i) / Double(steps)
+                let t1 = 1.0 - t
+                let qx = t1 * t1 * ax + 2 * t1 * t * cpx + t * t * bx
+                let qy = t1 * t1 * ay + 2 * t1 * t * cpy + t * t * by
+                path.add(CLLocationCoordinate2D(latitude: qy, longitude: qx / cosLat))
+            }
+
+            let polyline         = GMSPolyline(path: path)
+            polyline.strokeWidth = 2
+            polyline.zIndex      = 96
+            let limeConnector    = UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 0.75)
+            let solidSpan        = GMSStyleSpan(style: .solidColor(limeConnector), segments: 2)
+            let gapSpan          = GMSStyleSpan(style: .solidColor(.clear),        segments: 2)
+            polyline.spans       = [solidSpan, gapSpan]
+            polyline.geodesic    = false
+            polyline.map         = mapView
+            connectorLines.append(polyline)
+        }
+
         // MARK: Pins
 
         func applyPins(_ pins: [MapPin], to mapView: GMSMapView) {
@@ -213,6 +366,7 @@ extension GoogleMapView {
                     marker.position     = pin.coordinate
                     marker.groundAnchor = pin.anchorBottom ? CGPoint(x: 0.5, y: 1.0) : CGPoint(x: 0.5, y: 0.5)
                     marker.icon         = renderIcon(pin)
+                    marker.zIndex       = 5   // above end-cap markers (zIndex 2)
                     marker.map          = mapView
                     markers[pin.id]     = marker
                     pinStyleHashes[pin.id] = newHash

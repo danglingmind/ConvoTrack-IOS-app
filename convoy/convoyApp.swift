@@ -2,8 +2,17 @@ import SwiftUI
 import ClerkKit
 import GoogleMaps
 
+final class ConvoyAppDelegate: NSObject, UIApplicationDelegate {
+    static var landscapeAllowed = false
+
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        Self.landscapeAllowed ? [.portrait, .landscapeLeft, .landscapeRight] : .portrait
+    }
+}
+
 @main
 struct convoyApp: App {
+    @UIApplicationDelegateAdaptor(ConvoyAppDelegate.self) var delegate
     @StateObject private var membershipStore = MembershipStore()
 
     init() {

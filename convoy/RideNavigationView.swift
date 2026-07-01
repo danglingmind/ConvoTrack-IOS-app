@@ -36,6 +36,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var myDistanceToGoalKm: Double = 0
     @Published var riderCount: Int = 0
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
+    @Published var activeRouteCoordinates: [CLLocationCoordinate2D] = []   // trimmed to user position
     @Published var routeVersion: Int = 0   // increments when route is ready; Equatable
     @Published var destinationCoordinate: CLLocationCoordinate2D? = nil
     @Published var startCoordinate: CLLocationCoordinate2D? = nil
@@ -49,7 +50,6 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var endError: String? = nil
     @Published var currentInstruction: String = ""
     @Published var distanceToNextTurnMeters: Double = 0
-    @Published var rerouteCoordinates: [CLLocationCoordinate2D] = []
     @Published var isOffRoute: Bool = false
     @Published var activeRegroup: RegroupEvent? = nil
     @Published var hasMarkedArrived: Bool = false
@@ -84,10 +84,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var lastBroadcastDate: Date = .distantPast
     private var lastCameraTickDate: Date = .distantPast
     private var remainingStops: [CLLocationCoordinate2D] = []
-    private var rerouteGeneration = 0          // incremented to invalidate stale results
     private var regroupResolvedToastTask: Task<Void, Never>? = nil
     private var isRerouteInFlight = false
     private var lastRerouteOrigin: CLLocation? = nil
+    private var needsInitialRouteCheck = false   // bypasses off-route debounce on first GPS fix
     private let offRouteThresholdMeters: Double = 40
     private var currentRouteSegmentIndex: Int = 0
     private var consecutiveOffCount: Int = 0
@@ -244,6 +244,20 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         updateCurrentStep(location: location)
         checkOffRoute(location: location)
 
+        if needsInitialRouteCheck && !routeCoordinates.isEmpty {
+            needsInitialRouteCheck = false
+            if minimumDistanceToUpcomingRoute(from: location) > offRouteThresholdMeters,
+               !isRerouteInFlight {
+                isOffRoute = true
+                consecutiveOffCount = offRouteConfirmCount
+                lastRerouteOrigin = location
+                let coord = location.coordinate
+                Task { await calculateFullReroute(from: coord) }
+            }
+        }
+
+        if !isOffRoute { trimActiveRoute(to: location) }
+
         let now = Date()
         // Cap camera updates at ~10 Hz so overlapping animations don't jam the map
         if now.timeIntervalSince(lastCameraTickDate) >= 0.1 {
@@ -341,11 +355,13 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             currentInstruction       = first.instruction
             distanceToNextTurnMeters = first.distanceMeters
         }
-        routeCoordinates        = allCoords
-        routeExpectedTravelTime = totalTime
+        routeCoordinates         = allCoords
+        activeRouteCoordinates   = allCoords   // full route until first GPS update trims it
+        routeExpectedTravelTime  = totalTime
         currentRouteSegmentIndex = 0
         consecutiveOffCount      = 0
         consecutiveOnCount       = 0
+        needsInitialRouteCheck   = true
         routeVersion += 1
     }
 
@@ -385,40 +401,35 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         }
 
         if isOffRoute {
-            // Only start a new request when none is running, and refresh every 150 m of
-            // travel so the road-following polyline stays current as the user moves.
             guard !isRerouteInFlight else { return }
-            if let last = lastRerouteOrigin, location.distance(from: last) < 150,
-               !rerouteCoordinates.isEmpty { return }
-            guard let target = rerouteJoinPoint() ?? remainingStops.first else { return }
+            // Throttle: only recalculate every 200 m of travel while off-route.
+            if let last = lastRerouteOrigin, location.distance(from: last) < 200 { return }
             lastRerouteOrigin = location
-            isRerouteInFlight = true
-            rerouteGeneration += 1
-            let gen = rerouteGeneration
             let coord = location.coordinate
-            Task { await self.calculateReroute(from: coord, to: target, generation: gen) }
+            Task { await self.calculateFullReroute(from: coord) }
         } else {
-            // Invalidate any in-flight reroute without cancelling — cancellation created
-            // a race where 4 GPS jitter readings cleared the orange path before the
-            // network response arrived.
-            rerouteGeneration += 1
             isRerouteInFlight = false
             lastRerouteOrigin = nil
-            if !rerouteCoordinates.isEmpty { rerouteCoordinates = [] }
         }
     }
 
-    private func calculateReroute(from origin: CLLocationCoordinate2D, to target: CLLocationCoordinate2D, generation: Int) async {
-        do {
-            let result = try await GoogleDirectionsService.route(from: origin, to: target, trafficAware: false)
-            guard generation == rerouteGeneration else { return }
-            rerouteCoordinates = result.coordinates
-        } catch {
-            // Clear lastRerouteOrigin so the next location update retries immediately
-            // rather than waiting for 150 m of movement.
-            if generation == rerouteGeneration { lastRerouteOrigin = nil }
+    /// Recalculates the full remaining route from the user's current position through
+    /// all remaining stops to the destination, writing the result into activeRouteCoordinates.
+    /// The original routeCoordinates is never touched — it stays as the dim planned-route layer.
+    private func calculateFullReroute(from origin: CLLocationCoordinate2D) async {
+        guard !remainingStops.isEmpty else { return }
+        isRerouteInFlight = true
+        let stops = [origin] + remainingStops
+        var coords: [CLLocationCoordinate2D] = []
+        for i in 0..<stops.count - 1 {
+            guard let result = try? await GoogleDirectionsService.route(
+                from: stops[i], to: stops[i + 1], trafficAware: false
+            ) else { continue }
+            coords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
         }
-        if generation == rerouteGeneration { isRerouteInFlight = false }
+        isRerouteInFlight = false
+        guard !coords.isEmpty else { return }
+        activeRouteCoordinates = coords
     }
 
     /// Advance `currentRouteSegmentIndex` to the closest upcoming segment, never backwards.
@@ -439,6 +450,41 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         if bestIdx > currentRouteSegmentIndex && minDist <= 80 {
             currentRouteSegmentIndex = bestIdx
         }
+    }
+
+    /// Projects the user onto the current segment and rebuilds activeRouteCoordinates
+    /// so the bright polyline starts exactly at the user's position.
+    /// Only called when on-route; off-route uses calculateFullReroute instead.
+    private func trimActiveRoute(to location: CLLocation) {
+        guard routeCoordinates.count >= 2 else { return }
+        let i    = currentRouteSegmentIndex
+        let next = min(i + 1, routeCoordinates.count - 1)
+        let a    = routeCoordinates[i]
+        let b    = routeCoordinates[next]
+
+        // Project onto segment using the same flat-earth frame as distanceToLineSegment.
+        let cosLat = cos(a.latitude * .pi / 180)
+        let ax = a.longitude * cosLat, ay = a.latitude
+        let bx = b.longitude * cosLat, by = b.latitude
+        let px = location.coordinate.longitude * cosLat, py = location.coordinate.latitude
+        let dx = bx - ax, dy = by - ay
+        let lenSq = dx * dx + dy * dy
+        let projected: CLLocationCoordinate2D
+        if lenSq < 1e-18 {
+            projected = a
+        } else {
+            let t = max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
+            projected = CLLocationCoordinate2D(
+                latitude:  a.latitude  + t * (b.latitude  - a.latitude),
+                longitude: a.longitude + t * (b.longitude - a.longitude)
+            )
+        }
+
+        var trimmed: [CLLocationCoordinate2D] = [projected]
+        if next < routeCoordinates.count {
+            trimmed.append(contentsOf: routeCoordinates[next...])
+        }
+        activeRouteCoordinates = trimmed
     }
 
     /// Minimum perpendicular distance to any segment in a window around the current progress index.
@@ -478,19 +524,6 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         return point.distance(from: CLLocation(latitude: nearLat, longitude: nearLng))
     }
 
-    /// Walk ~500 m ahead on the planned route from the current progress point so the
-    /// reroute leads the rider back to the actual planned road, not straight to the next stop.
-    private func rerouteJoinPoint() -> CLLocationCoordinate2D? {
-        guard routeCoordinates.count > currentRouteSegmentIndex + 1 else { return nil }
-        var accumulated = 0.0
-        for i in currentRouteSegmentIndex..<routeCoordinates.count - 1 {
-            let a = CLLocation(latitude: routeCoordinates[i].latitude, longitude: routeCoordinates[i].longitude)
-            let b = CLLocation(latitude: routeCoordinates[i + 1].latitude, longitude: routeCoordinates[i + 1].longitude)
-            accumulated += a.distance(from: b)
-            if accumulated >= 500 { return routeCoordinates[i + 1] }
-        }
-        return nil
-    }
 
 }
 
@@ -504,6 +537,8 @@ struct RideNavigationView: View {
     @EnvironmentObject private var appState: AppState
     @StateObject private var vm = NavigationViewModel()
 
+    @Environment(\.verticalSizeClass) private var vSizeClass
+
     @State private var cameraCommand: MapCameraCommand? = nil
     @State private var selectedRiderId: String? = nil
     @State private var showRegroup = false
@@ -513,6 +548,8 @@ struct RideNavigationView: View {
     @State private var isFreeLooking: Bool = false
     @State private var lastInteractionDate: Date = .distantPast
     @State private var isNavigationActive: Bool = false
+
+    private var isLandscape: Bool { vSizeClass == .compact }
 
     private var destinationName: String { appState.currentRide?.destinationName ?? "Destination" }
 
@@ -554,11 +591,17 @@ struct RideNavigationView: View {
         .onAppear {
             appState.isRideActive = true
             UIApplication.shared.isIdleTimerDisabled = true
+            ConvoyAppDelegate.landscapeAllowed = true
         }
         .onDisappear {
             appState.isRideActive = false
             UIApplication.shared.isIdleTimerDisabled = false
+            ConvoyAppDelegate.landscapeAllowed = false
             vm.teardown()
+            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                let prefs = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .portrait)
+                scene.requestGeometryUpdate(prefs) { _ in }
+            }
         }
         .task { await loadAndSetup() }
         .onChange(of: vm.routeVersion) { _, _ in handleRouteVersionChanged() }
@@ -603,14 +646,21 @@ struct RideNavigationView: View {
 
     private var mapLayer: some View {
         GoogleMapView(
-            routeCoords:   vm.routeCoordinates,
-            rerouteCoords: vm.rerouteCoordinates,
+            routeCoords:         vm.activeRouteCoordinates,
+            originalRouteCoords: vm.routeCoordinates,
+            stopCoords:          navStopCoords,
             pins:          navMapPins,
             cameraCommand: cameraCommand,
             isInteractive: true,
             onInteraction: onMapInteraction
         )
         .ignoresSafeArea()
+    }
+
+    private var navStopCoords: [CLLocationCoordinate2D] {
+        guard let ride = appState.currentRide else { return [] }
+        return ride.waypoints.sorted { $0.order < $1.order }
+            .map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
     }
 
     private func onMapInteraction() {
@@ -626,6 +676,8 @@ struct RideNavigationView: View {
         }
     }
 
+    private let navTilt: Double = 45
+
     private func resumeNavigation() {
         isFreeLooking = false
         lastInteractionDate = .distantPast
@@ -633,7 +685,7 @@ struct RideNavigationView: View {
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
-                              zoom: navZoom, bearing: vm.userHeading, tilt: 0, animated: true)
+                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: true)
         )
     }
 
@@ -643,14 +695,17 @@ struct RideNavigationView: View {
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
-                              zoom: navZoom, bearing: vm.userHeading, tilt: 0, animated: true)
+                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: true)
         )
     }
 
     private func handleRouteVersionChanged() {
         guard !isNavigationActive else { return }
         if !vm.routeCoordinates.isEmpty {
-            cameraCommand = MapCameraCommand.fitRoute(vm.routeCoordinates, padding: 60)
+            // Extra bottom inset accounts for the navigation preview bar that sits over the map.
+            cameraCommand = MapCameraCommand.fitRouteInsets(
+                vm.routeCoordinates, top: 80, left: 44, bottom: 200, right: 44, animated: true
+            )
         } else if let dest = vm.destinationCoordinate {
             cameraCommand = MapCameraCommand.focus(lat: dest.latitude, lng: dest.longitude, zoom: 11)
         }
@@ -667,7 +722,7 @@ struct RideNavigationView: View {
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
-                              zoom: navZoom, bearing: vm.userHeading, tilt: 0, animated: !wasZero)
+                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: !wasZero)
         )
     }
 
@@ -690,11 +745,14 @@ struct RideNavigationView: View {
 
             if isNavigationActive {
                 if vm.isOffRoute {
-                    offRouteBanner
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .animation(.spring(), value: vm.isOffRoute)
+                    HStack {
+                        offRouteBanner
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(), value: vm.isOffRoute)
                 }
 
                 if vm.showSplitAlert {
@@ -820,7 +878,7 @@ struct RideNavigationView: View {
                 .shadow(color: Color.primaryFixed.opacity(0.4), radius: 16, y: 4)
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 44)
+            .padding(.bottom, isLandscape ? 8 : 44)
         }
         .background(Color.surfaceDim)
     }
@@ -843,6 +901,12 @@ struct RideNavigationView: View {
                 if isNavigationActive {
                     turnInstructionCard
                         .transition(.move(edge: .top).combined(with: .opacity))
+                    if isLandscape {
+                        landscapeLeaderboardStrip
+                            .transition(.opacity)
+                    } else {
+                        Spacer(minLength: 0)
+                    }
                 } else {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("TO")
@@ -876,7 +940,7 @@ struct RideNavigationView: View {
             .padding(.horizontal, 16)
             .animation(.easeInOut(duration: 0.35), value: isNavigationActive)
 
-            if isNavigationActive {
+            if isNavigationActive && !isLandscape {
                 leaderboardStrip
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -886,43 +950,40 @@ struct RideNavigationView: View {
     }
 
     private var turnInstructionCard: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(Color.primaryFixed)
-                    .frame(width: 46, height: 46)
+                    .frame(width: 36, height: 36)
                 Image(systemName: vm.currentInstruction.isEmpty
                       ? "arrow.up"
                       : maneuverIcon(for: vm.currentInstruction))
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundColor(Color.onPrimaryFixed)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 let dist = vm.distanceToNextTurnMeters
                 let distText: String = {
                     if dist <= 0 { return "" }
                     return dist >= 1000
-                        ? String(format: "in %.1f km", dist / 1000)
-                        : String(format: "in %.0f m", dist)
+                        ? String(format: "%.1f km", dist / 1000)
+                        : String(format: "%.0f m", dist)
                 }()
                 if !distText.isEmpty {
                     Text(distText)
-                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .font(.system(size: 10, weight: .black, design: .monospaced))
                         .foregroundColor(Color.primaryFixed)
-                        .tracking(0.3)
                 }
                 Text(vm.currentInstruction.isEmpty ? "Follow route" : vm.currentInstruction)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color.onSurface)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
-
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primaryFixed.opacity(0.3), lineWidth: 1))
@@ -968,40 +1029,75 @@ struct RideNavigationView: View {
         }
     }
 
-    private var offRouteBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(Color.errorColor)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("OFF ROUTE")
-                    .font(.system(size: 11, weight: .black, design: .monospaced))
-                    .foregroundColor(Color.errorColor)
-                    .tracking(1.5)
-                Text("Rerouting to next stop")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Color.errorColor.opacity(0.75))
+    // Compact inline leaderboard for the landscape top bar — same height as the turn card.
+    private var landscapeLeaderboardStrip: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    if vm.leaderboardRows.isEmpty {
+                        ForEach(0..<3, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.surfaceContainerHigh.opacity(0.5))
+                                .frame(width: 100, height: 44)
+                                .redacted(reason: .placeholder)
+                        }
+                    } else {
+                        ForEach(vm.leaderboardRows) { row in
+                            LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id)
+                                .id(row.id)
+                        }
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
             }
-            Spacer()
+            .onChange(of: selectedRiderId) { _, id in
+                if let id {
+                    withAnimation(.spring(response: 0.4)) { proxy.scrollTo(id, anchor: .center) }
+                }
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color.errorContainer.opacity(0.85))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.35), lineWidth: 1))
+    }
+
+    private var offRouteBanner: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 9, weight: .bold))
+            Text("OFF ROUTE")
+                .font(.system(size: 9, weight: .black, design: .monospaced))
+                .tracking(1)
+        }
+        .foregroundColor(Color.errorColor)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(Color.errorContainer.opacity(0.9))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.errorColor.opacity(0.4), lineWidth: 1))
     }
 
     // MARK: - Bottom Controls
 
     private var bottomControls: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                regroupButton
-                endRideButton
+            if isLandscape {
+                HStack(spacing: 8) {
+                    Spacer()
+                    regroupButton
+                    endRideButton
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+            } else {
+                HStack(spacing: 8) {
+                    Spacer()
+                    regroupButton
+                    endRideButton
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 44)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 14)
-            .padding(.bottom, 44)
         }
         .background(
             LinearGradient(
@@ -1012,18 +1108,17 @@ struct RideNavigationView: View {
         )
     }
 
+    private var buttonSize: CGFloat { isLandscape ? 44 : 56 }
+
     private var regroupButton: some View {
         Button(action: { showRegroup = true }) {
-            VStack(spacing: 5) {
-                Image(systemName: "person.3.fill").font(.system(size: 19))
-                Text("REGROUP")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced)).tracking(0.5)
-            }
-            .foregroundColor(Color.onSurface)
-            .frame(maxWidth: .infinity).frame(height: 72)
-            .background(Color.surfaceContainerHigh.opacity(0.9))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
+            Image(systemName: "person.3.fill")
+                .font(.system(size: isLandscape ? 16 : 20))
+                .foregroundColor(Color.onSurface)
+                .frame(width: buttonSize, height: buttonSize)
+                .background(Color.surfaceContainerHigh.opacity(0.9))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
         }
     }
 
@@ -1035,20 +1130,19 @@ struct RideNavigationView: View {
                 dismiss()
             }
         }) {
-            VStack(spacing: 5) {
+            Group {
                 if vm.isEnding {
                     ProgressView().tint(Color.errorColor).scaleEffect(0.8)
                 } else {
-                    Image(systemName: "stop.fill").font(.system(size: 19))
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: isLandscape ? 16 : 20))
                 }
-                Text(vm.amILeader ? "END RIDE" : "LEAVE RIDE")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced)).tracking(0.5)
             }
             .foregroundColor(Color.errorColor)
-            .frame(maxWidth: .infinity).frame(height: 72)
+            .frame(width: buttonSize, height: buttonSize)
             .background(Color.errorContainer.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.errorColor.opacity(0.35), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.35), lineWidth: 1))
         }
         .disabled(vm.isEnding)
     }
@@ -1088,27 +1182,29 @@ struct RideNavigationView: View {
             HStack {
                 Spacer()
                 if isNavigationActive {
-                    VStack(spacing: 9) {
+                    VStack(spacing: isLandscape ? 6 : 9) {
                         NavStatPill(
                             label: "SPEED",
                             value: vm.mySpeedKmh > 0 ? String(format: "%.0f", vm.mySpeedKmh) : "--",
-                            unit: "KM/H"
+                            unit: "KM/H",
+                            compact: isLandscape
                         )
-                        NavStatPill(label: "ETA", value: vm.etaString, unit: nil)
+                        NavStatPill(label: "ETA", value: vm.etaString, unit: nil, compact: isLandscape)
                         NavStatPill(
                             label: "DIST",
                             value: vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--",
-                            unit: "KM"
+                            unit: "KM",
+                            compact: isLandscape
                         )
                     }
-                    .padding(.trailing, 14)
+                    .padding(.trailing, 4)
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
                 }
             }
             Spacer()
         }
-        .padding(.top, 180)
-        .padding(.bottom, 220)
+        .padding(.top, isLandscape ? 56 : 180)
+        .padding(.bottom, isLandscape ? 72 : 220)
         .animation(.easeInOut(duration: 0.4), value: isNavigationActive)
     }
 }
@@ -1383,22 +1479,25 @@ struct NavStatPill: View {
     let value: String
     let unit: String?
     var accentColor: Color? = nil
+    var compact: Bool = false
+
+    private var size: CGFloat { compact ? 56 : 72 }
 
     var body: some View {
         VStack(alignment: .center, spacing: 1) {
             Text(label)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .font(.system(size: compact ? 7 : 8, weight: .bold, design: .monospaced))
                 .foregroundColor(Color.onSurfaceVariant).tracking(1)
             Text(value)
-                .font(.system(size: 17, weight: .black, design: .monospaced))
+                .font(.system(size: compact ? 13 : 17, weight: .black, design: .monospaced))
                 .foregroundColor(accentColor ?? Color.onSurface)
             if let unit {
-                Text(unit).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundColor(Color.onSurfaceVariant)
+                Text(unit).font(.system(size: compact ? 7 : 8, weight: .medium, design: .monospaced)).foregroundColor(Color.onSurfaceVariant)
             } else {
-                Text(" ").font(.system(size: 8, weight: .medium, design: .monospaced))
+                Text(" ").font(.system(size: compact ? 7 : 8, weight: .medium, design: .monospaced))
             }
         }
-        .frame(width: 72, height: 72)
+        .frame(width: size, height: size)
         .background(Color.surfaceContainerHigh.opacity(0.88))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.outlineVariant.opacity(0.2), lineWidth: 1))

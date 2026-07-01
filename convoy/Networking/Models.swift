@@ -73,6 +73,30 @@ struct CreateRideResponse: Codable {
     let inviteCode: String
 }
 
+struct UpdateRideRequest: Codable {
+    let title: String
+    let destinationName: String
+    let destinationLat: Double
+    let destinationLng: Double
+    let distanceMeters: Double
+    let estimatedDurationSeconds: Int
+    let maxAllowedParticipants: Int
+    let routePolyline: String
+    let waypoints: [CreateWaypoint]
+}
+
+struct RideUpdatedEvent: Codable {
+    let rideId: String
+    let title: String
+    let destinationName: String
+    let destinationLat: Double
+    let destinationLng: Double
+    let distanceMeters: Double
+    let estimatedDurationSeconds: Int
+    let maxAllowedParticipants: Int
+    let waypoints: [Waypoint]
+}
+
 
 // MARK: - Invite Code Lookup
 

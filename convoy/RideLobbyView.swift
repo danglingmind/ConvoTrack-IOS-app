@@ -19,6 +19,7 @@ final class LobbyViewModel: ObservableObject {
     var leaderId = ""
 
     var amILeader: Bool { !myUserId.isEmpty && myUserId == leaderId }
+    var onRideUpdated: ((RideUpdatedEvent) -> Void)?
 
     // Leader can start when alone OR when all non-leaders have readied up
     var canStart: Bool {
@@ -66,6 +67,10 @@ final class LobbyViewModel: ObservableObject {
             guard let self else { return }
             self.updateParticipantStatus(userId: userId, status: "READY")
             if userId == self.myUserId { self.myStatus = "READY" }
+        }
+
+        socket.onRideUpdated = { [weak self] event in
+            self?.onRideUpdated?(event)
         }
 
         // Join the room after a brief moment for connection to establish
@@ -131,6 +136,7 @@ final class LobbyViewModel: ObservableObject {
 
 struct RideLobbyView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var membershipStore: MembershipStore
     @Environment(Clerk.self) private var clerk
     @Environment(\.dismiss) private var dismiss
     @StateObject private var vm = LobbyViewModel()
@@ -139,6 +145,7 @@ struct RideLobbyView: View {
     @State private var showQRModal = false
     @State private var showRiderDetail = false
     @State private var showNavigation = false
+    @State private var showEditSheet = false
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var cameraCommand: MapCameraCommand? = nil
     @State private var showStartError = false
@@ -205,6 +212,16 @@ struct RideLobbyView: View {
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.6), radius: 4)
                     Spacer()
+                    if vm.amILeader && appState.currentRide?.status == "LOBBY" {
+                        Button(action: { showEditSheet = true }) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 36, height: 36)
+                                .background(Color.black.opacity(0.4))
+                                .clipShape(Circle())
+                        }
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -227,6 +244,15 @@ struct RideLobbyView: View {
         )
         .sheet(isPresented: $showRiderDetail) { RiderDetailDrawer() }
         .sheet(isPresented: $showQRModal) { QRCodeModal(inviteCode: inviteCode) }
+        .sheet(isPresented: $showEditSheet, onDismiss: {
+            Task { await refreshAfterEdit() }
+        }) {
+            if let ride = appState.currentRide {
+                EditRideView(ride: ride)
+                    .environmentObject(appState)
+                    .environmentObject(membershipStore)
+            }
+        }
         .alert("Couldn't Start Ride", isPresented: $showStartError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -245,6 +271,7 @@ struct RideLobbyView: View {
         ZStack(alignment: .bottom) {
             GoogleMapView(
                 routeCoords:   routeCoordinates,
+                stopCoords:    lobbyStopCoords,
                 pins:          lobbyMapPins,
                 cameraCommand: cameraCommand,
                 isInteractive: false
@@ -298,6 +325,12 @@ struct RideLobbyView: View {
             pins.append(MapPin(id: "dest", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .destination(name: wp.name)))
         }
         return pins
+    }
+
+    private var lobbyStopCoords: [CLLocationCoordinate2D] {
+        guard let ride = appState.currentRide else { return [] }
+        return ride.waypoints.sorted { $0.order < $1.order }
+            .map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
     }
 
     // MARK: - Roster Section
@@ -483,8 +516,40 @@ struct RideLobbyView: View {
             await calculateRoute(from: waypoints)
         }
 
+        vm.onRideUpdated = { [appState] event in
+            guard let existing = appState.currentRide else { return }
+            appState.currentRide = Ride(
+                id: existing.id,
+                title: event.title,
+                status: existing.status,
+                leaderId: existing.leaderId,
+                inviteCode: existing.inviteCode,
+                destinationName: event.destinationName,
+                destinationLat: event.destinationLat,
+                destinationLng: event.destinationLng,
+                distanceMeters: event.distanceMeters,
+                estimatedDurationSeconds: event.estimatedDurationSeconds,
+                maxAllowedParticipants: event.maxAllowedParticipants,
+                startedAt: existing.startedAt,
+                endedAt: existing.endedAt,
+                createdAt: existing.createdAt,
+                waypoints: event.waypoints,
+                participants: existing.participants
+            )
+            Task { await calculateRoute(from: event.waypoints) }
+        }
+
         if let token = try? await Clerk.shared.auth.getToken() {
             vm.setup(rideId: rideId, token: token)
+        }
+    }
+
+    @MainActor
+    private func refreshAfterEdit() async {
+        guard let rideId = appState.currentRideId else { return }
+        if let ride = try? await APIClient.shared.getRide(rideId) {
+            appState.currentRide = ride
+            await calculateRoute(from: ride.waypoints)
         }
     }
 
