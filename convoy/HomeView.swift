@@ -20,6 +20,13 @@ struct HomeView: View {
     @State private var nearbyRides: [NearbyRide] = []
     @State private var nearbyState: NearbyLoadState = .loading
     @State private var selectedNearbyRide: NearbyRide? = nil
+    @State private var recentRides: [HistoryRide] = []
+    @State private var recentLoading = true
+    @State private var selectedHistoryRide: HistoryRide? = nil
+
+    // Nearby Rides discovery is temporarily hidden on the client. Backend support
+    // stays fully intact — flip this to `true` to re-enable the entire section.
+    private let showNearbyRides = false
 
     var body: some View {
         NavigationStack(path: $navPath) {
@@ -90,30 +97,36 @@ struct HomeView: View {
                     }
 
                     // Nearby Rides header
-                    HStack {
-                        Text("NEARBY RIDES").font(.headlineMd).foregroundColor(Color.onSurface)
-                        Spacer()
-                        Button(action: { Task { await loadNearby() } }) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(Color.primaryFixed)
-                                .frame(width: 32, height: 32)
+                    if showNearbyRides {
+                        HStack {
+                            Text("NEARBY RIDES").font(.headlineMd).foregroundColor(Color.onSurface)
+                            Spacer()
+                            Button(action: { Task { await loadNearby() } }) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(Color.primaryFixed)
+                                    .frame(width: 32, height: 32)
+                            }
                         }
+                        .padding(.horizontal, 20)
                     }
-                    .padding(.horizontal, 20)
                 }
                 .padding(.bottom, 16)
 
-                // Scrollable nearby rides list
-                ScrollView {
-                    VStack(spacing: 12) {
-                        nearbyContent
-                        Color.clear.frame(height: 100)
+                if showNearbyRides {
+                    // Scrollable nearby rides list
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            nearbyContent
+                            Color.clear.frame(height: 100)
+                        }
+                        .padding(.horizontal, 20)
                     }
-                    .padding(.horizontal, 20)
+                    .refreshable { await loadNearby() }
+                    .ignoresSafeArea(edges: .bottom)
+                } else {
+                    recentRidesSection
                 }
-                .refreshable { await loadNearby() }
-                .ignoresSafeArea(edges: .bottom)
             }
 
             // Floating top bar
@@ -129,7 +142,16 @@ struct HomeView: View {
             .frame(height: 56)
         }
         .toolbar(.hidden, for: .navigationBar)
-        .task { await loadNearby() }
+        .navigationDestination(item: $selectedHistoryRide) { ride in
+            RideSummaryView(rideId: ride.rideId, rideTitle: ride.title, fallback: ride)
+        }
+        .task {
+            if showNearbyRides {
+                await loadNearby()
+            } else {
+                await loadRecent()
+            }
+        }
         .sheet(item: $selectedNearbyRide) { ride in
             RidePreviewSheet(ride: ride)
                 .environmentObject(appState)
@@ -228,6 +250,162 @@ struct HomeView: View {
         } catch {
             nearbyState = .error
         }
+    }
+
+    // MARK: - Recent rides
+
+    // Show the most recent rides; skip the one already surfaced in the Active Ride card.
+    private var displayedRecentRides: [HistoryRide] {
+        recentRides
+            .filter { $0.rideId != appState.currentRideId }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    @ViewBuilder
+    private var recentRidesSection: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("RECENT RIDES").font(.headlineMd).foregroundColor(Color.onSurface)
+                Spacer()
+                if !displayedRecentRides.isEmpty {
+                    Button(action: { activeTab = .flagged }) {
+                        Text("SEE ALL")
+                            .font(.labelCaps).tracking(1)
+                            .foregroundColor(Color.primaryFixed)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+
+            ScrollView {
+                VStack(spacing: 12) {
+                    if recentLoading {
+                        ProgressView()
+                            .tint(Color.primaryFixed)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 32)
+                    } else if displayedRecentRides.isEmpty {
+                        NearbyEmptyCard(
+                            icon: "flag.checkered",
+                            title: "No rides yet",
+                            subtitle: "Your rides will show up here once you create or join your first convoy.",
+                            action: { navPath.append(HomeRoute.createRide) },
+                            actionLabel: "Create Ride"
+                        )
+                    } else {
+                        ForEach(displayedRecentRides) { ride in
+                            RecentRideCard(ride: ride)
+                                .onTapGesture { handleRecentTap(ride) }
+                        }
+                    }
+                    Color.clear.frame(height: 100)
+                }
+                .padding(.horizontal, 20)
+            }
+            .refreshable { await loadRecent() }
+            .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    private func handleRecentTap(_ ride: HistoryRide) {
+        if ride.status == "COMPLETED" {
+            selectedHistoryRide = ride
+        } else {
+            if let code = ride.inviteCode { appState.inviteCode = code }
+            appState.currentRideId = ride.rideId   // triggers onChange → pushes RideLobbyView
+        }
+    }
+
+    private func loadRecent() async {
+        recentRides = (try? await APIClient.shared.getMyRides()) ?? []
+        recentLoading = false
+    }
+}
+
+// MARK: - Recent Ride Card (compact home-screen row)
+
+struct RecentRideCard: View {
+    let ride: HistoryRide
+
+    private var isCompleted: Bool { ride.status == "COMPLETED" }
+
+    private var dateLabel: String {
+        let iso = ride.endedAt ?? ride.startedAt ?? ride.createdAt
+        guard let iso, let date = ISO8601DateFormatter().date(from: iso) else { return "" }
+        let f = DateFormatter()
+        f.dateFormat = "dd MMM"
+        return f.string(from: date).uppercased()
+    }
+
+    private var distanceLabel: String {
+        guard ride.distanceMeters > 0 else { return "--" }
+        return String(format: "%.1f KM", ride.distanceMeters / 1000)
+    }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isCompleted ? Color.surfaceContainerHigh : Color.primaryFixed.opacity(0.12))
+                    .frame(width: 52, height: 52)
+                Image(systemName: isCompleted ? "flag.checkered" : "location.fill.viewfinder")
+                    .font(.system(size: 22))
+                    .foregroundColor(isCompleted ? Color.onSurfaceVariant : Color.primaryFixed)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Text(ride.title)
+                        .font(.bodyLg).fontWeight(.bold)
+                        .foregroundColor(Color.onSurface)
+                        .lineLimit(1)
+                    Spacer()
+                    if !isCompleted {
+                        Text("RESUME")
+                            .font(.labelCaps).tracking(1)
+                            .foregroundColor(Color.onPrimaryFixed)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Color.primaryFixed)
+                            .clipShape(Capsule())
+                    }
+                }
+                HStack(spacing: 4) {
+                    if !dateLabel.isEmpty {
+                        Text(dateLabel)
+                            .font(.labelCaps)
+                            .foregroundColor(Color.onSurfaceVariant)
+                        Text("·")
+                            .foregroundColor(Color.onSurfaceVariant.opacity(0.5))
+                    }
+                    Image(systemName: "road.lanes")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color.onSurfaceVariant.opacity(0.6))
+                    Text(distanceLabel)
+                        .font(.dataMono)
+                        .foregroundColor(Color.onSurfaceVariant)
+                    if ride.isLeader == true {
+                        Text("·")
+                            .foregroundColor(Color.onSurfaceVariant.opacity(0.5))
+                        Text("LEADER")
+                            .font(.labelCaps)
+                            .foregroundColor(Color.primaryFixed)
+                    }
+                }
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Color.onSurfaceVariant.opacity(0.5))
+        }
+        .padding(14)
+        .background(Color.surfaceContainerLow)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(isCompleted ? Color.outlineVariant.opacity(0.3) : Color.primaryFixed.opacity(0.25), lineWidth: 1)
+        )
     }
 }
 

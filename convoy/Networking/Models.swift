@@ -180,7 +180,7 @@ struct MyRidesResponse: Codable {
     let rides: [HistoryRide]
 }
 
-struct HistoryRide: Codable, Identifiable {
+struct HistoryRide: Codable, Identifiable, Hashable {
     var id: String { rideId }
     let rideId: String
     let title: String
