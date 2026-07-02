@@ -386,6 +386,13 @@ extension GoogleMapView {
                 if animated { mapView.animate(with: update) } else { mapView.moveCamera(update) }
 
             case .navigate(let lat, let lng, let zoom, let bearing, let tilt, let animated):
+                // In 3D nav mode (tilt > 0), push the viewport center downward so the user
+                // marker sits in the lower third and more of the route ahead is visible.
+                if tilt > 0 && mapView.bounds.height > 0 {
+                    mapView.padding = UIEdgeInsets(top: mapView.bounds.height * 0.30, left: 0, bottom: 0, right: 0)
+                } else {
+                    mapView.padding = .zero
+                }
                 let pos = GMSCameraPosition(latitude: lat, longitude: lng, zoom: zoom, bearing: bearing, viewingAngle: tilt)
                 if animated { mapView.animate(to: pos) } else { mapView.camera = pos }
             }

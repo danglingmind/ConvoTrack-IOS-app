@@ -48,7 +48,27 @@ final class APIClient {
 
     private func makeRequest(_ path: String, method: String = "GET", body: Data? = nil) async throws -> URLRequest {
         let token = try await getToken()
-        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+
+        // Split off any query string. appendingPathComponent percent-encodes the whole
+        // string (turning "?" into "%3F"), which would fold the query into the path and
+        // break routing. Attach the query separately via URLComponents instead.
+        let parts = path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        let pathOnly = String(parts[0])
+        guard var components = URLComponents(
+            url: baseURL.appendingPathComponent(pathOnly),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw APIClientError.networkError(URLError(.badURL))
+        }
+        if parts.count > 1 {
+            // Values are already URL-safe (numbers, codes); keep them as-is.
+            components.percentEncodedQuery = String(parts[1])
+        }
+        guard let url = components.url else {
+            throw APIClientError.networkError(URLError(.badURL))
+        }
+
+        var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         if body != nil {
@@ -134,6 +154,18 @@ final class APIClient {
         struct Body: Encodable { let name: String; let avatarUrl: String? }
         let body = try encoder.encode(Body(name: name, avatarUrl: avatarUrl))
         try await fetchVoid("/users/me", method: "PATCH", body: body)
+    }
+
+    func updateProfile(_ req: UpdateProfileRequest) async throws {
+        let body = try encoder.encode(req)
+        try await fetchVoid("/users/me", method: "PATCH", body: body)
+    }
+
+    func getNearbyRides(lat: Double, lng: Double) async throws -> [NearbyRide] {
+        let resp: NearbyRidesResponse = try await fetch(
+            "/rides/nearby?lat=\(lat)&lng=\(lng)&radiusKm=20"
+        )
+        return resp.rides
     }
 
     // MARK: - Membership Endpoints

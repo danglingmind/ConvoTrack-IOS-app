@@ -302,7 +302,21 @@ struct RideSummaryView: View {
 
     private func loadSummary() async {
         guard let id = rideId else { isLoading = false; return }
-        summary = try? await APIClient.shared.getRideSummary(id)
+
+        // Right after ending a ride the summary row can lag a moment behind the
+        // navigation trigger (the `ride:state_update`/socket path can beat the
+        // summary write becoming queryable). Retry briefly instead of giving up
+        // on the first failure, which is what surfaced "Summary unavailable".
+        let maxAttempts = isPostRide ? 6 : 1
+        for attempt in 1...maxAttempts {
+            if let result = try? await APIClient.shared.getRideSummary(id) {
+                summary = result
+                break
+            }
+            if attempt < maxAttempts {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+            }
+        }
         isLoading = false
     }
 
