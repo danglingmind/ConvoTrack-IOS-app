@@ -1,5 +1,5 @@
 {
-  "originHash" : "0cd50a28344abb9dd256499332949520d7bcfdaab46424a1737e846f2d2c7b95",
+  "originHash" : "aac1ea5a713ee02f21f252ee5970051db11f70293fda3c9c3e1cf1e6cdf71fba",
   "pins" : [
     {
       "identity" : "clerk-ios",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "13f3c9214ccca777e97c12273fa720fc3ee69391",
         "version" : "1.1.5"
+      }
+    },
+    {
+      "identity" : "ios-maps-sdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/googlemaps/ios-maps-sdk",
+      "state" : {
+        "revision" : "a951b24ac0ca7720f87d4be3d5bd539552d13882",
+        "version" : "10.15.0"
       }
     },
     {
