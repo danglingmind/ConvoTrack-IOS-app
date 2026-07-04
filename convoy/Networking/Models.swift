@@ -73,6 +73,30 @@ struct CreateRideResponse: Codable {
     let inviteCode: String
 }
 
+struct UpdateRideRequest: Codable {
+    let title: String
+    let destinationName: String
+    let destinationLat: Double
+    let destinationLng: Double
+    let distanceMeters: Double
+    let estimatedDurationSeconds: Int
+    let maxAllowedParticipants: Int
+    let routePolyline: String
+    let waypoints: [CreateWaypoint]
+}
+
+struct RideUpdatedEvent: Codable {
+    let rideId: String
+    let title: String
+    let destinationName: String
+    let destinationLat: Double
+    let destinationLng: Double
+    let distanceMeters: Double
+    let estimatedDurationSeconds: Int
+    let maxAllowedParticipants: Int
+    let waypoints: [Waypoint]
+}
+
 
 // MARK: - Invite Code Lookup
 
@@ -156,7 +180,7 @@ struct MyRidesResponse: Codable {
     let rides: [HistoryRide]
 }
 
-struct HistoryRide: Codable, Identifiable {
+struct HistoryRide: Codable, Identifiable, Hashable {
     var id: String { rideId }
     let rideId: String
     let title: String
@@ -188,7 +212,37 @@ struct UserMeResponse: Codable {
     let userId: String
     let name: String
     let avatarUrl: String?
+    let username: String?
+    let phone: String?
+    let phoneVisible: Bool
+    let emailContact: String?
+    let emailContactVisible: Bool
+    let notifyNearbyRides: Bool
     let plan: MembershipPlanInfo
+
+    // Default values for Bool fields so older API responses decode gracefully
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId               = try c.decode(String.self,  forKey: .userId)
+        name                 = try c.decode(String.self,  forKey: .name)
+        avatarUrl            = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
+        username             = try c.decodeIfPresent(String.self, forKey: .username)
+        phone                = try c.decodeIfPresent(String.self, forKey: .phone)
+        phoneVisible         = try c.decodeIfPresent(Bool.self,   forKey: .phoneVisible)         ?? false
+        emailContact         = try c.decodeIfPresent(String.self, forKey: .emailContact)
+        emailContactVisible  = try c.decodeIfPresent(Bool.self,   forKey: .emailContactVisible)  ?? false
+        notifyNearbyRides    = try c.decodeIfPresent(Bool.self,   forKey: .notifyNearbyRides)    ?? true
+        plan                 = try c.decode(MembershipPlanInfo.self, forKey: .plan)
+    }
+}
+
+struct UpdateProfileRequest: Encodable {
+    var username: String?
+    var phone: String?
+    var phoneVisible: Bool?
+    var emailContact: String?
+    var emailContactVisible: Bool?
+    var notifyNearbyRides: Bool?
 }
 
 struct ActivateMembershipRequest: Codable {
@@ -198,6 +252,46 @@ struct ActivateMembershipRequest: Codable {
 struct ActivateMembershipResponse: Codable {
     let ok: Bool
     let plan: MembershipPlanInfo
+}
+
+// MARK: - Nearby Rides
+
+struct NearbyRide: Codable, Identifiable {
+    let id: String
+    let title: String
+    let status: String
+    let destinationName: String
+    let distanceMeters: Double
+    let startLat: Double
+    let startLng: Double
+    let distanceFromUserKm: Double
+    let riderCount: Int
+    let maxParticipants: Int
+    let leaderName: String
+    let leaderId: String
+    let inviteCode: String
+    let viewerRole: String?   // "LEADER" | "MEMBER" | nil (not part of this ride)
+
+    var isLive: Bool { status != "LOBBY" }   // ACTIVE / PAUSED → live; LOBBY → forming
+    var isFull: Bool { riderCount >= maxParticipants }
+    var isMine: Bool { viewerRole == "LEADER" }
+    var isJoined: Bool { viewerRole == "MEMBER" }
+    var isParticipant: Bool { viewerRole != nil }
+
+    var formattedRideDistance: String {
+        let km = distanceMeters / 1000
+        return km < 10 ? String(format: "%.1f km", km) : String(format: "%.0f km", km)
+    }
+
+    var formattedUserDistance: String {
+        distanceFromUserKm < 1
+            ? String(format: "%.0f m away", distanceFromUserKm * 1000)
+            : String(format: "%.1f km away", distanceFromUserKm)
+    }
+}
+
+struct NearbyRidesResponse: Codable {
+    let rides: [NearbyRide]
 }
 
 // MARK: - API Errors

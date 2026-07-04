@@ -106,8 +106,17 @@ extension LocationService: CLLocationManagerDelegate {
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
+        switch manager.authorizationStatus {
+        case .authorizedAlways:
+            // Go through start() so allowsBackgroundLocationUpdates is enabled
+            start()
+        case .authorizedWhenInUse:
+            // Foreground-only; background updates won't work.
+            // The ride flow calls start() explicitly after the user begins a ride.
             manager.startUpdatingLocation()
+            manager.startUpdatingHeading()
+        default:
+            break
         }
     }
 }

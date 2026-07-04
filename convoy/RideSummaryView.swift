@@ -1,5 +1,5 @@
 import SwiftUI
-import MapKit
+import CoreLocation
 import CoreImage
 
 struct RideSummaryView: View {
@@ -15,7 +15,7 @@ struct RideSummaryView: View {
     @State private var isLoading = true
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var mapWaypoints: [Waypoint] = []
-    @State private var mapPosition: MapCameraPosition = .automatic
+    @State private var cameraCommand: MapCameraCommand? = nil
 
     @State private var isGeneratingShare = false
     @State private var shareSheetItems: [Any] = []
@@ -94,9 +94,12 @@ struct RideSummaryView: View {
                             .foregroundColor(Color.primaryFixed.opacity(0.15))
                     )
             } else {
-                Map(position: $mapPosition, content: summaryMapContent)
-                .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
-                .allowsHitTesting(false)
+                GoogleMapView(
+                    routeCoords:   routeCoordinates,
+                    pins:          summaryMapPins,
+                    cameraCommand: cameraCommand,
+                    isInteractive: false
+                )
                 .frame(maxWidth: .infinity)
                 .frame(height: 360)
             }
@@ -279,39 +282,41 @@ struct RideSummaryView: View {
         .padding(.horizontal, 20)
     }
 
-    // MARK: - Map Content
+    // MARK: - Map Pins
 
-    @MapContentBuilder
-    private func summaryMapContent() -> some MapContent {
-        MapPolyline(coordinates: routeCoordinates)
-            .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-        summaryWaypointAnnotations
-    }
-
-    @MapContentBuilder
-    private var summaryWaypointAnnotations: some MapContent {
+    private var summaryMapPins: [MapPin] {
+        var pins: [MapPin] = []
         if let wp = mapWaypoints.first(where: { $0.type == "START" }) {
-            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
-                LobbyStartPin()
-            }
+            pins.append(MapPin(id: "start", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .lobbyStart))
         }
-        ForEach(mapWaypoints.filter { $0.type == "WAYPOINT" }, id: \.order) { wp in
-            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
-                WaypointPin(name: wp.name)
-            }
+        for wp in mapWaypoints.filter({ $0.type == "WAYPOINT" }) {
+            pins.append(MapPin(id: "wp_\(wp.order)", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .waypoint(name: wp.name)))
         }
         if let wp = mapWaypoints.first(where: { $0.type == "DESTINATION" }) {
-            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
-                DestinationPin(name: wp.name)
-            }
+            pins.append(MapPin(id: "dest", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .destination(name: wp.name)))
         }
+        return pins
     }
 
     // MARK: - Helpers
 
     private func loadSummary() async {
         guard let id = rideId else { isLoading = false; return }
-        summary = try? await APIClient.shared.getRideSummary(id)
+
+        // Right after ending a ride the summary row can lag a moment behind the
+        // navigation trigger (the `ride:state_update`/socket path can beat the
+        // summary write becoming queryable). Retry briefly instead of giving up
+        // on the first failure, which is what surfaced "Summary unavailable".
+        let maxAttempts = isPostRide ? 6 : 1
+        for attempt in 1...maxAttempts {
+            if let result = try? await APIClient.shared.getRideSummary(id) {
+                summary = result
+                break
+            }
+            if attempt < maxAttempts {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+            }
+        }
         isLoading = false
     }
 
@@ -327,30 +332,20 @@ struct RideSummaryView: View {
         let sorted = waypoints.sorted { $0.order < $1.order }
         guard sorted.count >= 2 else { return }
 
-        let items = sorted.map {
-            MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)))
-        }
-
         var allCoords: [CLLocationCoordinate2D] = []
-        for i in 0..<items.count - 1 {
-            let req = MKDirections.Request()
-            req.source = items[i]; req.destination = items[i + 1]; req.transportType = .automobile
-            if let route = try? await MKDirections(request: req).calculate().routes.first {
-                let coords = route.polyline.coordinates
-                allCoords += (i == 0) ? coords : Array(coords.dropFirst())
+        for i in 0..<sorted.count - 1 {
+            let origin = CLLocationCoordinate2D(latitude: sorted[i].lat,   longitude: sorted[i].lng)
+            let dest   = CLLocationCoordinate2D(latitude: sorted[i+1].lat, longitude: sorted[i+1].lng)
+            if let result = try? await GoogleDirectionsService.route(from: origin, to: dest) {
+                allCoords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
             }
         }
 
         routeCoordinates = allCoords
         if !allCoords.isEmpty {
-            let poly = MKPolyline(coordinates: allCoords, count: allCoords.count)
-            let rect = poly.boundingMapRect
-            mapPosition = .rect(rect.insetBy(dx: -rect.width * 0.2, dy: -rect.height * 0.2))
+            cameraCommand = MapCameraCommand.fitRoute(allCoords, padding: 60)
         } else if let first = sorted.first {
-            mapPosition = .region(MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: first.lat, longitude: first.lng),
-                span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
-            ))
+            cameraCommand = MapCameraCommand.focus(lat: first.lat, lng: first.lng, zoom: 11)
         }
     }
 
@@ -363,7 +358,7 @@ struct RideSummaryView: View {
         defer { isGeneratingShare = false }
 
         let mapImg = await generateMapSnapshot(waypoints: mapWaypoints)
-        let qrImg = generateQRCode(from: "https://convoy.app")
+        let qrImg = generateQRCode(from: "https://vynl.in/convoy")
 
         let distStr: String
         let durStr: String
@@ -407,138 +402,12 @@ struct RideSummaryView: View {
     }
 
     private func generateMapSnapshot(waypoints: [Waypoint]) async -> UIImage? {
-        guard !routeCoordinates.isEmpty else { return nil }
-        let coords = routeCoordinates
-        let wps = waypoints.sorted { $0.order < $1.order }
-
-        let poly = MKPolyline(coordinates: coords, count: coords.count)
-        let rect = poly.boundingMapRect
-
-        // Asymmetric padding: push route toward top so it clears the text overlay at bottom.
-        // In MKMapRect Y increases southward, so adding more to height = more space south.
-        let expandX = rect.width * 0.28
-        let expandTop = rect.height * 0.12
-        let expandBottom = rect.height * 0.72
-        let paddedRect = MKMapRect(
-            x: rect.minX - expandX,
-            y: rect.minY - expandTop,
-            width: rect.width + expandX * 2,
-            height: rect.height + expandTop + expandBottom
+        await GoogleStaticMapsService.snapshot(
+            routeCoordinates: routeCoordinates,
+            waypoints:        waypoints,
+            size:             CGSize(width: 390, height: 700),
+            scale:            2
         )
-
-        // 2× logical size for a sharp result when the image fills 390×700 pt at @2x rendering
-        let s: CGFloat = 2
-        let options = MKMapSnapshotter.Options()
-        options.mapRect = paddedRect
-        options.size = CGSize(width: 390 * s, height: 700 * s)
-        options.pointOfInterestFilter = .excludingAll
-        options.traitCollection = UITraitCollection(userInterfaceStyle: .dark)
-
-        let snapshotter = MKMapSnapshotter(options: options)
-
-        return await withCheckedContinuation { continuation in
-            snapshotter.start { snapshot, _ in
-                guard let snapshot = snapshot else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-
-                let imgSize = snapshot.image.size
-                let rendered = UIGraphicsImageRenderer(size: imgSize).image { _ in
-                    snapshot.image.draw(at: .zero)
-                    guard let ctx = UIGraphicsGetCurrentContext() else { return }
-
-                    let points = coords.map { snapshot.point(for: $0) }
-                    guard let first = points.first else { return }
-
-                    // -- Glow --
-                    ctx.saveGState()
-                    ctx.setStrokeColor(UIColor(red: 202/255, green: 243/255, blue: 0, alpha: 0.2).cgColor)
-                    ctx.setLineWidth(22 * s)
-                    ctx.setLineCap(.round); ctx.setLineJoin(.round)
-                    ctx.move(to: first)
-                    points.dropFirst().forEach { ctx.addLine(to: $0) }
-                    ctx.strokePath()
-                    ctx.restoreGState()
-
-                    // -- Lime route --
-                    ctx.saveGState()
-                    ctx.setStrokeColor(UIColor(red: 202/255, green: 243/255, blue: 0, alpha: 1).cgColor)
-                    ctx.setLineWidth(5 * s)
-                    ctx.setLineCap(.round); ctx.setLineJoin(.round)
-                    ctx.move(to: first)
-                    points.dropFirst().forEach { ctx.addLine(to: $0) }
-                    ctx.strokePath()
-                    ctx.restoreGState()
-
-                    // -- Waypoint pins + labels --
-                    let imgW = imgSize.width
-                    let shadow = NSShadow()
-                    shadow.shadowColor = UIColor.black.withAlphaComponent(0.85)
-                    shadow.shadowBlurRadius = 4 * s
-                    shadow.shadowOffset = .zero
-
-                    for wp in wps {
-                        let coord = CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng)
-                        let pt = snapshot.point(for: coord)
-
-                        let dotColor: UIColor
-                        let dotRadius: CGFloat
-
-                        switch wp.type {
-                        case "START":
-                            dotColor = UIColor(red: 98/255, green: 1.0, blue: 150/255, alpha: 1)
-                            dotRadius = 7 * s
-                        case "DESTINATION":
-                            dotColor = UIColor(red: 202/255, green: 243/255, blue: 0, alpha: 1)
-                            dotRadius = 9 * s
-                        default:
-                            dotColor = UIColor.white.withAlphaComponent(0.9)
-                            dotRadius = 5 * s
-                        }
-
-                        // Dot
-                        ctx.saveGState()
-                        ctx.setFillColor(dotColor.cgColor)
-                        ctx.fillEllipse(in: CGRect(x: pt.x - dotRadius, y: pt.y - dotRadius,
-                                                   width: dotRadius * 2, height: dotRadius * 2))
-                        ctx.setStrokeColor(UIColor(white: 0.1, alpha: 1).cgColor)
-                        ctx.setLineWidth(1.5 * s)
-                        ctx.strokeEllipse(in: CGRect(x: pt.x - dotRadius, y: pt.y - dotRadius,
-                                                     width: dotRadius * 2, height: dotRadius * 2))
-                        ctx.restoreGState()
-
-                        guard !wp.name.isEmpty else { continue }
-
-                        let font = UIFont.boldSystemFont(ofSize: 11 * s)
-                        let labelAttrs: [NSAttributedString.Key: Any] = [
-                            .font: font,
-                            .foregroundColor: UIColor.white,
-                            .shadow: shadow
-                        ]
-                        let text = wp.name as NSString
-                        let textSize = text.size(withAttributes: labelAttrs)
-                        let pad = 5 * s
-                        let pillW = textSize.width + pad * 2
-                        let pillH = textSize.height + pad
-
-                        // Flip to left if near right edge
-                        let labelX: CGFloat = (pt.x + dotRadius + 6 * s + pillW > imgW - 12 * s)
-                            ? pt.x - dotRadius - 6 * s - pillW
-                            : pt.x + dotRadius + 6 * s
-                        let labelY = pt.y - pillH / 2
-
-                        let pillRect = CGRect(x: labelX, y: labelY, width: pillW, height: pillH)
-                        UIColor.black.withAlphaComponent(0.6).setFill()
-                        UIBezierPath(roundedRect: pillRect, cornerRadius: 4 * s).fill()
-
-                        text.draw(at: CGPoint(x: pillRect.minX + pad, y: pillRect.minY + pad / 2),
-                                  withAttributes: labelAttrs)
-                    }
-                }
-                continuation.resume(returning: rendered)
-            }
-        }
     }
 
     private func generateQRCode(from string: String) -> UIImage? {

@@ -1,5 +1,5 @@
 import SwiftUI
-import MapKit
+import CoreLocation
 import ClerkKit
 import Combine
 
@@ -19,6 +19,7 @@ final class LobbyViewModel: ObservableObject {
     var leaderId = ""
 
     var amILeader: Bool { !myUserId.isEmpty && myUserId == leaderId }
+    var onRideUpdated: ((RideUpdatedEvent) -> Void)?
 
     // Leader can start when alone OR when all non-leaders have readied up
     var canStart: Bool {
@@ -66,6 +67,10 @@ final class LobbyViewModel: ObservableObject {
             guard let self else { return }
             self.updateParticipantStatus(userId: userId, status: "READY")
             if userId == self.myUserId { self.myStatus = "READY" }
+        }
+
+        socket.onRideUpdated = { [weak self] event in
+            self?.onRideUpdated?(event)
         }
 
         // Join the room after a brief moment for connection to establish
@@ -131,6 +136,7 @@ final class LobbyViewModel: ObservableObject {
 
 struct RideLobbyView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var membershipStore: MembershipStore
     @Environment(Clerk.self) private var clerk
     @Environment(\.dismiss) private var dismiss
     @StateObject private var vm = LobbyViewModel()
@@ -139,8 +145,9 @@ struct RideLobbyView: View {
     @State private var showQRModal = false
     @State private var showRiderDetail = false
     @State private var showNavigation = false
+    @State private var showEditSheet = false
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
-    @State private var mapPosition: MapCameraPosition = .automatic
+    @State private var cameraCommand: MapCameraCommand? = nil
     @State private var showStartError = false
 
     // MARK: - Derived
@@ -205,6 +212,16 @@ struct RideLobbyView: View {
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.6), radius: 4)
                     Spacer()
+                    if vm.amILeader && appState.currentRide?.status == "LOBBY" {
+                        Button(action: { showEditSheet = true }) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 36, height: 36)
+                                .background(Color.black.opacity(0.4))
+                                .clipShape(Circle())
+                        }
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -227,6 +244,15 @@ struct RideLobbyView: View {
         )
         .sheet(isPresented: $showRiderDetail) { RiderDetailDrawer() }
         .sheet(isPresented: $showQRModal) { QRCodeModal(inviteCode: inviteCode) }
+        .sheet(isPresented: $showEditSheet, onDismiss: {
+            Task { await refreshAfterEdit() }
+        }) {
+            if let ride = appState.currentRide {
+                EditRideView(ride: ride)
+                    .environmentObject(appState)
+                    .environmentObject(membershipStore)
+            }
+        }
         .alert("Couldn't Start Ride", isPresented: $showStartError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -243,10 +269,14 @@ struct RideLobbyView: View {
 
     private var mapSection: some View {
         ZStack(alignment: .bottom) {
-            Map(position: $mapPosition, content: lobbyMapContent)
-                .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
-                .allowsHitTesting(false)
-                .frame(maxWidth: .infinity, minHeight: 420)
+            GoogleMapView(
+                routeCoords:   routeCoordinates,
+                stopCoords:    lobbyStopCoords,
+                pins:          lobbyMapPins,
+                cameraCommand: cameraCommand,
+                isInteractive: false
+            )
+            .frame(maxWidth: .infinity, minHeight: 420)
 
             LinearGradient(
                 colors: [Color.black.opacity(0.45), .clear],
@@ -282,33 +312,25 @@ struct RideLobbyView: View {
         .frame(height: 420)
     }
 
-    @MapContentBuilder
-    private func lobbyMapContent() -> some MapContent {
-        if !routeCoordinates.isEmpty {
-            MapPolyline(coordinates: routeCoordinates)
-                .stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-        }
-        lobbyWaypointAnnotations
-    }
-
-    @MapContentBuilder
-    private var lobbyWaypointAnnotations: some MapContent {
+    private var lobbyMapPins: [MapPin] {
         let waypoints = appState.currentRide?.waypoints ?? []
+        var pins: [MapPin] = []
         if let wp = waypoints.first(where: { $0.type == "START" }) {
-            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
-                LobbyStartPin()
-            }
+            pins.append(MapPin(id: "start", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .lobbyStart))
         }
-        ForEach(waypoints.filter { $0.type == "WAYPOINT" }, id: \.order) { wp in
-            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
-                WaypointPin(name: wp.name)
-            }
+        for wp in waypoints.filter({ $0.type == "WAYPOINT" }) {
+            pins.append(MapPin(id: "wp_\(wp.order)", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .waypoint(name: wp.name)))
         }
         if let wp = waypoints.first(where: { $0.type == "DESTINATION" }) {
-            Annotation("", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), anchor: .bottom) {
-                DestinationPin(name: wp.name)
-            }
+            pins.append(MapPin(id: "dest", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .destination(name: wp.name)))
         }
+        return pins
+    }
+
+    private var lobbyStopCoords: [CLLocationCoordinate2D] {
+        guard let ride = appState.currentRide else { return [] }
+        return ride.waypoints.sorted { $0.order < $1.order }
+            .map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
     }
 
     // MARK: - Roster Section
@@ -494,8 +516,40 @@ struct RideLobbyView: View {
             await calculateRoute(from: waypoints)
         }
 
+        vm.onRideUpdated = { [appState] event in
+            guard let existing = appState.currentRide else { return }
+            appState.currentRide = Ride(
+                id: existing.id,
+                title: event.title,
+                status: existing.status,
+                leaderId: existing.leaderId,
+                inviteCode: existing.inviteCode,
+                destinationName: event.destinationName,
+                destinationLat: event.destinationLat,
+                destinationLng: event.destinationLng,
+                distanceMeters: event.distanceMeters,
+                estimatedDurationSeconds: event.estimatedDurationSeconds,
+                maxAllowedParticipants: event.maxAllowedParticipants,
+                startedAt: existing.startedAt,
+                endedAt: existing.endedAt,
+                createdAt: existing.createdAt,
+                waypoints: event.waypoints,
+                participants: existing.participants
+            )
+            Task { await calculateRoute(from: event.waypoints) }
+        }
+
         if let token = try? await Clerk.shared.auth.getToken() {
             vm.setup(rideId: rideId, token: token)
+        }
+    }
+
+    @MainActor
+    private func refreshAfterEdit() async {
+        guard let rideId = appState.currentRideId else { return }
+        if let ride = try? await APIClient.shared.getRide(rideId) {
+            appState.currentRide = ride
+            await calculateRoute(from: ride.waypoints)
         }
     }
 
@@ -504,30 +558,20 @@ struct RideLobbyView: View {
         let sorted = waypoints.sorted { $0.order < $1.order }
         guard sorted.count >= 2 else { return }
 
-        let items = sorted.map {
-            MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)))
-        }
-
         var allCoords: [CLLocationCoordinate2D] = []
-        for i in 0..<items.count - 1 {
-            let req = MKDirections.Request()
-            req.source = items[i]; req.destination = items[i + 1]; req.transportType = .automobile
-            if let route = try? await MKDirections(request: req).calculate().routes.first {
-                let coords = route.polyline.coordinates
-                allCoords += (i == 0) ? coords : Array(coords.dropFirst())
+        for i in 0..<sorted.count - 1 {
+            let origin = CLLocationCoordinate2D(latitude: sorted[i].lat,   longitude: sorted[i].lng)
+            let dest   = CLLocationCoordinate2D(latitude: sorted[i+1].lat, longitude: sorted[i+1].lng)
+            if let result = try? await GoogleDirectionsService.route(from: origin, to: dest) {
+                allCoords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
             }
         }
 
         routeCoordinates = allCoords
         if !allCoords.isEmpty {
-            let poly = MKPolyline(coordinates: allCoords, count: allCoords.count)
-            let rect = poly.boundingMapRect
-            mapPosition = .rect(rect.insetBy(dx: -rect.width * 0.2, dy: -rect.height * 0.2))
+            cameraCommand = MapCameraCommand.fitRoute(allCoords, padding: 60)
         } else if let first = sorted.first {
-            mapPosition = .region(MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: first.lat, longitude: first.lng),
-                span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
-            ))
+            cameraCommand = MapCameraCommand.focus(lat: first.lat, lng: first.lng, zoom: 11)
         }
     }
 }

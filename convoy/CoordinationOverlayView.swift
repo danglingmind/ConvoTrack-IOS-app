@@ -1,5 +1,5 @@
 import SwiftUI
-import MapKit
+import CoreLocation
 
 struct CoordinationOverlayView: View {
     @Environment(\.dismiss) private var dismiss
@@ -249,7 +249,7 @@ struct RegroupBottomSheet: View {
 
     @State private var locationMode: LocationMode = .myPosition
     @State private var locationQuery = ""
-    @State private var locationResults: [MKMapItem] = []
+    @State private var locationResults: [PlaceResult] = []
     @State private var pickedLocation: (name: String, coordinate: CLLocationCoordinate2D)? = nil
     @State private var searchTask: Task<Void, Never>? = nil
 
@@ -276,14 +276,6 @@ struct RegroupBottomSheet: View {
                             Text("REGROUP").font(.headlineLg).foregroundColor(Color.primaryFixed)
                         }
                         Spacer()
-                        Text("COORD_REQ_09")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.onSurfaceVariant)
-                            .tracking(1)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.surfaceContainerHigh)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
                     }
                     .padding(.horizontal, 20)
 
@@ -471,8 +463,8 @@ struct RegroupBottomSheet: View {
         VStack(spacing: 0) {
             ForEach(Array(locationResults.prefix(4).enumerated()), id: \.offset) { index, item in
                 Button(action: {
-                    pickedLocation = (name: item.name ?? "", coordinate: item.placemark.coordinate)
-                    locationQuery = item.name ?? ""
+                    pickedLocation = (name: item.name, coordinate: item.coordinate)
+                    locationQuery = item.name
                     locationResults = []
                 }) {
                     HStack(spacing: 12) {
@@ -480,23 +472,20 @@ struct RegroupBottomSheet: View {
                             .foregroundColor(Color.primaryFixed)
                             .font(.system(size: 16))
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(item.name ?? "")
+                            Text(item.name)
                                 .font(.bodyMd)
                                 .foregroundColor(Color.onSurface)
                                 .lineLimit(1)
-                            let locality = [item.placemark.subLocality, item.placemark.locality]
-                                .compactMap { $0 }.joined(separator: ", ")
-                            if !locality.isEmpty {
-                                Text(locality)
+                            if let addr = item.formattedAddress, !addr.isEmpty {
+                                Text(addr)
                                     .font(.captionMd)
                                     .foregroundColor(Color.onSurfaceVariant)
                                     .lineLimit(1)
                             }
                         }
                         Spacer()
-                        if let userLoc = LocationService.shared.lastLocation,
-                           let itemLoc = item.placemark.location {
-                            let dist = userLoc.distance(from: itemLoc)
+                        if let userLoc = LocationService.shared.lastLocation {
+                            let dist = userLoc.distance(from: item.location)
                             Text(dist < 1000 ? "\(Int(dist)) m" : String(format: "%.1f km", dist / 1000))
                                 .font(.dataMono)
                                 .foregroundColor(Color.onSurfaceVariant)
@@ -520,23 +509,9 @@ struct RegroupBottomSheet: View {
 
     @MainActor
     private func performLocationSearch(_ query: String) async {
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = query
-        request.resultTypes = [.pointOfInterest, .address]
-        if let userLoc = LocationService.shared.lastLocation {
-            request.region = MKCoordinateRegion(
-                center: userLoc.coordinate,
-                latitudinalMeters: 50_000,
-                longitudinalMeters: 50_000
-            )
-        }
-        do {
-            let response = try await MKLocalSearch(request: request).start()
-            guard !Task.isCancelled else { return }
-            locationResults = response.mapItems
-        } catch {
-            locationResults = []
-        }
+        let results = await GooglePlacesService.search(query: query, near: LocationService.shared.lastLocation)
+        guard !Task.isCancelled else { return }
+        locationResults = results
     }
 }
 

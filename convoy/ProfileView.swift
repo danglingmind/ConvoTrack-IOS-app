@@ -7,12 +7,18 @@ struct ProfileView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var store: MembershipStore
     @Environment(\.dismiss) private var dismiss
-    @State private var units = "Metric"
-    @State private var mapStyle = "Dark"
+    @State private var userProfile: UserMeResponse? = nil
+    @State private var notifyNearbyRides: Bool = true
     @State private var isSigningOut = false
     @State private var showMembership = false
+    @State private var showDeleteAccountConfirm = false
+    @State private var isDeletingAccount = false
+    @State private var deleteError: String?
+    @State private var showDeleteError = false
+    @State private var showEditProfile = false
 
     private var displayName: String {
+        if let username = userProfile?.username, !username.isEmpty { return username }
         let parts = [clerk.user?.firstName, clerk.user?.lastName]
             .compactMap { $0 }.filter { !$0.isEmpty }
         let name = parts.joined(separator: " ")
@@ -55,11 +61,23 @@ struct ProfileView: View {
                             .tracking(4)
                             .padding(.horizontal, 4)
 
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                            PrefCard(icon: "ruler", label: "UNITS", value: units) { units = units == "Metric" ? "Imperial" : "Metric" }
-                            PrefCard(icon: "map", label: "MAP STYLE", value: mapStyle) { mapStyle = mapStyle == "Dark" ? "Satellite" : "Dark" }
+                        HStack {
+                            Label("Notify nearby rides", systemImage: "bell.badge")
+                                .font(.bodyMd)
+                                .foregroundColor(Color.onSurface)
+                            Spacer()
+                            Toggle("", isOn: $notifyNearbyRides)
+                                .labelsHidden()
+                                .tint(Color.primaryFixed)
+                                .onChange(of: notifyNearbyRides) { _, newVal in
+                                    Task { try? await APIClient.shared.updateProfile(
+                                        UpdateProfileRequest(notifyNearbyRides: newVal)) }
+                                }
                         }
-
+                        .padding(16)
+                        .background(Color.surfaceContainerHigh.opacity(0.8))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
                     }
                     .padding(.horizontal, 20)
 
@@ -93,15 +111,76 @@ struct ProfileView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
 
+                    // Delete Account — required by App Store Guideline 5.1.1
+                    Button(action: { showDeleteAccountConfirm = true }) {
+                        HStack(spacing: 8) {
+                            if isDeletingAccount {
+                                ProgressView().tint(Color.errorColor).scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "person.crop.circle.badge.minus")
+                            }
+                            Text(isDeletingAccount ? "DELETING..." : "DELETE ACCOUNT").font(.bodyMd)
+                        }
+                        .foregroundColor(Color.errorColor.opacity(0.7))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(Color.errorContainer.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.2), lineWidth: 1))
+                    }
+                    .disabled(isDeletingAccount || isSigningOut)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+
                     Color.clear.frame(height: 120)
                 }
             }
             .ignoresSafeArea(edges: .bottom)
+            .task {
+                if let p = try? await APIClient.shared.fetchMe() {
+                    userProfile = p
+                    notifyNearbyRides = p.notifyNearbyRides
+                }
+            }
             .sheet(isPresented: $showMembership) {
-                MembershipView()
-                    .environmentObject(store)
+                MembershipView().environmentObject(store)
+            }
+            .sheet(isPresented: $showEditProfile) {
+                EditProfileSheet(
+                    initialUsername:            userProfile?.username ?? "",
+                    initialPhone:               userProfile?.phone ?? "",
+                    initialPhoneVisible:        userProfile?.phoneVisible ?? false,
+                    initialEmailContact:        userProfile?.emailContact ?? "",
+                    initialEmailContactVisible: userProfile?.emailContactVisible ?? false,
+                    onSaved: { _ in
+                        Task {
+                            if let p = try? await APIClient.shared.fetchMe() {
+                                userProfile = p
+                                notifyNearbyRides = p.notifyNearbyRides
+                            }
+                        }
+                    }
+                )
+            }
+            .confirmationDialog(
+                "Delete Account",
+                isPresented: $showDeleteAccountConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Account", role: .destructive) {
+                    Task { await deleteAccount() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently delete your account and all ride history. Active subscriptions must be cancelled separately in Settings > Apple ID > Subscriptions. This cannot be undone.")
+            }
+            .alert("Deletion Failed", isPresented: $showDeleteError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(deleteError ?? "An error occurred. Please try again.")
             }
 
+            // Floating top bar
             HStack(alignment: .center, spacing: 12) {
                 ZStack(alignment: .bottomTrailing) {
                     AsyncImage(url: avatarUrl) { img in
@@ -124,11 +203,22 @@ struct ProfileView: View {
                         Circle().fill(Color.onPrimaryContainer).frame(width: 5, height: 5)
                     }
                 }
-                Text(displayName)
-                    .font(.headlineMd)
-                    .foregroundColor(Color.onSurface)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 6) {
+                    Text(displayName)
+                        .font(.headlineMd)
+                        .foregroundColor(Color.onSurface)
+                        .lineLimit(1)
+                    Button(action: { showEditProfile = true }) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color.onSurfaceVariant)
+                            .frame(width: 28, height: 28)
+                            .background(Color.surfaceContainerHigh)
+                            .clipShape(Circle())
+                    }
+                }
+
                 Spacer()
                 Image(systemName: "antenna.radiowaves.left.and.right")
                     .font(.iconNav)
@@ -137,6 +227,25 @@ struct ProfileView: View {
             }
             .padding(.horizontal, 20)
             .frame(minHeight: 56)
+        }
+    }
+}
+
+// MARK: - Account Actions
+
+extension ProfileView {
+    func deleteAccount() async {
+        isDeletingAccount = true
+        do {
+            try await clerk.user?.delete()
+            appState.currentRideId = nil
+            appState.inviteCode = nil
+            appState.currentRide = nil
+            dismiss()
+        } catch {
+            deleteError = error.localizedDescription
+            showDeleteError = true
+            isDeletingAccount = false
         }
     }
 }
@@ -232,34 +341,189 @@ extension ProfileView {
     }
 }
 
-// MARK: - Pref Card
+// MARK: - Edit Profile Sheet
 
-struct PrefCard: View {
-    let icon: String
-    let label: String
-    let value: String
-    let action: () -> Void
+struct EditProfileSheet: View {
+    let initialUsername: String
+    let initialPhone: String
+    let initialPhoneVisible: Bool
+    let initialEmailContact: String
+    let initialEmailContactVisible: Bool
+    let onSaved: (UpdateProfileRequest) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var username: String
+    @State private var phone: String
+    @State private var phoneVisible: Bool
+    @State private var emailContact: String
+    @State private var emailContactVisible: Bool
+    @State private var isSaving = false
+    @State private var errorMessage: String? = nil
+
+    init(
+        initialUsername: String,
+        initialPhone: String,
+        initialPhoneVisible: Bool,
+        initialEmailContact: String,
+        initialEmailContactVisible: Bool,
+        onSaved: @escaping (UpdateProfileRequest) -> Void
+    ) {
+        self.initialUsername            = initialUsername
+        self.initialPhone               = initialPhone
+        self.initialPhoneVisible        = initialPhoneVisible
+        self.initialEmailContact        = initialEmailContact
+        self.initialEmailContactVisible = initialEmailContactVisible
+        self.onSaved                    = onSaved
+        _username            = State(initialValue: initialUsername)
+        _phone               = State(initialValue: initialPhone)
+        _phoneVisible        = State(initialValue: initialPhoneVisible)
+        _emailContact        = State(initialValue: initialEmailContact)
+        _emailContactVisible = State(initialValue: initialEmailContactVisible)
+    }
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 0) {
-                Image(systemName: icon)
-                    .font(.iconLg)
-                    .foregroundColor(Color.primaryFixed)
-                Spacer()
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(label).font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
-                    Text(value).font(.headlineMd).foregroundColor(Color.onSurface)
+        NavigationStack {
+            ZStack {
+                Color.surfaceDim.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Username
+                        fieldSection(
+                            header: "USERNAME",
+                            note: "Other riders see your username instead of your name"
+                        ) {
+                            styledTextField("Choose a username", text: $username)
+                        }
+
+                        // Phone
+                        fieldSection(header: "MOBILE NUMBER") {
+                            styledTextField("e.g. +91 98765 43210", text: $phone)
+                                .keyboardType(.phonePad)
+                            visibilityRow(label: "Visible to other riders", isOn: $phoneVisible)
+                        }
+
+                        // Email contact
+                        fieldSection(header: "CONTACT EMAIL") {
+                            styledTextField("e.g. you@example.com", text: $emailContact)
+                                .keyboardType(.emailAddress)
+                                .textInputAutocapitalization(.never)
+                            visibilityRow(label: "Visible to other riders", isOn: $emailContactVisible)
+                        }
+
+                        if let err = errorMessage {
+                            Text(err)
+                                .font(.bodyMd)
+                                .foregroundColor(Color.errorColor)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 4)
+                        }
+
+                        Color.clear.frame(height: 40)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 120)
-            .padding(16)
-            .background(Color.surfaceContainerHigh.opacity(0.8))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
+            .navigationTitle("Edit Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .preferredColorScheme(.dark)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(Color.onSurfaceVariant)
+                        .disabled(isSaving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if isSaving {
+                        ProgressView().tint(Color.primaryFixed)
+                    } else {
+                        Button("Save") { Task { await save() } }
+                            .foregroundColor(Color.primaryFixed)
+                            .fontWeight(.semibold)
+                    }
+                }
+            }
         }
-        .buttonStyle(PlainButtonStyle())
+    }
+
+    // MARK: - Sub-views
+
+    @ViewBuilder
+    private func fieldSection<Content: View>(
+        header: String,
+        note: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(header)
+                .font(.labelCaps)
+                .foregroundColor(Color.primaryFixed)
+                .tracking(3)
+            VStack(spacing: 0) { content() }
+                .background(Color.surfaceContainerHigh)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
+            if let note {
+                Text(note)
+                    .font(.captionMd)
+                    .foregroundColor(Color.onSurfaceVariant)
+                    .padding(.horizontal, 4)
+            }
+        }
+    }
+
+    private func styledTextField(_ placeholder: String, text: Binding<String>) -> some View {
+        TextField(placeholder, text: text)
+            .font(.bodyMd)
+            .foregroundColor(Color.onSurface)
+            .tint(Color.primaryFixed)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+    }
+
+    private func visibilityRow(label: String, isOn: Binding<Bool>) -> some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.outlineVariant.opacity(0.4))
+                .frame(height: 0.5)
+                .padding(.horizontal, 16)
+            HStack {
+                Text(label)
+                    .font(.bodyMd)
+                    .foregroundColor(Color.onSurfaceVariant)
+                Spacer()
+                Toggle("", isOn: isOn)
+                    .labelsHidden()
+                    .tint(Color.primaryFixed)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    // MARK: - Save
+
+    private func save() async {
+        errorMessage = nil
+        isSaving = true
+        let req = UpdateProfileRequest(
+            username:            username.trimmingCharacters(in: .whitespaces).isEmpty ? nil : username.trimmingCharacters(in: .whitespaces),
+            phone:               phone.trimmingCharacters(in: .whitespaces).isEmpty ? nil : phone.trimmingCharacters(in: .whitespaces),
+            phoneVisible:        phoneVisible,
+            emailContact:        emailContact.trimmingCharacters(in: .whitespaces).isEmpty ? nil : emailContact.trimmingCharacters(in: .whitespaces),
+            emailContactVisible: emailContactVisible
+        )
+        do {
+            try await APIClient.shared.updateProfile(req)
+            onSaved(req)
+            dismiss()
+        } catch APIClientError.serverError(let msg) where msg == "USERNAME_TAKEN" {
+            errorMessage = "That username is already taken. Please choose another."
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isSaving = false
     }
 }
 
