@@ -153,8 +153,8 @@ New endpoint:
   Response (not LOBBY): 409 { error: "RIDE_NOT_IN_LOBBY", status: string }
 
 Share link formats:
-  Universal link: convoy.app/join/{inviteCode}
-  Deep link:      convoy://join/{inviteCode}
+  Universal link: motorcade.app/join/{inviteCode}
+  Deep link:      motorcade://join/{inviteCode}
 
 iOS app flow:
   1. User taps link or enters 6-char code
@@ -231,7 +231,7 @@ Returned in: GET /rides/:rideId/summary participants[].syncScore: number`,
   "MAP-1": {
     title: "Route Polyline — MapKit MKDirections (Client-Only)",
     decision: `Resolution: Route drawing is 100% client-side via Apple MapKit.
-No polyline is ever fetched from the convoy backend.
+No polyline is ever fetched from the motorcade backend.
 
 How it works:
   1. CREATE RIDE (iOS):
@@ -1024,7 +1024,7 @@ export default function TaskBoard() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
           <div>
             <div style={{ fontFamily: "'Syne', sans-serif", fontSize: "20px", fontWeight: 900, letterSpacing: "0.05em", color: "#f1f5f9" }}>
-              CONVOY RIDE <span style={{ color: "#3b82f6" }}>///</span> BACKEND SPEC <span style={{ color: "#a855f7" }}>v2</span>
+              MOTORCADE RIDE <span style={{ color: "#3b82f6" }}>///</span> BACKEND SPEC <span style={{ color: "#a855f7" }}>v2</span>
             </div>
             <div style={{ color: "#334155", fontSize: "10px", letterSpacing: "3px", marginTop: "3px" }}>
               IMPLEMENTATION TASK REGISTRY — {tasks.length} TASKS — ALL UI GAPS RESOLVED

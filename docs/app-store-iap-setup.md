@@ -1,6 +1,6 @@
 # App Store Connect — In-App Purchase Setup Guide
 
-Follow these steps when you're ready to go live with Convoy Pro subscriptions.
+Follow these steps when you're ready to go live with Motorcade Pro subscriptions.
 
 ---
 
@@ -8,7 +8,7 @@ Follow these steps when you're ready to go live with Convoy Pro subscriptions.
 
 - Apple Developer Program membership ($99/year) — must be active
 - Agreements, Tax, and Banking completed in App Store Connect (Payments & Financial Reports section)
-- Bundle ID `danglingmind.convoy` registered in the Apple Developer portal
+- Bundle ID `danglingmind.motorcade` registered in the Apple Developer portal
 
 ---
 
@@ -16,7 +16,7 @@ Follow these steps when you're ready to go live with Convoy Pro subscriptions.
 
 1. Go to [developer.apple.com](https://developer.apple.com) → Certificates, IDs & Profiles → Identifiers
 2. Click **+** → App IDs → App
-3. Set Bundle ID: `danglingmind.convoy`
+3. Set Bundle ID: `danglingmind.motorcade`
 4. Under Capabilities, check **In-App Purchase** ✓
 5. Register
 
@@ -26,17 +26,17 @@ Follow these steps when you're ready to go live with Convoy Pro subscriptions.
 
 1. Go to [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → My Apps → **+** → New App
 2. Platform: iOS
-3. Name: Convoy
-4. Bundle ID: `danglingmind.convoy`
-5. SKU: `convoy-ios` (any unique string, internal only)
+3. Name: Motorcade
+4. Bundle ID: `danglingmind.motorcade`
+5. SKU: `motorcade-ios` (any unique string, internal only)
 6. User Access: Full Access → Create
 
 ---
 
 ## Step 3 — Enable In-App Purchase Capability in Xcode
 
-1. Open `convoy.xcodeproj` in Xcode
-2. Select the **convoy** target → **Signing & Capabilities**
+1. Open `motorcade.xcodeproj` in Xcode
+2. Select the **motorcade** target → **Signing & Capabilities**
 3. Click **+** → search **In-App Purchase** → Add
 4. This adds the entitlement automatically (no code change needed)
 
@@ -44,37 +44,37 @@ Follow these steps when you're ready to go live with Convoy Pro subscriptions.
 
 ## Step 4 — Create the Subscription Group
 
-1. In App Store Connect → select the Convoy app → **Monetization** → **Subscriptions**
+1. In App Store Connect → select the Motorcade app → **Monetization** → **Subscriptions**
 2. Click **Create** next to Subscription Groups
-3. Reference Name: `Convoy Pro`
+3. Reference Name: `Motorcade Pro`
 4. Save — note the Group ID (you'll need it for localizations)
 
 ---
 
 ## Step 5 — Add the Two Subscription Products
 
-For each product below, click **+** inside the Convoy Pro group:
+For each product below, click **+** inside the Motorcade Pro group:
 
-### Monthly — `danglingmind.convoy.membership.monthly`
+### Monthly — `danglingmind.motorcade.membership.monthly`
 
 | Field | Value |
 |---|---|
-| Reference Name | Convoy Pro Monthly |
-| Product ID | `danglingmind.convoy.membership.monthly` |
+| Reference Name | Motorcade Pro Monthly |
+| Product ID | `danglingmind.motorcade.membership.monthly` |
 | Price | $4.99 USD |
 | Subscription Duration | 1 Month |
-| Display Name (en-US) | Convoy Pro Monthly |
+| Display Name (en-US) | Motorcade Pro Monthly |
 | Description | Up to 25 riders, full ride history, and advanced analytics. |
 
-### Yearly — `danglingmind.convoy.membership.yearly`
+### Yearly — `danglingmind.motorcade.membership.yearly`
 
 | Field | Value |
 |---|---|
-| Reference Name | Convoy Pro Yearly |
-| Product ID | `danglingmind.convoy.membership.yearly` |
+| Reference Name | Motorcade Pro Yearly |
+| Product ID | `danglingmind.motorcade.membership.yearly` |
 | Price | $39.99 USD |
 | Subscription Duration | 1 Year |
-| Display Name (en-US) | Convoy Pro Yearly |
+| Display Name (en-US) | Motorcade Pro Yearly |
 | Description | Up to 25 riders, full ride history, and advanced analytics. Save 33% vs monthly. |
 
 > **Critical**: the Product IDs must match exactly — the app hardcodes these strings.
@@ -92,7 +92,7 @@ Size: 640×920 px minimum (any iOS screenshot works).
 
 IAPs are reviewed alongside your first app submission (or a new app version):
 
-1. Create a new version under the Convoy app → **+** next to iOS App
+1. Create a new version under the Motorcade app → **+** next to iOS App
 2. In the **In-App Purchases** section of the version, add both subscriptions
 3. Submit the version for review
 
@@ -113,7 +113,7 @@ On TestFlight / a real device, StoreKit uses App Store Connect's **sandbox** env
 
 ## What changes in the code when you go live
 
-**Nothing.** The product IDs, StoreKit 2 purchase flow, and server activation endpoint are all production-ready. The simulator uses `convoy/convoy.storekit` for local testing; real devices always use App Store Connect.
+**Nothing.** The product IDs, StoreKit 2 purchase flow, and server activation endpoint are all production-ready. The simulator uses `motorcade/motorcade.storekit` for local testing; real devices always use App Store Connect.
 
 ---
 
@@ -121,12 +121,12 @@ On TestFlight / a real device, StoreKit uses App Store Connect's **sandbox** env
 
 - [ ] Apple Developer membership active
 - [ ] Tax & Banking forms completed in App Store Connect
-- [ ] Bundle ID `danglingmind.convoy` registered with In-App Purchase capability
+- [ ] Bundle ID `danglingmind.motorcade` registered with In-App Purchase capability
 - [ ] App created in App Store Connect
 - [ ] In-App Purchase capability added in Xcode (Step 3)
-- [ ] Subscription group "Convoy Pro" created
-- [ ] `danglingmind.convoy.membership.monthly` product created at $4.99
-- [ ] `danglingmind.convoy.membership.yearly` product created at $39.99
+- [ ] Subscription group "Motorcade Pro" created
+- [ ] `danglingmind.motorcade.membership.monthly` product created at $4.99
+- [ ] `danglingmind.motorcade.membership.yearly` product created at $39.99
 - [ ] Review screenshots attached to each product
 - [ ] App version submitted with both IAPs included
 - [ ] Sandbox tester created and tested on real device

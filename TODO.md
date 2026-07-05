@@ -1,4 +1,4 @@
-# Convoy — Launch Checklist
+# Motorcade — Launch Checklist
 
 ## Blocked: Must complete first
 
@@ -16,7 +16,7 @@
 
 ## Web (noto / vynl.in)
 
-- [ ] **Update the App Store link** in `src/app/convoy/page.tsx` (currently `https://apps.apple.com` placeholder) once you have the real App Store URL
+- [ ] **Update the App Store link** in `src/app/motorcade/page.tsx` (currently `https://apps.apple.com` placeholder) once you have the real App Store URL
 
 ---
 
