@@ -1,0 +1,70 @@
+{
+  "identifier" : "convotrack-membership",
+  "nonConsumableProducts" : [],
+  "nonRenewingSubscriptions" : [],
+  "products" : [],
+  "settings" : {
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingGracePeriodUnits" : 0,
+    "_billingGracePeriodValue" : 0,
+    "_locale" : "en_US",
+    "_renewalBehavior" : "RAPID_RENEWAL",
+    "_storeKitErrors" : []
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "convotrack-pro-group",
+      "localizations" : [],
+      "name" : "ConvoTrack Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "convotrack-membership-monthly",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlimited convotrack size, full ride history, and advanced analytics.",
+              "displayName" : "ConvoTrack Pro Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "danglingmind.convotrack.membership.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "ConvoTrack Pro Monthly",
+          "subscriptionGroupID" : "convotrack-pro-group",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "39.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "convotrack-membership-yearly",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlimited convotrack size, full ride history, and advanced analytics. Save 33% vs monthly.",
+              "displayName" : "ConvoTrack Pro Yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "danglingmind.convotrack.membership.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "ConvoTrack Pro Yearly",
+          "subscriptionGroupID" : "convotrack-pro-group",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 2,
+    "minor" : 0
+  }
+}

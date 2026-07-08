@@ -1,6 +1,6 @@
-# Motorcade Backend — Build Brief
+# ConvoTrack Backend — Build Brief
 
-Self-contained spec for building the motorcade backend from scratch.
+Self-contained spec for building the convotrack backend from scratch.
 No other files from the iOS repo are needed.
 
 ---
@@ -236,7 +236,7 @@ function generateInviteCode(): string {
 ```
 
 Share link format (custom URL scheme — no paid Apple Developer account needed):
-`motorcade://join/{inviteCode}`
+`convotrack://join/{inviteCode}`
 
 ---
 
@@ -712,7 +712,7 @@ Backend stores enum strings. iOS maps client-side:
 - `route_polyline` is stored in the DB but **never returned** in any response. iOS clients reconstruct routes via MKDirections from `waypoints[]`.
 - Emergency option in the iOS regroup sheet emits `ride:emergency`, NOT `ride:regroup`. Backend RG-1 rejects `type=EMERGENCY`.
 - No PTT / voice / audio features. Out of scope permanently.
-- Invite links use custom URL scheme `motorcade://join/{inviteCode}`, not universal links (no paid Apple Developer account required).
+- Invite links use custom URL scheme `convotrack://join/{inviteCode}`, not universal links (no paid Apple Developer account required).
 - SPLIT_THRESHOLD_METERS = **5000** (not 2000 as in earlier drafts).
 - iOS-only for now. No CORS configuration needed for native app. Add when web/Android clients arrive.
 - Rider title display names are mapped client-side on iOS. Backend stores raw enum strings.

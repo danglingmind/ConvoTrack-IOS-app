@@ -8,7 +8,7 @@ This is a pure SwiftUI iOS project — no package manager, no SPM dependencies, 
 
 **Run in simulator:**
 ```
-xcodebuild -project motorcade.xcodeproj -scheme motorcade -destination 'platform=iOS Simulator,name=iPhone 16' build
+xcodebuild -project convotrack.xcodeproj -scheme convotrack -destination 'platform=iOS Simulator,name=iPhone 16' build
 ```
 ### Backend Service Location
 While integrating with backend always refer to the API spec first and make sure all the payloads and responses are according to the contracts.
@@ -20,12 +20,12 @@ path : /Users/ricky/Workspace/convoy-backend/openapi.json
 
 **Open in Xcode (preferred for UI work):**
 ```
-open motorcade.xcodeproj
+open convotrack.xcodeproj
 ```
 
 **Key project settings:**
 - Swift 5.0, iOS deployment target 26.2
-- Bundle ID: `danglingmind.motorcade`
+- Bundle ID: `danglingmind.convotrack`
 - No test targets exist yet
 
 There are no lint, test, or CI commands — the project is pre-backend-integration prototype stage.
@@ -35,7 +35,7 @@ There are no lint, test, or CI commands — the project is pre-backend-integrati
 ### App Launch Flow
 `SplashView` (3.5s animated) → `AuthView` (Google/Apple/Rider ID) → `MainTabView`
 
-`MainTabView` owns global state and navigation. It wraps three tabs in individual `NavigationStack`s and hosts the `JoinRideView` sheet. The bottom nav (`MotorcadeBottomNav`) hides itself when `AppState.isRideActive == true` (set by `RideNavigationView.onAppear`).
+`MainTabView` owns global state and navigation. It wraps three tabs in individual `NavigationStack`s and hosts the `JoinRideView` sheet. The bottom nav (`ConvoTrackBottomNav`) hides itself when `AppState.isRideActive == true` (set by `RideNavigationView.onAppear`).
 
 ### Screen Flow
 ```
@@ -57,7 +57,7 @@ JoinRideView ────────────────────── 
 - `AppState` (`@StateObject` in `MainTabView`, injected via `@EnvironmentObject`): single boolean `isRideActive` that drives bottom nav visibility. `RideNavigationView` sets it on appear/disappear.
 - All other state is local `@State` — the app has no networking or persistent state yet; all data is hardcoded.
 
-### Theme System (`MotorcadeTheme.swift`)
+### Theme System (`ConvoTrackTheme.swift`)
 All colors and fonts are defined as `extension Color` and `extension Font` — never use raw hex strings or `Font.system(...)` inline in views.
 
 **Color palette** — dark-only, Material You-inspired:
@@ -74,11 +74,11 @@ All colors and fonts are defined as `extension Color` and `extension Font` — n
 - `.labelCaps` — 12pt bold monospaced (used for all-caps labels, status tags)
 - `.dataMono` — 14pt medium monospaced (live telemetry numbers)
 
-**Reusable modifiers/components** in `MotorcadeTheme.swift`:
+**Reusable modifiers/components** in `ConvoTrackTheme.swift`:
 - `LimePrimaryButton` — full-width lime CTA (apply with `.modifier(LimePrimaryButton())`)
 - `GlassCard` — semi-transparent surface with outline
-- `MotorcadeTopBar(title:)` — standard top bar with logo + antenna icon
-- `MotorcadeBottomNav` — 3-tab nav (FLAGGED / TRACK / PROFILE)
+- `ConvoTrackTopBar(title:)` — standard top bar with logo + antenna icon
+- `ConvoTrackBottomNav` — 3-tab nav (FLAGGED / TRACK / PROFILE)
 - `FloatingStatPill` — stat chip for map overlays
 - `ShareSheetPresenter` — UIViewControllerRepresentable wrapper for `UIActivityViewController` with medium sheet detent
 
@@ -106,7 +106,7 @@ The app is currently entirely hardcoded (dummy riders, coordinates, stats). Back
 - **Turn-by-turn nav** — P1 client-side via `MKDirections` → `MKRoute.steps`. No backend involvement. Banner currently removed from `RideNavigationView`.
 - **Rider titles** — backend stores enum strings (`RIDE_LEADER`, `PACE_KEEPER`, `TRAIL_GUARDIAN`, `FORMATION_RIDER`); iOS maps to display strings client-side.
 
-### Component Locations (not in MotorcadeTheme.swift)
+### Component Locations (not in ConvoTrackTheme.swift)
 - `Triangle` shape — defined in `RideNavigationView.swift`, used by map pins across lobby and navigation
 - `DrawerButtonStyle` — defined locally in `RiderDetailDrawer.swift`
-- `ShareSheetPresenter` — defined in `RideLobbyView.swift` (not MotorcadeTheme despite being reusable)
+- `ShareSheetPresenter` — defined in `RideLobbyView.swift` (not ConvoTrackTheme despite being reusable)

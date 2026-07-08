@@ -19,7 +19,7 @@ Add via Xcode → File → Add Package Dependencies:
 ### 0.2 New Files to Create
 
 ```
-motorcade/
+convotrack/
   Networking/
     APIClient.swift        — URLSession wrapper, auto-injects Clerk JWT
     SocketClient.swift     — Socket.IO singleton, typed event methods
@@ -36,7 +36,7 @@ New:
 ```swift
 class AppState: ObservableObject {
     @Published var isRideActive = false
-    @Published var currentUser: MotorcadeUser? = nil       // set after Clerk sign-in
+    @Published var currentUser: ConvoTrackUser? = nil       // set after Clerk sign-in
     @Published var currentRideId: String? = nil         // set after create/join
     @Published var currentRide: Ride? = nil             // full ride from GET /rides/:id
     @Published var liveRideState: RideStateUpdate? = nil // from ride:state_update socket
@@ -44,7 +44,7 @@ class AppState: ObservableObject {
 }
 ```
 
-### 0.4 Update motorcadeApp.swift
+### 0.4 Update convotrackApp.swift
 Configure Clerk with publishable key on app launch.
 
 ### 0.5 Models (Codable structs)
@@ -53,7 +53,7 @@ All structs needed — define once, used across all phases:
 
 ```swift
 // Auth
-struct MotorcadeUser: Codable { let id, name: String; let avatarUrl: String? }
+struct ConvoTrackUser: Codable { let id, name: String; let avatarUrl: String? }
 
 // Rides
 struct Ride: Codable {
@@ -140,7 +140,7 @@ struct APIError: Codable { let error: String }
 *Clerk SDK → real sign-in → JWT available for all subsequent requests.*
 
 ### Files changed
-- `motorcadeApp.swift` — configure Clerk
+- `convotrackApp.swift` — configure Clerk
 - `AuthView.swift` — wire Google + Apple buttons to real Clerk OAuth flows
 - `APIClient.swift` — implement `getToken()` helper using `Clerk.shared.session`
 
