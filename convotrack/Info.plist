@@ -34,7 +34,7 @@
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>ConvoTrack tracks your location during rides to share your position with the group, even when the app is in the background.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>ConvoTrack uses your location to show your position to other riders in the convotrack.</string>
+    <string>ConvoTrack uses your location to show your position to other riders in your group.</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>

@@ -7,9 +7,13 @@ struct AuthView: View {
     @EnvironmentObject private var membershipStore: MembershipStore
     @State private var navigateToMain = false
     @State private var appeared = false
-    @State private var isSigningIn = false
+    @State private var signingInProvider: AuthProvider?
     @State private var errorMessage: String?
     @State private var showError = false
+
+    private enum AuthProvider {
+        case google, apple
+    }
 
     var body: some View {
         ZStack {
@@ -116,7 +120,7 @@ struct AuthView: View {
                 border: Color.primaryFixed,
                 borderWidth: 2,
                 glowColor: Color.primaryFixed.opacity(0.35),
-                isLoading: isSigningIn,
+                isLoading: signingInProvider == .google,
                 action: signInWithGoogle
             )
 
@@ -132,7 +136,7 @@ struct AuthView: View {
                 border: Color.outline.opacity(0.3),
                 borderWidth: 1,
                 glowColor: .clear,
-                isLoading: false,
+                isLoading: signingInProvider == .apple,
                 action: signInWithApple
             )
 
@@ -182,14 +186,14 @@ struct AuthView: View {
             .shadow(color: glowColor, radius: 16)
         }
         .buttonStyle(.plain)
-        .disabled(isSigningIn)
+        .disabled(signingInProvider != nil)
         .frame(width: 350)
     }
 
     // MARK: - Auth Actions
 
     private func signInWithGoogle() {
-        isSigningIn = true
+        signingInProvider = .google
         Task {
             do {
                 try await clerk.auth.signInWithOAuth(provider: .google)
@@ -198,12 +202,12 @@ struct AuthView: View {
                 errorMessage = error.localizedDescription
                 showError = true
             }
-            isSigningIn = false
+            signingInProvider = nil
         }
     }
 
     private func signInWithApple() {
-        isSigningIn = true
+        signingInProvider = .apple
         Task {
             do {
                 try await clerk.auth.signInWithApple()
@@ -212,7 +216,7 @@ struct AuthView: View {
                 errorMessage = error.localizedDescription
                 showError = true
             }
-            isSigningIn = false
+            signingInProvider = nil
         }
     }
 

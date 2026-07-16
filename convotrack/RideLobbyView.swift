@@ -369,10 +369,9 @@ struct RideLobbyView: View {
                         let isMe = participant.userId == vm.myUserId
                         let name = isMe ? (myClerkName ?? participant.name) : participant.name
                         let status = isMe ? vm.myStatus : participant.status
-                        Button(action: { showRiderDetail = true }) {
-                            ParticipantRiderRow(participant: participant, nameOverride: name, statusOverride: status, isOnline: vm.onlineUserIds.contains(participant.userId))
-                        }
-                        .buttonStyle(PlainButtonStyle())
+                        // Tapping a rider to open their detail drawer is not yet
+                        // implemented — row is inert for now (drawer wired up later).
+                        ParticipantRiderRow(participant: participant, nameOverride: name, statusOverride: status, isOnline: vm.onlineUserIds.contains(participant.userId))
                     }
                 }
             }
