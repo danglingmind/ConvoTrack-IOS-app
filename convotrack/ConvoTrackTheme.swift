@@ -78,6 +78,7 @@ extension Font {
     static let dataMono = Font.system(size: 14, weight: .medium, design: .monospaced)
     static let toggleLabel = Font.system(size: 13, weight: .semibold)
     static let captionMd = Font.system(size: 12, weight: .regular)
+    static let captionSm = Font.system(size: 10, weight: .regular)
 
     // Icon sizes — use these on Image(systemName:) instead of inline .font(.system(...))
     static let iconXS   = Font.system(size: 14, weight: .semibold)

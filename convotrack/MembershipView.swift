@@ -194,36 +194,28 @@ struct MembershipView: View {
                         .foregroundColor(isSelected ? Color.onSurface : Color.onSurfaceVariant)
                         .tracking(1.5)
 
-                    Text(isYearly
-                         ? "\(perMonthLabel(product)) / mo · billed annually"
-                         : "Billed every month")
+                    Text(isYearly ? "Billed every 12 months" : "Billed every month")
                         .font(.captionMd)
                         .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
                 }
 
                 Spacer()
 
-                // Price block
+                // Price block — the billed amount is always the dominant element
+                // (Guideline 3.1.2(c)); calculated per-month pricing stays subordinate.
                 VStack(alignment: .trailing, spacing: 2) {
+                    Text(isYearly ? "\(product.displayPrice) / yr" : "\(product.displayPrice) / mo")
+                        .font(.headlineMd)
+                        .foregroundColor(
+                            isSelected
+                                ? (isYearly ? Color.primaryFixed : Color.onSurface)
+                                : Color.onSurface
+                        )
+
                     if isYearly {
-                        Text(perMonthLabel(product))
-                            .font(.headlineMd)
-                            .foregroundColor(isSelected ? Color.primaryFixed : Color.onSurface)
-
-                        if let monthly = store.monthlyProduct {
-                            Text(monthly.displayPrice)
-                                .font(.captionMd)
-                                .strikethrough(true, color: Color.onSurfaceVariant.opacity(0.5))
-                                .foregroundColor(Color.onSurfaceVariant.opacity(0.5))
-                        }
-                    } else {
-                        Text(product.displayPrice)
-                            .font(.headlineMd)
-                            .foregroundColor(isSelected ? Color.onSurface : Color.onSurfaceVariant)
-
-                        Text("/ mo")
-                            .font(.captionMd)
-                            .foregroundColor(Color.onSurfaceVariant.opacity(0.6))
+                        Text("≈ \(perMonthLabel(product)) / mo")
+                            .font(.captionSm)
+                            .foregroundColor(Color.onSurfaceVariant.opacity(0.55))
                     }
                 }
             }

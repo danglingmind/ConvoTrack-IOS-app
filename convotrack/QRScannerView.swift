@@ -124,7 +124,7 @@ struct QRScannerSheet: View {
                 .font(.bodyMd)
                 .foregroundColor(Color.onSurfaceVariant)
                 .multilineTextAlignment(.center)
-            Button("Allow Camera") {
+            Button("Continue") {
                 AVCaptureDevice.requestAccess(for: .video) { granted in
                     DispatchQueue.main.async {
                         cameraPermission = granted ? .authorized : .denied
