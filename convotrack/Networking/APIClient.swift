@@ -133,6 +133,10 @@ final class APIClient {
         try await fetchVoid("/rides/\(rideId)/join", method: "POST")
     }
 
+    func removeParticipant(rideId: String, userId: String) async throws {
+        try await fetchVoid("/rides/\(rideId)/participants/\(userId)", method: "DELETE")
+    }
+
     func startRide(_ rideId: String) async throws {
         try await fetchVoid("/rides/\(rideId)/start", method: "POST")
     }

@@ -55,8 +55,17 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var hasMarkedArrived: Bool = false
     @Published var showRegroupToast: Bool = false
     @Published var showRegroupResolvedToast: Bool = false
+    @Published var activeEmergency: EmergencyEvent? = nil
 
     var amILeader: Bool { !myUserId.isEmpty && myUserId == leaderId }
+
+    var emergencyReporterName: String {
+        guard let e = activeEmergency else { return "" }
+        if e.userId == myUserId { return "You" }
+        return leaderboardRows.first { $0.id == e.userId }?.name
+            ?? staticParticipants.first { $0.userId == e.userId }?.name
+            ?? "A rider"
+    }
 
     var etaString: String {
         guard routeExpectedTravelTime > 0, totalDistanceMeters > 0, myDistanceToGoalKm >= 0 else { return "--:--" }
@@ -85,6 +94,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var lastCameraTickDate: Date = .distantPast
     private var remainingStops: [CLLocationCoordinate2D] = []
     private var regroupResolvedToastTask: Task<Void, Never>? = nil
+    private var emergencyDismissTask: Task<Void, Never>? = nil
     private var isRerouteInFlight = false
     private var lastRerouteOrigin: CLLocation? = nil
     private var needsInitialRouteCheck = false   // bypasses off-route debounce on first GPS fix
@@ -138,6 +148,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         socket.onSplitResolved = { [weak self] in self?.showSplitAlert = false }
         socket.onRegroupStarted = { [weak self] event in self?.handleRegroupStarted(event) }
         socket.onRegroupResolved = { [weak self] regroupId in self?.handleRegroupResolved(regroupId) }
+        socket.onEmergencyStarted = { [weak self] event in self?.handleEmergencyStarted(event) }
 
         // Re-join room so the server sends the current state snapshot to this client
         // and so state updates are received after any socket reconnect.
@@ -157,6 +168,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
     func teardown() {
         regroupResolvedToastTask?.cancel()
+        emergencyDismissTask?.cancel()
         LocationService.shared.stop()
         LocationService.shared.delegate = nil
         LocationService.shared.onHeadingUpdate = nil
@@ -165,6 +177,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         SocketClient.shared.onSplitResolved = nil
         SocketClient.shared.onRegroupStarted = nil
         SocketClient.shared.onRegroupResolved = nil
+        SocketClient.shared.onEmergencyStarted = nil
         SocketClient.shared.onParticipantOffline = nil
     }
 
@@ -232,6 +245,17 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         regroupResolvedToastTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2.5))
             self?.showRegroupResolvedToast = false
+        }
+    }
+
+    private func handleEmergencyStarted(_ event: EmergencyEvent) {
+        activeEmergency = event
+        SirenPlayer.shared.play(times: 3)
+        // No server-side resolve for emergencies — auto-clear the alert locally.
+        emergencyDismissTask?.cancel()
+        emergencyDismissTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            withAnimation { self?.activeEmergency = nil }
         }
     }
 
@@ -641,6 +665,9 @@ struct RideNavigationView: View {
         if let regroup = vm.activeRegroup {
             pins.append(MapPin(id: "regroup", coordinate: CLLocationCoordinate2D(latitude: regroup.lat, longitude: regroup.lng), style: .regroup(type: regroup.type)))
         }
+        if let emergency = vm.activeEmergency {
+            pins.append(MapPin(id: "emergency", coordinate: CLLocationCoordinate2D(latitude: emergency.lat, longitude: emergency.lng), style: .emergency))
+        }
         return pins
     }
 
@@ -785,6 +812,18 @@ struct RideNavigationView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                         .animation(.spring(), value: vm.showRegroupResolvedToast)
                 }
+
+                if let emergency = vm.activeEmergency {
+                    EmergencyAlertBanner(
+                        reporterName: vm.emergencyReporterName,
+                        message: emergency.message,
+                        onDismiss: { withAnimation { vm.activeEmergency = nil } }
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(), value: vm.activeEmergency)
+                }
             }
 
             Spacer()
@@ -811,11 +850,17 @@ struct RideNavigationView: View {
             }
 
             if vm.activeRegroup != nil && isNavigationActive {
-                arrivedButton
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 12)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(.spring(), value: vm.activeRegroup != nil)
+                Group {
+                    if vm.hasMarkedArrived {
+                        waitingForOthersPill
+                    } else {
+                        arrivedButton
+                    }
+                }
+                .padding(.bottom, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(response: 0.3), value: vm.hasMarkedArrived)
+                .animation(.spring(), value: vm.activeRegroup != nil)
             }
 
             if isNavigationActive {
@@ -1150,28 +1195,38 @@ struct RideNavigationView: View {
     // MARK: - Arrived Button
 
     private var arrivedButton: some View {
-        Button(action: {
-            if !vm.hasMarkedArrived { vm.markArrivedAtRegroup() }
-        }) {
-            HStack(spacing: 10) {
-                Image(systemName: vm.hasMarkedArrived ? "clock.fill" : "checkmark.circle.fill")
-                    .font(.system(size: 17, weight: .semibold))
-                Text(vm.hasMarkedArrived ? "WAITING FOR OTHERS..." : "MARK AS ARRIVED")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+        Button(action: { vm.markArrivedAtRegroup() }) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("MARK AS ARRIVED")
+                    .font(.labelCaps)
                     .tracking(0.5)
             }
-            .foregroundColor(vm.hasMarkedArrived ? Color.onSurfaceVariant : Color.onPrimaryFixed)
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .background(vm.hasMarkedArrived ? Color.surfaceContainerHigh : Color.primaryFixed)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(
-                vm.hasMarkedArrived ? Color.outlineVariant.opacity(0.4) : Color.clear,
-                lineWidth: 1
-            ))
+            .foregroundColor(Color.onPrimaryFixed)
+            .padding(.horizontal, 20)
+            .frame(height: 44)
+            .background(Color.primaryFixed, in: Capsule())
+            .shadow(color: Color.primaryFixed.opacity(0.5), radius: 12, y: 2)
         }
-        .disabled(vm.hasMarkedArrived)
-        .animation(.spring(response: 0.3), value: vm.hasMarkedArrived)
+    }
+
+    // Subtle, out-of-focus indicator shown after this rider has marked arrived,
+    // while we wait for the regroup to be resolved. Deliberately small so it
+    // doesn't compete with the map or the primary bottom controls.
+    private var waitingForOthersPill: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.fill")
+                .font(.system(size: 10, weight: .semibold))
+            Text("WAITING FOR OTHERS")
+                .font(.labelCaps)
+                .tracking(0.5)
+        }
+        .foregroundColor(Color.onSurfaceVariant)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
     }
 
     // MARK: - Right Stat Pills
@@ -1511,28 +1566,28 @@ struct RegroupPin: View {
 
     private var icon: String {
         switch type {
-        case "FUEL":   return "fuelpump.fill"
-        case "FOOD":   return "fork.knife"
-        case "SCENIC": return "camera.fill"
-        default:       return "hand.raised.fill"
+        case "FUEL":      return "fuelpump.fill"
+        case "FOOD":      return "fork.knife"
+        case "SCENIC":    return "camera.fill"
+        default:          return "hand.raised.fill"
         }
     }
 
     private var accentColor: Color {
         switch type {
-        case "FUEL":   return Color(red: 1.0, green: 0.63, blue: 0.0)   // amber
-        case "FOOD":   return Color(red: 1.0, green: 0.43, blue: 0.0)   // orange
-        case "SCENIC": return Color(red: 0.01, green: 0.61, blue: 0.9)  // sky blue
-        default:       return Color(red: 0.48, green: 0.11, blue: 0.64) // purple
+        case "FUEL":      return Color(red: 1.0, green: 0.63, blue: 0.0)   // amber
+        case "FOOD":      return Color(red: 1.0, green: 0.43, blue: 0.0)   // orange
+        case "SCENIC":    return Color(red: 0.01, green: 0.61, blue: 0.9)  // sky blue
+        default:          return Color(red: 0.48, green: 0.11, blue: 0.64) // purple
         }
     }
 
     private var label: String {
         switch type {
-        case "FUEL":   return "FUEL STOP"
-        case "FOOD":   return "FOOD STOP"
-        case "SCENIC": return "SCENIC STOP"
-        default:       return "STOP"
+        case "FUEL":      return "FUEL STOP"
+        case "FOOD":      return "FOOD STOP"
+        case "SCENIC":    return "SCENIC STOP"
+        default:          return "STOP"
         }
     }
 
@@ -1555,6 +1610,33 @@ struct RegroupPin: View {
                 .tracking(0.5)
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(Color.surfaceContainerHigh.opacity(0.92))
+                .clipShape(Capsule())
+        }
+    }
+}
+
+// MARK: - Emergency Pin
+
+/// Distinct from RegroupPin — an emergency is its own concept, not a regroup "type".
+struct EmergencyPin: View {
+    var body: some View {
+        VStack(spacing: 2) {
+            ZStack {
+                Circle()
+                    .fill(Color.errorColor)
+                    .frame(width: 40, height: 40)
+                    .shadow(color: Color.errorColor.opacity(0.7), radius: 10)
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            Triangle().fill(Color.errorColor).frame(width: 8, height: 5).offset(y: -1)
+            Text("EMERGENCY")
+                .font(.system(size: 7, weight: .black, design: .monospaced))
+                .foregroundColor(.white)
+                .tracking(0.5)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Color.errorColor.opacity(0.92))
                 .clipShape(Capsule())
         }
     }
@@ -1640,6 +1722,50 @@ struct RegroupResolvedBanner: View {
         .background(Color.tertiaryFixed.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.tertiaryFixed.opacity(0.5), lineWidth: 1.5))
+    }
+}
+
+// MARK: - Emergency Alert Banner
+
+struct EmergencyAlertBanner: View {
+    let reporterName: String
+    let message: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(Color.errorColor)
+                .frame(width: 36, height: 36)
+                .background(Color.errorColor.opacity(0.18))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("EMERGENCY")
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .foregroundColor(Color.errorColor)
+                    .tracking(1.5)
+                Text("\(reporterName) needs help — head to their location")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Color.onSurface)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 4)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Color.onSurfaceVariant)
+                    .frame(width: 28, height: 28)
+                    .background(Color.surfaceContainerHigh.opacity(0.6))
+                    .clipShape(Circle())
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.errorContainer.opacity(0.22))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.6), lineWidth: 1.5))
+        .shadow(color: Color.errorColor.opacity(0.3), radius: 10, y: 3)
     }
 }
 

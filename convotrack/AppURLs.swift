@@ -12,4 +12,17 @@ enum AppURLs {
     // add a custom domain) and update this URL — the `-hx3c` suffix is Render-assigned, so the
     // new host isn't predictable from here. Left as-is to avoid breaking all API/socket calls.
     static let backendBaseURL = URL(string: "https://convoy-backend-hx3c.onrender.com")!
+
+    // MARK: - Ride invite deep links
+    // Shared invite links must be real HTTPS Universal Links, not the
+    // `convotrack://` custom scheme (that isn't tappable in messaging apps and
+    // has no fallback when the app isn't installed). This host must match the
+    // Associated Domains entitlement (`applinks:<host>`) and the backend's
+    // apple-app-site-association file.
+    static let joinLinkHost = "convoy-backend-hx3c.onrender.com"
+
+    /// Canonical shareable invite link, e.g. https://…/convotrack/join/ABC123
+    static func joinLink(code: String) -> String {
+        "\(backendBaseURL.absoluteString)/convotrack/join/\(code)"
+    }
 }

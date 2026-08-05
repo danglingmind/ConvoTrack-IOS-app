@@ -22,12 +22,17 @@ struct QRScannerView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: ScannerViewController, context: Context) {}
 
     private static func extractInviteCode(from raw: String) -> String {
-        // convotrack://join/ABC123
-        if let url = URL(string: raw),
-           url.scheme == "convotrack",
-           url.host == "join",
-           let segment = url.pathComponents.first(where: { $0 != "/" }) {
-            return String(segment.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
+        if let url = URL(string: raw) {
+            // convotrack://join/ABC123
+            if url.scheme == "convotrack", url.host == "join",
+               let segment = url.pathComponents.first(where: { $0 != "/" }) {
+                return String(segment.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
+            }
+            // https://<host>/convotrack/join/ABC123 (Universal Link) — validate the host to
+            // match ConvoTrackApp.handleDeepLink, so an off-domain link can't masquerade as an invite.
+            if url.scheme == "https", url.host == AppURLs.joinLinkHost, url.path.hasPrefix("/convotrack/join/") {
+                return String(url.lastPathComponent.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
+            }
         }
         // Plain 6-char code
         return String(raw.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))

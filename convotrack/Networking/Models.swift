@@ -29,6 +29,20 @@ struct Ride: Codable {
     let participants: [RideParticipant]
 }
 
+extension Ride {
+    /// A copy with a changed status. Centralizes the field copy so call sites don't hand-rebuild
+    /// the struct (and a new `Ride` field becomes a compile error here, not a silent drop).
+    func with(status: String) -> Ride {
+        Ride(
+            id: id, title: title, status: status, leaderId: leaderId, inviteCode: inviteCode,
+            destinationName: destinationName, destinationLat: destinationLat, destinationLng: destinationLng,
+            distanceMeters: distanceMeters, estimatedDurationSeconds: estimatedDurationSeconds,
+            maxAllowedParticipants: maxAllowedParticipants, startedAt: startedAt, endedAt: endedAt,
+            createdAt: createdAt, waypoints: waypoints, participants: participants
+        )
+    }
+}
+
 struct Waypoint: Codable {
     let order: Int
     let name: String
@@ -37,13 +51,15 @@ struct Waypoint: Codable {
     let lng: Double
 }
 
-struct RideParticipant: Codable {
+struct RideParticipant: Codable, Identifiable {
     let userId: String
     let name: String
     let avatarUrl: String?
     let status: String
     let isLeader: Bool
     let joinedAt: String
+
+    var id: String { userId }
 }
 
 // MARK: - Create Ride
@@ -117,6 +133,17 @@ struct RegroupEvent: Codable, Equatable {
     let lat: Double
     let lng: Double
     let createdBy: String
+    let createdAt: String
+}
+
+// Fire-and-forget critical alert. Unlike RegroupEvent it has no server-side
+// resolve/arrived flow — it is broadcast once and dismissed locally.
+struct EmergencyEvent: Codable, Equatable {
+    let emergencyId: String
+    let userId: String
+    let lat: Double
+    let lng: Double
+    let message: String
     let createdAt: String
 }
 

@@ -8,15 +8,18 @@ final class SocketClient {
     private var socket: SocketIOClient?
 
     // MARK: - Event Callbacks (set by views)
+    var onConnect: (() -> Void)?
     var onStateUpdate: ((RideStateUpdate) -> Void)?
     var onParticipantJoined: ((RideParticipant) -> Void)?
     var onParticipantLeft: ((String) -> Void)?
+    var onParticipantRemoved: ((String) -> Void)?   // userId removed by leader
     var onParticipantOffline: ((String) -> Void)?
     var onParticipantReady: ((String) -> Void)?
+    var onPresence: (([String]) -> Void)?   // authoritative online userIds (heartbeat-based)
     var onLobbyRoster: (([RideParticipant], String) -> Void)?
     var onSplitDetected: (([String: Any]) -> Void)?
     var onSplitResolved: (() -> Void)?
-    var onEmergencyStarted: (([String: Any]) -> Void)?
+    var onEmergencyStarted: ((EmergencyEvent) -> Void)?
     var onRegroupStarted: ((RegroupEvent) -> Void)?
     var onRegroupResolved: ((String) -> Void)?   // regroupId
     var onRideUpdated: ((RideUpdatedEvent) -> Void)?
@@ -107,10 +110,22 @@ final class SocketClient {
         socket?.emit("ride:regroup_arrived", ["rideId": rideId, "regroupId": regroupId])
     }
 
+    // MARK: - Emit: Presence heartbeat
+
+    /// Periodic liveness ping. The server keeps the user in the ride's online set while these
+    /// arrive within its TTL; stopping (background/lock/kill) lets them lapse to offline.
+    func emitHeartbeat(rideId: String) {
+        socket?.emit("ride:heartbeat", ["rideId": rideId])
+    }
+
     // MARK: - Incoming Event Handlers
 
     private func registerHandlers() {
         guard let socket else { return }
+
+        socket.on(clientEvent: .connect) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.onConnect?() }
+        }
 
         socket.on("ride:state_update") { [weak self] data, _ in
             guard let self,
@@ -134,6 +149,12 @@ final class SocketClient {
             DispatchQueue.main.async { self?.onParticipantLeft?(userId) }
         }
 
+        socket.on("ride:participant_removed") { [weak self] data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let userId = dict["userId"] as? String else { return }
+            DispatchQueue.main.async { self?.onParticipantRemoved?(userId) }
+        }
+
         socket.on("ride:participant_offline") { [weak self] data, _ in
             guard let dict = data.first as? [String: Any],
                   let userId = dict["userId"] as? String else { return }
@@ -144,6 +165,12 @@ final class SocketClient {
             guard let dict = data.first as? [String: Any],
                   let userId = dict["userId"] as? String else { return }
             DispatchQueue.main.async { self?.onParticipantReady?(userId) }
+        }
+
+        socket.on("ride:presence") { [weak self] data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let online = dict["online"] as? [String] else { return }
+            DispatchQueue.main.async { self?.onPresence?(online) }
         }
 
         socket.on("ride:lobby_roster") { [weak self] data, _ in
@@ -166,8 +193,11 @@ final class SocketClient {
         }
 
         socket.on("ride:emergency_started") { [weak self] data, _ in
-            guard let dict = data.first as? [String: Any] else { return }
-            DispatchQueue.main.async { self?.onEmergencyStarted?(dict) }
+            guard let self,
+                  let dict = data.first as? [String: Any],
+                  let json = try? JSONSerialization.data(withJSONObject: dict),
+                  let event = try? self.decoder.decode(EmergencyEvent.self, from: json) else { return }
+            DispatchQueue.main.async { self.onEmergencyStarted?(event) }
         }
 
         socket.on("ride:regroup_started") { [weak self] data, _ in

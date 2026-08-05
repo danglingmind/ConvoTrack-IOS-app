@@ -13,6 +13,8 @@ final class LobbyViewModel: ObservableObject {
     @Published var isStarting = false
     @Published var socketConnected = false
     @Published var startError: String? = nil
+    @Published var removingUserId: String? = nil   // in-flight removal target
+    @Published var removeError: String? = nil
 
     var rideId = ""
     var myUserId = ""
@@ -20,6 +22,11 @@ final class LobbyViewModel: ObservableObject {
 
     var amILeader: Bool { !myUserId.isEmpty && myUserId == leaderId }
     var onRideUpdated: ((RideUpdatedEvent) -> Void)?
+    // Fired when the ride transitions LOBBY → ACTIVE (leader started it).
+    // Lets non-leader riders auto-navigate into RideNavigationView.
+    var onRideStarted: (() -> Void)?
+    // Fired when *this* rider is removed from the ride by the leader.
+    var onRemovedFromRide: (() -> Void)?
 
     // Leader can start when alone OR when all non-leaders have readied up
     var canStart: Bool {
@@ -34,16 +41,21 @@ final class LobbyViewModel: ObservableObject {
             socket.connect(token: token)
         }
 
-        // state_update carries LiveParticipant (GPS/progress) — consumed by RideNavigationView, not lobby
-        socket.onStateUpdate = nil
+        // state_update carries LiveParticipant (GPS/progress) — the lobby ignores the
+        // telemetry payload, but uses it to detect the LOBBY → ACTIVE transition so
+        // non-leader riders auto-advance when the leader starts the ride.
+        socket.onStateUpdate = { [weak self] update in
+            guard let self, update.status == "ACTIVE" else { return }
+            self.onRideStarted?()
+        }
 
         socket.onLobbyRoster = { [weak self] participants, leaderId in
             guard let self else { return }
-            // Roster snapshot from server — use it to seed the list if REST failed
+            // Membership snapshot — seed only if REST hasn't populated the roster yet (fallback).
+            // Live additions/removals come via onParticipantJoined / _Left / _Removed. Presence
+            // (green dot) is separate (ride:presence).
             if self.participants.isEmpty { self.participants = participants }
             if self.leaderId.isEmpty { self.leaderId = leaderId }
-            // Replace with authoritative snapshot — anyone missing here is offline
-            self.onlineUserIds = Set(participants.map { $0.userId })
         }
 
         socket.onParticipantJoined = { [weak self] participant in
@@ -51,16 +63,28 @@ final class LobbyViewModel: ObservableObject {
             if !self.participants.contains(where: { $0.userId == participant.userId }) {
                 self.participants.append(participant)
             }
+            // Optimistic: a just-joined rider is online now; the next ride:presence snapshot
+            // (authoritative) reconciles it. Avoids a grey flash before the first snapshot.
             self.onlineUserIds.insert(participant.userId)
         }
 
         socket.onParticipantLeft = { [weak self] userId in
             self?.participants.removeAll { $0.userId == userId }
-            self?.onlineUserIds.remove(userId)
         }
 
-        socket.onParticipantOffline = { [weak self] userId in
-            self?.onlineUserIds.remove(userId)
+        socket.onParticipantRemoved = { [weak self] userId in
+            guard let self else { return }
+            self.participants.removeAll { $0.userId == userId }
+            self.removingUserId = nil
+            // If I'm the one removed, exit the ride.
+            if userId == self.myUserId { self.onRemovedFromRide?() }
+        }
+
+        // Authoritative online set — heartbeat/TTL-based snapshot from the server. This is the
+        // ONLY thing that drives the green presence dot, so a lingering socket / roster
+        // membership can never falsely show a locked or closed device as online.
+        socket.onPresence = { [weak self] online in
+            self?.onlineUserIds = Set(online)
         }
 
         socket.onParticipantReady = { [weak self] userId in
@@ -73,15 +97,47 @@ final class LobbyViewModel: ObservableObject {
             self?.onRideUpdated?(event)
         }
 
-        // Join the room after a brief moment for connection to establish
-        Task {
-            try? await Task.sleep(for: .milliseconds(400))
-            socket.joinRoom(rideId: rideId)
-            self.socketConnected = true
-            if !self.myUserId.isEmpty {
-                self.onlineUserIds.insert(self.myUserId)
-            }
+        // Join the room once the socket is actually connected, rather than racing a
+        // fixed timer. Covers both a fresh connect and a reused (already-open) socket.
+        socket.onConnect = { [weak self] in
+            self?.joinRoom(rideId: rideId)
         }
+        if socket.isConnected {
+            joinRoom(rideId: rideId)
+        }
+
+        startHeartbeat(rideId: rideId)
+    }
+
+    private func joinRoom(rideId: String) {
+        SocketClient.shared.joinRoom(rideId: rideId)
+        socketConnected = true
+        // Optimistic self-presence so my own dot isn't grey until the first ride:presence
+        // snapshot lands; the snapshot then becomes authoritative.
+        if !myUserId.isEmpty { onlineUserIds.insert(myUserId) }
+    }
+
+    // MARK: - Presence heartbeat
+
+    private var heartbeatTimer: Timer?
+
+    private func startHeartbeat(rideId: String) {
+        heartbeatTimer?.invalidate()
+        // Emit now, then every 8s. Timers don't fire while the app is suspended, so
+        // backgrounding / locking / killing the app stops heartbeats and the server's TTL
+        // lapses us to offline — no reliance on a (flaky) socket disconnect.
+        SocketClient.shared.emitHeartbeat(rideId: rideId)
+        // [weak self] + self-invalidate so the repeating timer can't outlive the VM and keep a
+        // departed rider falsely "online" if a teardown path deallocs without calling disconnect().
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] timer in
+            guard self != nil else { timer.invalidate(); return }
+            SocketClient.shared.emitHeartbeat(rideId: rideId)
+        }
+    }
+
+    private func stopHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
     }
 
     func markReady(rideId: String) {
@@ -96,6 +152,21 @@ final class LobbyViewModel: ObservableObject {
                 self?.myStatus = "WAITING"
                 self?.updateParticipantStatus(userId: self?.myUserId ?? "", status: "WAITING")
             }
+        }
+    }
+
+    func removeParticipant(userId: String) async {
+        guard amILeader, userId != myUserId else { return }
+        removingUserId = userId
+        removeError = nil
+        do {
+            try await APIClient.shared.removeParticipant(rideId: rideId, userId: userId)
+            // The ride:participant_removed broadcast (which the leader also receives)
+            // performs the actual roster removal + clears removingUserId.
+        } catch {
+            removingUserId = nil
+            removeError = (error as? APIClientError)?.localizedDescription
+                ?? error.localizedDescription
         }
     }
 
@@ -118,9 +189,25 @@ final class LobbyViewModel: ObservableObject {
     }
 
     func disconnect() {
-        SocketClient.shared.disconnect()
+        stopHeartbeat()
+        // Clear the callbacks this VM registered on the shared client so a later reconnect /
+        // screen reuse can't fire stale lobby closures (e.g. a spurious joinRoom or a
+        // state handler bound to a dead VM).
+        let socket = SocketClient.shared
+        socket.onConnect = nil
+        socket.onStateUpdate = nil
+        socket.onLobbyRoster = nil
+        socket.onParticipantJoined = nil
+        socket.onParticipantLeft = nil
+        socket.onParticipantRemoved = nil
+        socket.onParticipantReady = nil
+        socket.onPresence = nil
+        socket.onRideUpdated = nil
+        socket.disconnect()
         socketConnected = false
     }
+
+    deinit { heartbeatTimer?.invalidate() }
 
     private func updateParticipantStatus(userId: String, status: String) {
         guard let idx = participants.firstIndex(where: { $0.userId == userId }) else { return }
@@ -149,6 +236,9 @@ struct RideLobbyView: View {
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var cameraCommand: MapCameraCommand? = nil
     @State private var showStartError = false
+    @State private var participantToManage: RideParticipant? = nil
+    @State private var showRemovedAlert = false
+    @State private var showRemoveError = false
 
     // MARK: - Derived
 
@@ -162,14 +252,16 @@ struct RideLobbyView: View {
 
     private var deepLinkURL: URL? {
         guard !inviteCode.isEmpty else { return nil }
-        return URL(string: "convotrack://join/\(inviteCode)")
+        return URL(string: AppURLs.joinLink(code: inviteCode))
     }
 
     private var shareItems: [Any] {
         guard let url = deepLinkURL else {
             return ["Join my ConvoTrack ride!"]
         }
-        return [url, "Join my ConvoTrack ride! Tap to open in ConvoTrack: convotrack://join/\(inviteCode)"]
+        // HTTPS Universal Link: tappable in every messaging app, opens the app if
+        // installed and falls back to a web page + store links otherwise.
+        return ["Join my ConvoTrack ride!", url]
     }
 
     private var myClerkName: String? {
@@ -253,6 +345,17 @@ struct RideLobbyView: View {
                     .environmentObject(membershipStore)
             }
         }
+        .sheet(item: $participantToManage) { participant in
+            RemoveRiderSheet(
+                participant: participant,
+                isRemoving: vm.removingUserId == participant.userId
+            ) {
+                Task {
+                    await vm.removeParticipant(userId: participant.userId)
+                    participantToManage = nil
+                }
+            }
+        }
         .alert("Couldn't Start Ride", isPresented: $showStartError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -260,6 +363,23 @@ struct RideLobbyView: View {
         }
         .onChange(of: vm.startError) { _, err in
             if err != nil { showStartError = true }
+        }
+        .alert("Couldn't Remove Rider", isPresented: $showRemoveError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(vm.removeError ?? "An error occurred.")
+        }
+        .onChange(of: vm.removeError) { _, err in
+            if err != nil { showRemoveError = true }
+        }
+        .alert("Removed From Ride", isPresented: $showRemovedAlert) {
+            Button("OK", role: .cancel) {
+                appState.currentRideId = nil   // also clears currentRide
+                appState.inviteCode = nil
+                dismiss()
+            }
+        } message: {
+            Text("The ride leader removed you from this ride.")
         }
         .task { await loadRideAndConnect() }
         .preferredColorScheme(.dark)
@@ -369,9 +489,16 @@ struct RideLobbyView: View {
                         let isMe = participant.userId == vm.myUserId
                         let name = isMe ? (myClerkName ?? participant.name) : participant.name
                         let status = isMe ? vm.myStatus : participant.status
-                        // Tapping a rider to open their detail drawer is not yet
-                        // implemented — row is inert for now (drawer wired up later).
-                        ParticipantRiderRow(participant: participant, nameOverride: name, statusOverride: status, isOnline: vm.onlineUserIds.contains(participant.userId))
+                        // The leader can tap any non-leader rider to open the
+                        // management sheet (remove from ride).
+                        let canManage = vm.amILeader && participant.userId != vm.leaderId
+                        let row = ParticipantRiderRow(participant: participant, nameOverride: name, statusOverride: status, isOnline: vm.onlineUserIds.contains(participant.userId))
+                        if canManage {
+                            Button { participantToManage = participant } label: { row }
+                                .buttonStyle(.plain)
+                        } else {
+                            row
+                        }
                     }
                 }
             }
@@ -538,6 +665,21 @@ struct RideLobbyView: View {
             Task { await calculateRoute(from: event.waypoints) }
         }
 
+        // Ride is/became ACTIVE: reflect the status locally so the bottom bar shows
+        // RESUME NAVIGATION. Do NOT auto-navigate — the rider stays on the lobby and taps
+        // RESUME to enter navigation. (The leader's own Start button navigates directly.)
+        vm.onRideStarted = { [appState] in
+            if let ride = appState.currentRide, ride.status != "ACTIVE" {
+                appState.currentRide = ride.with(status: "ACTIVE")
+            }
+        }
+
+        // I was removed by the leader — tear down the socket and surface an alert.
+        vm.onRemovedFromRide = {
+            vm.disconnect()
+            showRemovedAlert = true
+        }
+
         if let token = try? await Clerk.shared.auth.getToken() {
             vm.setup(rideId: rideId, token: token)
         }
@@ -632,7 +774,9 @@ struct ParticipantRiderRow: View {
 
             Spacer()
 
-            Text(displayStatus)
+            // Ready-state only — connection state is shown by the presence dot, never as a
+            // "DISCONNECTED" badge (which conflated roster status with liveness).
+            Text(isReady ? "READY" : "WAITING")
                 .font(.labelCaps)
                 .foregroundColor(isReady ? Color.onPrimaryContainer : Color.onSurfaceVariant)
                 .tracking(1)
@@ -653,6 +797,82 @@ struct ParticipantRiderRow: View {
             }
         )
         .animation(.easeInOut(duration: 0.2), value: displayStatus)
+    }
+}
+
+// MARK: - Remove Rider Sheet
+
+struct RemoveRiderSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let participant: RideParticipant
+    let isRemoving: Bool
+    let onRemove: () -> Void
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Capsule().fill(Color.outline).frame(width: 36, height: 4).padding(.top, 12)
+
+            VStack(spacing: 12) {
+                if let url = participant.avatarUrl.flatMap(URL.init) {
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle().fill(Color.surfaceVariant)
+                    }
+                    .frame(width: 72, height: 72)
+                    .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color.surfaceVariant)
+                        .frame(width: 72, height: 72)
+                        .overlay(
+                            Text(String(participant.name.prefix(1)).uppercased())
+                                .font(.headlineLg).foregroundColor(Color.onSurface)
+                        )
+                }
+
+                Text(participant.name).font(.headlineMd).foregroundColor(Color.onSurface)
+                Text(participant.isLeader ? "RIDE LEADER" : "FORMATION RIDER")
+                    .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
+            }
+
+            Button(action: onRemove) {
+                HStack(spacing: 10) {
+                    if isRemoving {
+                        ProgressView().tint(Color.errorColor)
+                    } else {
+                        Image(systemName: "person.fill.xmark").font(.system(size: 18, weight: .bold))
+                    }
+                    Text(isRemoving ? "REMOVING..." : "REMOVE FROM RIDE")
+                        .font(.headlineMd).tracking(-0.5)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .background(Color.errorContainer)
+                .foregroundColor(Color.errorColor)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .disabled(isRemoving)
+
+            Button(action: { dismiss() }) {
+                Text("CANCEL")
+                    .font(.headlineMd).tracking(-0.5)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .foregroundColor(Color.onSurfaceVariant)
+                    .background(Color.surfaceContainerHigh)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .disabled(isRemoving)
+
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.surfaceDim.ignoresSafeArea())
+        .presentationDetents([.height(360)])
+        .presentationDragIndicator(.hidden)
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -697,7 +917,7 @@ struct QRCodeModal: View {
     var inviteCode: String = ""
 
     private var deepLinkURL: String {
-        "convotrack://join/\(inviteCode)"
+        AppURLs.joinLink(code: inviteCode)
     }
 
     private var qrImage: UIImage? {

@@ -40,17 +40,27 @@ struct ConvoTrackApp: App {
         }
     }
 
-    // Handles convotrack://join/INVITECODE
+    // Handles both the legacy custom scheme (convotrack://join/CODE) and the
+    // HTTPS Universal Link (https://<host>/convotrack/join/CODE). SwiftUI's
+    // .onOpenURL delivers both; universal links only arrive here once the
+    // Associated Domains entitlement + backend AASA file are in place.
     private func handleDeepLink(_ url: URL) {
-        guard url.scheme == "convotrack",
-              url.host == "join" else { return }
-        let code = url.pathComponents
-            .first(where: { $0 != "/" })?
-            .uppercased()
-            .filter({ $0.isLetter || $0.isNumber })
-            .prefix(6)
-            .map(String.init)
-            .joined() ?? ""
+        let rawSegment: String?
+        if url.scheme == "convotrack", url.host == "join" {
+            rawSegment = url.pathComponents.first(where: { $0 != "/" })
+        } else if url.scheme == "https",
+                  url.host == AppURLs.joinLinkHost,
+                  url.path.hasPrefix("/convotrack/join/") {
+            rawSegment = url.lastPathComponent
+        } else {
+            return
+        }
+        let code = String(
+            (rawSegment ?? "")
+                .uppercased()
+                .filter { $0.isLetter || $0.isNumber }
+                .prefix(6)
+        )
         guard code.count == 6 else { return }
         // Post through NotificationCenter so MainTabView can react
         // regardless of where it is in the hierarchy

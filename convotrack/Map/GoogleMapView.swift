@@ -12,6 +12,7 @@ struct MapPin: Identifiable {
         case lobbyStart
         case rider(name: String, avatarUrl: String?, isMe: Bool, rank: Int, isSelected: Bool)
         case regroup(type: String)
+        case emergency
         case simpleDot(color: UIColor, size: CGFloat)
     }
 
@@ -37,6 +38,8 @@ struct MapPin: Identifiable {
             h.combine(5); h.combine(t)
         case .simpleDot(_, let sz):
             h.combine(6); h.combine(Int(sz))
+        case .emergency:
+            h.combine(7)
         }
         return h.finalize()
     }
@@ -414,6 +417,8 @@ extension GoogleMapView {
                 return renderSwiftUI(LobbyStartPin(), size: CGSize(width: 70, height: 80))
             case .regroup(let type):
                 return renderSwiftUI(RegroupPin(type: type), size: CGSize(width: 70, height: 90))
+            case .emergency:
+                return renderSwiftUI(EmergencyPin(), size: CGSize(width: 70, height: 90))
             case .rider(let name, _, let isMe, let rank, let isSelected):
                 return renderRiderIcon(name: name, isMe: isMe, rank: rank, isSelected: isSelected)
             }
