@@ -90,20 +90,27 @@ struct RideSummaryShareCard: View {
                     .stroke(m.color.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
                 }
             }
-            // Name pills
+            // Name pills — width-capped, wrapping onto up to two lines so long
+            // stop names stay inside the card instead of being clipped at the edge.
             ForEach(placed) { m in
                 Text(m.name.uppercased())
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .tracking(0.5)
-                    .lineLimit(1)
+                    .lineLimit(Self.maxLabelLines)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .foregroundColor(.white)
+                    .frame(width: m.textWidth)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(
-                        Capsule().fill(Color(hex: "131313").opacity(0.82))
-                            .overlay(Capsule().stroke(m.color.opacity(0.7), lineWidth: 1))
+                        RoundedRectangle(cornerRadius: m.height / 2)
+                            .fill(Color(hex: "131313").opacity(0.82))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: m.height / 2)
+                                    .stroke(m.color.opacity(0.7), lineWidth: 1)
+                            )
                     )
-                    .fixedSize()
                     .position(m.labelCenter)
             }
             // Dots drawn last so a pin is never hidden behind another marker's pill.
@@ -127,9 +134,17 @@ struct RideSummaryShareCard: View {
         let color: Color
         let dot: CGPoint
         let labelCenter: CGPoint
+        let textWidth: CGFloat   // inner text frame width (excludes horizontal padding)
+        let height: CGFloat      // full pill height (grows when the name wraps)
     }
 
     private static let defaultLabelOffset: CGFloat = -16   // label sits above its dot by default
+    private static let maxLabelLines = 2
+    private static let maxLabelWidth: CGFloat = 132        // full pill width cap, incl. padding
+    private static let labelCharWidth: CGFloat = 6.2       // per-char advance at 9pt monospaced
+    private static let labelLineHeight: CGFloat = 11       // per line at 9pt
+    private static let labelHPadding: CGFloat = 14         // 7pt each side
+    private static let labelVPadding: CGFloat = 6          // 3pt top+bottom
 
     private func markerColor(_ type: String) -> Color {
         switch type {
@@ -146,10 +161,7 @@ struct RideSummaryShareCard: View {
         guard let snap = snapshot else { return [] }
         let sorted = waypoints.sorted { $0.order < $1.order }
 
-        let labelH: CGFloat = 18
         let gap: CGFloat = 3
-        let minY: CGFloat = labelH / 2 + 6
-        let maxY: CGFloat = mapSize.height - labelH / 2 - 6
         // Try above first, then below, then progressively further from the dot.
         let offsets: [CGFloat] = [-16, 18, -36, 38, -56, 58, -78, 80]
 
@@ -162,7 +174,17 @@ struct RideSummaryShareCard: View {
 
         var result: [PlacedMarker] = []
         for d in dots {
-            let w = CGFloat(d.wp.name.count) * 6.2 + 20
+            // Size the pill for this name, wrapping onto up to `maxLabelLines`
+            // and capping total width so it never runs off the card.
+            let maxTextWidth = Self.maxLabelWidth - Self.labelHPadding
+            let intrinsic = CGFloat(d.wp.name.count) * Self.labelCharWidth
+            let lines = min(Self.maxLabelLines, max(1, Int((intrinsic / maxTextWidth).rounded(.up))))
+            let textWidth = lines == 1 ? intrinsic : maxTextWidth
+            let w = textWidth + Self.labelHPadding
+            let labelH = CGFloat(lines) * Self.labelLineHeight + Self.labelVPadding
+
+            let minY: CGFloat = labelH / 2 + 6
+            let maxY: CGFloat = mapSize.height - labelH / 2 - 6
             let cx = min(max(d.p.x, w / 2 + 8), cardSize.width - w / 2 - 8)
 
             func rect(at cy: CGFloat) -> CGRect {
@@ -187,7 +209,9 @@ struct RideSummaryShareCard: View {
                 name: d.wp.name,
                 color: markerColor(d.wp.type),
                 dot: d.p,
-                labelCenter: CGPoint(x: cx, y: finalY)
+                labelCenter: CGPoint(x: cx, y: finalY),
+                textWidth: textWidth,
+                height: labelH
             ))
         }
         return result

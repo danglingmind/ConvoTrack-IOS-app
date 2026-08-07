@@ -6,6 +6,9 @@ struct MainTabView: View {
     @State private var showJoinRide = false
     @State private var deepLinkCode: String? = nil
     @StateObject private var appState = AppState()
+    // Owns the ride's realtime socket for its whole lifetime, above both the lobby and the
+    // navigation screen, so a reconnect self-heals and the lobby→navigation push never drops it.
+    @StateObject private var rideSession = RideRealtimeSession()
     @Environment(Clerk.self) private var clerk
 
     var body: some View {
@@ -30,6 +33,7 @@ struct MainTabView: View {
             }
         }
         .environmentObject(appState)
+        .environmentObject(rideSession)
         .ignoresSafeArea(edges: .bottom)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showJoinRide, onDismiss: { deepLinkCode = nil }) {

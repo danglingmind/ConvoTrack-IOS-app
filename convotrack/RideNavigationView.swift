@@ -35,6 +35,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var myRank: Int = 0
     @Published var myDistanceToGoalKm: Double = 0
     @Published var riderCount: Int = 0
+    @Published var onlineUserIds: Set<String> = []   // authoritative presence for offline markers
+    @Published var connectionState: RideRealtimeSession.ConnectionState = .connected
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
     @Published var activeRouteCoordinates: [CLLocationCoordinate2D] = []   // trimmed to user position
     @Published var routeVersion: Int = 0   // increments when route is ready; Equatable
@@ -104,8 +106,9 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var consecutiveOnCount: Int = 0
     private let offRouteConfirmCount = 3   // consecutive off-route readings before flagging
     private let onRouteClearCount = 4      // consecutive on-route readings before clearing
+    private var cancellables = Set<AnyCancellable>()
 
-    func setup(rideId: String, ride: Ride, myUserId: String) async {
+    func setup(rideId: String, ride: Ride, myUserId: String, session: RideRealtimeSession) async {
         self.rideId = rideId
         self.staticParticipants = ride.participants
         self.myUserId = myUserId
@@ -142,17 +145,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
         await calculateRoute(from: ride.waypoints)
 
-        let socket = SocketClient.shared
-        socket.onStateUpdate = { [weak self] update in self?.handleStateUpdate(update) }
-        socket.onSplitDetected = { [weak self] _ in self?.showSplitAlert = true }
-        socket.onSplitResolved = { [weak self] in self?.showSplitAlert = false }
-        socket.onRegroupStarted = { [weak self] event in self?.handleRegroupStarted(event) }
-        socket.onRegroupResolved = { [weak self] regroupId in self?.handleRegroupResolved(regroupId) }
-        socket.onEmergencyStarted = { [weak self] event in self?.handleEmergencyStarted(event) }
-
-        // Re-join room so the server sends the current state snapshot to this client
-        // and so state updates are received after any socket reconnect.
-        socket.joinRoom(rideId: rideId)
+        bind(to: session)
 
         LocationService.shared.delegate = self
         LocationService.shared.onHeadingUpdate = { [weak self] heading in
@@ -166,19 +159,52 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         LocationService.shared.start()
     }
 
+    /// Observe the shared `RideRealtimeSession` instead of subscribing to `SocketClient` directly.
+    /// The session owns the connection, reconnect→rejoin, heartbeat and presence for the whole ride,
+    /// so navigation self-heals after a drop and sees an always-fresh roster (mid-ride joiners get
+    /// real names, not "Rider"). Combine's multi-subscriber fan-out means this never clobbers the
+    /// lobby's own subscription.
+    private func bind(to session: RideRealtimeSession) {
+        cancellables.removeAll()
+
+        session.$liveState
+            .compactMap { $0 }
+            .sink { [weak self] update in self?.handleStateUpdate(update) }
+            .store(in: &cancellables)
+        // Live roster keeps rider name/avatar lookup accurate as people join/leave mid-ride.
+        session.$participants
+            .sink { [weak self] in self?.staticParticipants = $0 }
+            .store(in: &cancellables)
+        session.$onlineUserIds
+            .sink { [weak self] in self?.onlineUserIds = $0 }
+            .store(in: &cancellables)
+        session.$connectionState
+            .sink { [weak self] in self?.connectionState = $0 }
+            .store(in: &cancellables)
+        session.$splitActive
+            .sink { [weak self] in self?.showSplitAlert = $0 }
+            .store(in: &cancellables)
+        session.$latestRegroup
+            .compactMap { $0 }
+            .sink { [weak self] event in self?.handleRegroupStarted(event) }
+            .store(in: &cancellables)
+        session.$latestRegroupResolvedId
+            .compactMap { $0 }
+            .sink { [weak self] id in self?.handleRegroupResolved(id) }
+            .store(in: &cancellables)
+        session.$latestEmergency
+            .compactMap { $0 }
+            .sink { [weak self] event in self?.handleEmergencyStarted(event) }
+            .store(in: &cancellables)
+    }
+
     func teardown() {
         regroupResolvedToastTask?.cancel()
         emergencyDismissTask?.cancel()
+        cancellables.removeAll()   // stop observing the session; the session itself keeps running
         LocationService.shared.stop()
         LocationService.shared.delegate = nil
         LocationService.shared.onHeadingUpdate = nil
-        SocketClient.shared.onStateUpdate = nil
-        SocketClient.shared.onSplitDetected = nil
-        SocketClient.shared.onSplitResolved = nil
-        SocketClient.shared.onRegroupStarted = nil
-        SocketClient.shared.onRegroupResolved = nil
-        SocketClient.shared.onEmergencyStarted = nil
-        SocketClient.shared.onParticipantOffline = nil
     }
 
     func endRide() async {
@@ -559,6 +585,7 @@ struct RideNavigationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var rideSession: RideRealtimeSession
     @StateObject private var vm = NavigationViewModel()
 
     @Environment(\.verticalSizeClass) private var vSizeClass
@@ -602,6 +629,8 @@ struct RideNavigationView: View {
                 Text(vm.endError ?? "An error occurred.")
             }
             .onChange(of: vm.endError) { _, err in if err != nil { showEndError = true } }
+            // Ride is over (ended by leader or COMPLETED broadcast) → tear down the shared session.
+            .onChange(of: vm.showSummary) { _, show in if show { rideSession.stop() } }
     }
 
     private var coreView: some View {
@@ -640,7 +669,13 @@ struct RideNavigationView: View {
         if let fetched { appState.currentRide = fetched }
         guard let ride else { return }
         let userId = clerk.user?.id ?? ""
-        await vm.setup(rideId: rideId, ride: ride, myUserId: userId)
+        // Normally the lobby already started the session; start() is idempotent for the same ride
+        // (just re-joins), so this also covers entering navigation without a live lobby VM.
+        if let token = try? await Clerk.shared.auth.getToken() {
+            rideSession.start(rideId: rideId, token: token, myUserId: userId,
+                              seedParticipants: ride.participants, leaderId: ride.leaderId)
+        }
+        await vm.setup(rideId: rideId, ride: ride, myUserId: userId, session: rideSession)
     }
 
     // MARK: - Map
@@ -769,6 +804,14 @@ struct RideNavigationView: View {
     private var hudLayer: some View {
         VStack(spacing: 0) {
             topBar
+
+            if vm.connectionState == .reconnecting {
+                ConnectionBanner(state: vm.connectionState)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(), value: vm.connectionState)
+            }
 
             if isNavigationActive {
                 if vm.isOffRoute {
@@ -1058,7 +1101,8 @@ struct RideNavigationView: View {
                         }
                     } else {
                         ForEach(vm.leaderboardRows) { row in
-                            LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id)
+                            LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id,
+                                                isOffline: !row.isMe && !vm.onlineUserIds.contains(row.id))
                                 .id(row.id)
                         }
                     }
@@ -1088,7 +1132,8 @@ struct RideNavigationView: View {
                         }
                     } else {
                         ForEach(vm.leaderboardRows) { row in
-                            LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id)
+                            LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id,
+                                                isOffline: !row.isMe && !vm.onlineUserIds.contains(row.id))
                                 .id(row.id)
                         }
                     }
@@ -1359,6 +1404,7 @@ struct LiveRiderPin: View {
 struct LiveLeaderboardCard: View {
     let row: NavLeaderboardRow
     var isSelected: Bool = false
+    var isOffline: Bool = false
 
     private var isHighlighted: Bool { row.rank == 1 || isSelected || row.isMe }
     private var firstName: String { row.name.components(separatedBy: " ").first ?? row.name }
@@ -1393,6 +1439,14 @@ struct LiveLeaderboardCard: View {
                 isHighlighted ? Color.primaryFixed : Color.outlineVariant.opacity(0.4),
                 lineWidth: isHighlighted ? 2 : 1
             ))
+            .overlay(alignment: .bottomTrailing) {
+                // Grey dot = this rider's heartbeats lapsed (backgrounded / lost connection).
+                if isOffline {
+                    Circle().fill(Color.onSurfaceVariant)
+                        .frame(width: 8, height: 8)
+                        .overlay(Circle().stroke(Color.surfaceContainerHigh, lineWidth: 1.5))
+                }
+            }
 
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
@@ -1423,7 +1477,9 @@ struct LiveLeaderboardCard: View {
             isHighlighted ? Color.primaryFixed : Color.outlineVariant.opacity(0.3),
             lineWidth: isHighlighted ? 1.5 : 1
         ))
+        .opacity(isOffline ? 0.5 : 1)
         .animation(.spring(response: 0.3), value: isSelected)
+        .animation(.easeInOut(duration: 0.3), value: isOffline)
     }
 }
 

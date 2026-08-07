@@ -7,8 +7,10 @@ final class SocketClient {
     private var manager: SocketManager?
     private var socket: SocketIOClient?
 
-    // MARK: - Event Callbacks (set by views)
+    // MARK: - Event Callbacks (set by RideRealtimeSession — the single subscriber)
     var onConnect: (() -> Void)?
+    var onDisconnect: (() -> Void)?      // transport dropped; library will auto-reconnect
+    var onReconnecting: (() -> Void)?    // a reconnect attempt is in flight
     var onStateUpdate: ((RideStateUpdate) -> Void)?
     var onParticipantJoined: ((RideParticipant) -> Void)?
     var onParticipantLeft: ((String) -> Void)?
@@ -38,6 +40,15 @@ final class SocketClient {
         manager = SocketManager(socketURL: AppURLs.backendBaseURL, config: [
             .log(false),
             .compress,
+            // Mobile links drop constantly (tunnels, lifts, cell↔wifi handoff). Reconnect
+            // forever with a capped, jittered backoff instead of relying on library defaults,
+            // and pin to websockets so a flaky link can't thrash between transports.
+            .reconnects(true),
+            .reconnectAttempts(-1),
+            .reconnectWait(2),
+            .reconnectWaitMax(15),
+            .randomizationFactor(0.5),
+            .forceWebsockets(true),
         ])
         socket = manager?.defaultSocket
         registerHandlers()
@@ -125,6 +136,22 @@ final class SocketClient {
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             DispatchQueue.main.async { self?.onConnect?() }
+        }
+
+        // Surface the connection lifecycle so the session can drive reconnect→rejoin and a
+        // "reconnecting" banner. `.disconnect` also fires on our own disconnect(), but by then
+        // the session has already nil'd these callbacks, so it won't misreport a manual teardown.
+        socket.on(clientEvent: .disconnect) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.onDisconnect?() }
+        }
+        socket.on(clientEvent: .reconnect) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.onReconnecting?() }
+        }
+        socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.onReconnecting?() }
+        }
+        socket.on(clientEvent: .error) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.onReconnecting?() }
         }
 
         socket.on("ride:state_update") { [weak self] data, _ in

@@ -35,127 +35,58 @@ final class LobbyViewModel: ObservableObject {
         return others.isEmpty || others.allSatisfy { $0.status == "READY" }
     }
 
-    func setup(rideId: String, token: String) {
-        let socket = SocketClient.shared
-        if !socket.isConnected {
-            socket.connect(token: token)
-        }
+    private var cancellables = Set<AnyCancellable>()
 
-        // state_update carries LiveParticipant (GPS/progress) — the lobby ignores the
-        // telemetry payload, but uses it to detect the LOBBY → ACTIVE transition so
-        // non-leader riders auto-advance when the leader starts the ride.
-        socket.onStateUpdate = { [weak self] update in
-            guard let self, update.status == "ACTIVE" else { return }
-            self.onRideStarted?()
-        }
+    /// Mirror the shared `RideRealtimeSession` into this view model and translate its state into the
+    /// view's callbacks. The session (owned by `MainTabView`) owns the socket, heartbeat,
+    /// reconnect→rejoin and presence — the lobby only observes. Combine's multi-subscriber
+    /// observation means this can't clobber the navigation screen's own subscription.
+    func bind(to session: RideRealtimeSession) {
+        cancellables.removeAll()
 
-        socket.onLobbyRoster = { [weak self] participants, leaderId in
-            guard let self else { return }
-            // Authoritative membership snapshot — the server sends this on every room join, so
-            // apply it UNCONDITIONALLY. This reconciles any live delta (a rider joining or marking
-            // ready) that was missed during the socket-connect window — the root cause of the
-            // leader being stuck on WAITING until a manual reopen. Safe because: the local user's
-            // optimistic ready is overlaid via myStatus at render, and every other rider's status
-            // comes straight from this DB-backed snapshot (ready is persisted before it's sent).
-            // Presence (green dot) remains separate (ride:presence).
-            self.participants = participants
-            if !leaderId.isEmpty { self.leaderId = leaderId }
-        }
-
-        socket.onParticipantJoined = { [weak self] participant in
-            guard let self else { return }
-            if !self.participants.contains(where: { $0.userId == participant.userId }) {
-                self.participants.append(participant)
+        session.$participants
+            .sink { [weak self] participants in
+                guard let self else { return }
+                self.participants = participants
+                // Clear the leader's in-flight removal spinner once the roster confirms the kick.
+                if let removing = self.removingUserId,
+                   !participants.contains(where: { $0.userId == removing }) {
+                    self.removingUserId = nil
+                }
             }
-            // Optimistic: a just-joined rider is online now; the next ride:presence snapshot
-            // (authoritative) reconciles it. Avoids a grey flash before the first snapshot.
-            self.onlineUserIds.insert(participant.userId)
-        }
-
-        socket.onParticipantLeft = { [weak self] userId in
-            self?.participants.removeAll { $0.userId == userId }
-        }
-
-        socket.onParticipantRemoved = { [weak self] userId in
-            guard let self else { return }
-            self.participants.removeAll { $0.userId == userId }
-            self.removingUserId = nil
-            // If I'm the one removed, exit the ride.
-            if userId == self.myUserId { self.onRemovedFromRide?() }
-        }
-
-        // Authoritative online set — heartbeat/TTL-based snapshot from the server. This is the
-        // ONLY thing that drives the green presence dot, so a lingering socket / roster
-        // membership can never falsely show a locked or closed device as online.
-        socket.onPresence = { [weak self] online in
-            self?.onlineUserIds = Set(online)
-        }
-
-        socket.onParticipantReady = { [weak self] userId in
-            guard let self else { return }
-            self.updateParticipantStatus(userId: userId, status: "READY")
-            if userId == self.myUserId { self.myStatus = "READY" }
-        }
-
-        socket.onRideUpdated = { [weak self] event in
-            self?.onRideUpdated?(event)
-        }
-
-        // Join the room once the socket is actually connected, rather than racing a
-        // fixed timer. Covers both a fresh connect and a reused (already-open) socket.
-        socket.onConnect = { [weak self] in
-            self?.joinRoom(rideId: rideId)
-        }
-        if socket.isConnected {
-            joinRoom(rideId: rideId)
-        }
-
-        startHeartbeat(rideId: rideId)
-    }
-
-    private func joinRoom(rideId: String) {
-        SocketClient.shared.joinRoom(rideId: rideId)
-        socketConnected = true
-        // Optimistic self-presence so my own dot isn't grey until the first ride:presence
-        // snapshot lands; the snapshot then becomes authoritative.
-        if !myUserId.isEmpty { onlineUserIds.insert(myUserId) }
-    }
-
-    // MARK: - Presence heartbeat
-
-    private var heartbeatTimer: Timer?
-
-    private func startHeartbeat(rideId: String) {
-        heartbeatTimer?.invalidate()
-        // Emit now, then every 8s. Timers don't fire while the app is suspended, so
-        // backgrounding / locking / killing the app stops heartbeats and the server's TTL
-        // lapses us to offline — no reliance on a (flaky) socket disconnect.
-        SocketClient.shared.emitHeartbeat(rideId: rideId)
-        // [weak self] + self-invalidate so the repeating timer can't outlive the VM and keep a
-        // departed rider falsely "online" if a teardown path deallocs without calling disconnect().
-        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] timer in
-            guard self != nil else { timer.invalidate(); return }
-            SocketClient.shared.emitHeartbeat(rideId: rideId)
-        }
-    }
-
-    private func stopHeartbeat() {
-        heartbeatTimer?.invalidate()
-        heartbeatTimer = nil
+            .store(in: &cancellables)
+        session.$onlineUserIds
+            .sink { [weak self] in self?.onlineUserIds = $0 }
+            .store(in: &cancellables)
+        session.$leaderId
+            .sink { [weak self] leaderId in if !leaderId.isEmpty { self?.leaderId = leaderId } }
+            .store(in: &cancellables)
+        session.$connectionState
+            .sink { [weak self] in self?.socketConnected = ($0 == .connected) }
+            .store(in: &cancellables)
+        // Fire only on the LOBBY → ACTIVE transition so non-leader riders auto-advance to the
+        // navigation screen when the leader starts the ride.
+        session.$rideStatus
+            .removeDuplicates()
+            .sink { [weak self] status in if status == "ACTIVE" { self?.onRideStarted?() } }
+            .store(in: &cancellables)
+        session.$rideUpdated
+            .compactMap { $0 }
+            .sink { [weak self] event in self?.onRideUpdated?(event) }
+            .store(in: &cancellables)
+        session.$wasRemoved
+            .filter { $0 }
+            .sink { [weak self] _ in self?.onRemovedFromRide?() }
+            .store(in: &cancellables)
     }
 
     func markReady(rideId: String) {
         guard myStatus != "READY" else { return }
-        // Optimistic update
+        // Optimistic update; the leader's roster reflects it via ride:participant_ready (which the
+        // session applies). Own ready is overlaid locally at render via myStatus.
         myStatus = "READY"
-        updateParticipantStatus(userId: myUserId, status: "READY")
-
         SocketClient.shared.emitReady(rideId: rideId) { [weak self] success in
-            if !success {
-                // Rollback on ack failure
-                self?.myStatus = "WAITING"
-                self?.updateParticipantStatus(userId: self?.myUserId ?? "", status: "WAITING")
-            }
+            if !success { self?.myStatus = "WAITING" }   // rollback on ack failure
         }
     }
 
@@ -191,36 +122,6 @@ final class LobbyViewModel: ObservableObject {
         }
         isStarting = false
     }
-
-    func disconnect() {
-        stopHeartbeat()
-        // Clear the callbacks this VM registered on the shared client so a later reconnect /
-        // screen reuse can't fire stale lobby closures (e.g. a spurious joinRoom or a
-        // state handler bound to a dead VM).
-        let socket = SocketClient.shared
-        socket.onConnect = nil
-        socket.onStateUpdate = nil
-        socket.onLobbyRoster = nil
-        socket.onParticipantJoined = nil
-        socket.onParticipantLeft = nil
-        socket.onParticipantRemoved = nil
-        socket.onParticipantReady = nil
-        socket.onPresence = nil
-        socket.onRideUpdated = nil
-        socket.disconnect()
-        socketConnected = false
-    }
-
-    deinit { heartbeatTimer?.invalidate() }
-
-    private func updateParticipantStatus(userId: String, status: String) {
-        guard let idx = participants.firstIndex(where: { $0.userId == userId }) else { return }
-        let old = participants[idx]
-        participants[idx] = RideParticipant(
-            userId: old.userId, name: old.name, avatarUrl: old.avatarUrl,
-            status: status, isLeader: old.isLeader, joinedAt: old.joinedAt
-        )
-    }
 }
 
 // MARK: - RideLobbyView
@@ -228,6 +129,7 @@ final class LobbyViewModel: ObservableObject {
 struct RideLobbyView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var membershipStore: MembershipStore
+    @EnvironmentObject private var rideSession: RideRealtimeSession
     @Environment(Clerk.self) private var clerk
     @Environment(\.dismiss) private var dismiss
     @StateObject private var vm = LobbyViewModel()
@@ -307,7 +209,7 @@ struct RideLobbyView: View {
             VStack {
                 HStack(spacing: 12) {
                     Button(action: {
-                        vm.disconnect()
+                        rideSession.stop()
                         dismiss()
                     }) {
                         Image(systemName: "arrow.left")
@@ -335,6 +237,13 @@ struct RideLobbyView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
+                if rideSession.connectionState == .reconnecting {
+                    ConnectionBanner(state: rideSession.connectionState)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .animation(.spring(), value: rideSession.connectionState)
+                }
                 Spacer()
             }
 
@@ -646,10 +555,14 @@ struct RideLobbyView: View {
             appState.currentRide = ride
         }
 
+        var seedParticipants: [RideParticipant] = []
+        var seedLeaderId = ""
         if let ride = appState.currentRide {
             vm.myUserId = clerk.user?.id ?? ""
             vm.leaderId = ride.leaderId
             vm.participants = ride.participants
+            seedParticipants = ride.participants
+            seedLeaderId = ride.leaderId
             // Sync own initial status from server
             if let me = ride.participants.first(where: { $0.userId == vm.myUserId }) {
                 vm.myStatus = me.status
@@ -692,15 +605,18 @@ struct RideLobbyView: View {
             }
         }
 
-        // I was removed by the leader — tear down the socket and surface an alert.
-        vm.onRemovedFromRide = {
-            vm.disconnect()
+        // I was removed by the leader — tear down the shared session and surface an alert.
+        vm.onRemovedFromRide = { [rideSession] in
+            rideSession.stop()
             showRemovedAlert = true
         }
 
+        // Start the shared realtime session (idempotent), then mirror its state into the VM.
         if let token = try? await Clerk.shared.auth.getToken() {
-            vm.setup(rideId: rideId, token: token)
+            rideSession.start(rideId: rideId, token: token, myUserId: vm.myUserId,
+                              seedParticipants: seedParticipants, leaderId: seedLeaderId)
         }
+        vm.bind(to: rideSession)
     }
 
     @MainActor
