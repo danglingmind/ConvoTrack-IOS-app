@@ -151,7 +151,23 @@ extension GoogleMapView {
         var originalRouteVersion = 0
 
         var markers:       [String: GMSMarker] = [:]
-        var pinStyleHashes:[String: Int]        = [:]
+        var pinRenderKeys: [String: Int]        = [:]   // styleHash ⊕ quantized offset
+
+        // Marker collision state — see resolveCollisions(on:)
+        var pinModels:   [String: MapPin]   = [:]       // last pin per id, to re-bake on offset change
+        var pinOffsets:  [String: CGVector] = [:]       // current (quantized) body displacement per id
+        var pinBodyGeom: [String: BodyGeom] = [:]       // body disc geometry per id, for detection
+
+        /// Body-box geometry relative to the tip (true coordinate), in screen points.
+        struct BodyGeom {
+            let defaultCenterOffset: CGVector  // body-box center at rest, relative to tip
+            let halfSize: CGSize               // half the body box
+            let movable: Bool                  // riders move; stops / user arrow are obstacles
+        }
+
+        // Collision tuning
+        static let collisionMaxLeader: CGFloat = 60
+        static let collisionQuantum:   CGFloat = 8   // offset grid; deadbands micro-jitter
 
         var lastCameraId: UUID? = nil
 
@@ -351,30 +367,52 @@ extension GoogleMapView {
             for id in Array(markers.keys) where !currentIds.contains(id) {
                 markers[id]?.map = nil
                 markers.removeValue(forKey: id)
-                pinStyleHashes.removeValue(forKey: id)
+                pinRenderKeys.removeValue(forKey: id)
+                pinModels.removeValue(forKey: id)
+                pinOffsets.removeValue(forKey: id)
+                pinBodyGeom.removeValue(forKey: id)
             }
 
             for pin in pins {
-                let newHash = pin.styleHash
+                pinModels[pin.id] = pin
+                let offset  = pinOffsets[pin.id] ?? .zero
+                let newKey  = renderKey(pin.styleHash, offset)
+
                 if let marker = markers[pin.id] {
                     // Always update position (riders move)
                     marker.position = pin.coordinate
-                    // Only re-render icon if style changed
-                    if pinStyleHashes[pin.id] != newHash {
-                        pinStyleHashes[pin.id] = newHash
-                        marker.icon = renderIcon(pin)
+                    // Re-render only when style OR collision offset changed
+                    if pinRenderKeys[pin.id] != newKey {
+                        pinRenderKeys[pin.id] = newKey
+                        let baked = renderMarker(pin, offset: offset)
+                        marker.icon = baked.image
+                        pinBodyGeom[pin.id] = baked.geom
                     }
                 } else {
+                    let baked = renderMarker(pin, offset: offset)
                     let marker = GMSMarker()
                     marker.position     = pin.coordinate
-                    marker.groundAnchor = pin.anchorBottom ? CGPoint(x: 0.5, y: 1.0) : CGPoint(x: 0.5, y: 0.5)
-                    marker.icon         = renderIcon(pin)
+                    // Collidable pins are baked tip-centered → constant center anchor.
+                    marker.groundAnchor = isCollidable(pin.style) ? CGPoint(x: 0.5, y: 0.5)
+                                        : (pin.anchorBottom ? CGPoint(x: 0.5, y: 1.0) : CGPoint(x: 0.5, y: 0.5))
+                    marker.icon         = baked.image
                     marker.zIndex       = 5   // above end-cap markers (zIndex 2)
                     marker.map          = mapView
                     markers[pin.id]     = marker
-                    pinStyleHashes[pin.id] = newHash
+                    pinRenderKeys[pin.id] = newKey
+                    pinBodyGeom[pin.id]   = baked.geom
                 }
             }
+
+            resolveCollisions(on: mapView)
+        }
+
+        private func renderKey(_ styleHash: Int, _ offset: CGVector) -> Int {
+            var h = Hasher()
+            h.combine(styleHash)
+            h.combine(Int((offset.dx / Self.collisionQuantum).rounded()))
+            h.combine(Int((offset.dy / Self.collisionQuantum).rounded()))
+            return h.finalize()
         }
 
         // MARK: Camera
@@ -403,24 +441,116 @@ extension GoogleMapView {
 
         // MARK: Icon rendering
 
-        private func renderIcon(_ pin: MapPin) -> UIImage? {
+        private func isCollidable(_ style: MapPin.Style) -> Bool {
+            switch style {
+            case .rider, .destination, .waypoint, .regroup, .emergency: return true
+            default: return false
+            }
+        }
+
+        private func isMovable(_ style: MapPin.Style) -> Bool {
+            if case .rider = style { return true }
+            return false
+        }
+
+        /// Body art for a collidable pin plus the point within it that is the semantic
+        /// tip (the pixel that must sit on the true coordinate), and a leader accent color.
+        private func renderBody(_ pin: MapPin) -> (image: UIImage, anchorInBody: CGPoint, accent: UIColor)? {
+            let lime = UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1)
             switch pin.style {
-            case .userLocation(let heading):
-                return renderUserLocationIcon(heading: heading)
-            case .simpleDot(let color, let size):
-                return renderDotIcon(color: color, size: size)
             case .destination(let name):
-                return renderSwiftUI(DestinationPin(name: name), size: CGSize(width: 80, height: 100))
+                guard let img = renderSwiftUIFit(DestinationPin(name: name)) else { return nil }
+                return (img, CGPoint(x: img.size.width / 2, y: img.size.height), lime)
             case .waypoint(let name):
-                return renderSwiftUI(WaypointPin(name: name), size: CGSize(width: 80, height: 80))
-            case .lobbyStart:
-                return renderSwiftUI(LobbyStartPin(), size: CGSize(width: 70, height: 80))
+                guard let img = renderSwiftUIFit(WaypointPin(name: name)) else { return nil }
+                return (img, CGPoint(x: img.size.width / 2, y: img.size.height), lime)
             case .regroup(let type):
-                return renderSwiftUI(RegroupPin(type: type), size: CGSize(width: 70, height: 90))
+                guard let img = renderSwiftUI(RegroupPin(type: type), size: CGSize(width: 70, height: 90)) else { return nil }
+                return (img, CGPoint(x: img.size.width / 2, y: img.size.height), UIColor(red: 1, green: 0.72, blue: 0.24, alpha: 1))
             case .emergency:
-                return renderSwiftUI(EmergencyPin(), size: CGSize(width: 70, height: 90))
+                guard let img = renderSwiftUI(EmergencyPin(), size: CGSize(width: 70, height: 90)) else { return nil }
+                return (img, CGPoint(x: img.size.width / 2, y: img.size.height), UIColor(red: 1, green: 0.706, blue: 0.671, alpha: 1))
             case .rider(let name, _, let isMe, let rank, let isSelected):
-                return renderRiderIcon(name: name, isMe: isMe, rank: rank, isSelected: isSelected)
+                let size: CGFloat = isSelected ? 54 : 46
+                guard let img = renderRiderIcon(name: name, isMe: isMe, rank: rank, isSelected: isSelected) else { return nil }
+                // Triangle tip within the rider canvas is at (width/2, size+6).
+                return (img, CGPoint(x: img.size.width / 2, y: size + 6), (isMe || isSelected) ? lime : .white)
+            default:
+                return nil
+            }
+        }
+
+        /// Renders a marker icon plus its collision geometry. Collidable pins are baked
+        /// into a tip-centered canvas so `groundAnchor` stays (0.5,0.5) at any offset,
+        /// with a leader line from the fixed tip to the displaced body.
+        func renderMarker(_ pin: MapPin, offset: CGVector) -> (image: UIImage?, geom: BodyGeom) {
+            if isCollidable(pin.style), let body = renderBody(pin) {
+                let composed = composeOffsetIcon(body: body.image, anchorInBody: body.anchorInBody,
+                                                 offset: offset, accent: body.accent)
+                let w = body.image.size.width, h = body.image.size.height
+                let geom = BodyGeom(
+                    defaultCenterOffset: CGVector(dx: w / 2 - body.anchorInBody.x,
+                                                  dy: h / 2 - body.anchorInBody.y),
+                    halfSize: CGSize(width: w / 2, height: h / 2),
+                    movable: isMovable(pin.style)
+                )
+                return (composed, geom)
+            }
+
+            // Non-collidable — original path; geometry used only as an obstacle.
+            let image: UIImage?
+            switch pin.style {
+            case .userLocation(let heading): image = renderUserLocationIcon(heading: heading)
+            case .simpleDot(let c, let s):   image = renderDotIcon(color: c, size: s)
+            case .lobbyStart:                image = renderSwiftUI(LobbyStartPin(), size: CGSize(width: 70, height: 80))
+            default:                         image = nil
+            }
+            let sz = image?.size ?? .zero
+            let centered: Bool = { if case .userLocation = pin.style { return true } else { return false } }()
+            let geom = BodyGeom(
+                defaultCenterOffset: centered ? .zero : CGVector(dx: 0, dy: -sz.height / 2),
+                halfSize: CGSize(width: sz.width / 2, height: sz.height / 2),
+                movable: false
+            )
+            return (image, geom)
+        }
+
+        /// Composites `body` into a tip-centered canvas (tip at center → constant
+        /// (0.5,0.5) ground anchor), drawing the body displaced by `offset` with a
+        /// dashed leader line back to the tip. `offset == .zero` reproduces the resting
+        /// look (tip on the coordinate, no leader).
+        private func composeOffsetIcon(body: UIImage, anchorInBody: CGPoint, offset: CGVector, accent: UIColor) -> UIImage {
+            let w = body.size.width, h = body.size.height
+            let leftExt = anchorInBody.x, rightExt = w - anchorInBody.x
+            let topExt  = anchorInBody.y, botExt   = h - anchorInBody.y
+            let maxLeader = Self.collisionMaxLeader
+            let halfW = maxLeader + max(leftExt, rightExt)
+            let halfH = maxLeader + max(topExt, botExt)
+            let canvas = CGSize(width: halfW * 2, height: halfH * 2)
+            let center = CGPoint(x: halfW, y: halfH)                    // tip = true coordinate
+            let bodyAnchor = CGPoint(x: center.x + offset.dx, y: center.y + offset.dy)
+
+            let renderer = UIGraphicsImageRenderer(size: canvas, format: {
+                let f = UIGraphicsImageRendererFormat(); f.scale = UIScreen.main.scale; return f
+            }())
+            return renderer.image { ctx in
+                let c = ctx.cgContext
+                if hypot(offset.dx, offset.dy) > 3 {
+                    c.setStrokeColor(accent.withAlphaComponent(0.55).cgColor)
+                    c.setLineWidth(1.5)
+                    c.setLineDash(phase: 0, lengths: [3, 3])
+                    c.move(to: center)
+                    c.addLine(to: bodyAnchor)
+                    c.strokePath()
+                    c.setLineDash(phase: 0, lengths: [])
+                    // Tip dot marking the exact true location
+                    c.setFillColor(accent.cgColor)
+                    c.fillEllipse(in: CGRect(x: center.x - 2.5, y: center.y - 2.5, width: 5, height: 5))
+                    c.setStrokeColor(UIColor(white: 0.07, alpha: 1).cgColor)
+                    c.setLineWidth(1)
+                    c.strokeEllipse(in: CGRect(x: center.x - 2.5, y: center.y - 2.5, width: 5, height: 5))
+                }
+                body.draw(at: CGPoint(x: bodyAnchor.x - anchorInBody.x, y: bodyAnchor.y - anchorInBody.y))
             }
         }
 
@@ -429,6 +559,18 @@ extension GoogleMapView {
                 view.preferredColorScheme(.dark)
                     .frame(width: size.width, height: size.height)
             )
+            renderer.scale = UIScreen.main.scale
+            return renderer.uiImage
+        }
+
+        /// Renders a pin at its intrinsic size (no fixed canvas), so labels that
+        /// wrap to a second line are not clipped. The view itself caps its label
+        /// width (via `.frame(maxWidth:)`), which bounds the marker's footprint so
+        /// a long name can't sprawl across the screen even when the pin sits at a
+        /// corner. The pin content is horizontally centered, so the default
+        /// bottom-center ground anchor still sits the marker over its coordinate.
+        private func renderSwiftUIFit<V: View>(_ view: V) -> UIImage? {
+            let renderer = ImageRenderer(content: view.preferredColorScheme(.dark))
             renderer.scale = UIScreen.main.scale
             return renderer.uiImage
         }
@@ -553,10 +695,59 @@ extension GoogleMapView {
             }
         }
 
+        // MARK: - Collision resolution
+
+        /// Projects every marker to screen space, resolves body overlaps (tips fixed),
+        /// and re-bakes only the icons whose quantized offset actually changed. Cheap:
+        /// one projection + O(n²) box tests over ~30 markers, re-raster gated by deadband.
+        func resolveCollisions(on mapView: GMSMapView) {
+            guard mapView.bounds.width > 1, mapView.bounds.height > 1 else { return }
+
+            var inputs: [MarkerCollisionResolver.Marker] = []
+            for (id, marker) in markers {
+                guard let geom = pinBodyGeom[id] else { continue }
+                let tip = mapView.projection.point(for: marker.position)
+                inputs.append(.init(
+                    id: id,
+                    tip: tip,
+                    defaultCenter: CGPoint(x: tip.x + geom.defaultCenterOffset.dx,
+                                           y: tip.y + geom.defaultCenterOffset.dy),
+                    halfSize: geom.halfSize,
+                    movable: geom.movable,
+                    prevOffset: pinOffsets[id] ?? .zero
+                ))
+            }
+            guard inputs.contains(where: { $0.movable }) else { return }
+
+            let solved = MarkerCollisionResolver.resolve(inputs, maxLeader: Self.collisionMaxLeader)
+            let q = Self.collisionQuantum
+
+            for input in inputs where input.movable {
+                let raw = solved[input.id] ?? .zero
+                let quantized = CGVector(dx: (raw.dx / q).rounded() * q,
+                                         dy: (raw.dy / q).rounded() * q)
+                let prev = pinOffsets[input.id] ?? .zero
+                // Deadband: skip sub-quantum changes so nothing re-bakes on jitter.
+                if abs(quantized.dx - prev.dx) < 0.5, abs(quantized.dy - prev.dy) < 0.5 { continue }
+
+                pinOffsets[input.id] = quantized
+                guard let pin = pinModels[input.id], let marker = markers[input.id] else { continue }
+                let baked = renderMarker(pin, offset: quantized)
+                marker.icon = baked.image
+                pinBodyGeom[input.id]   = baked.geom
+                pinRenderKeys[input.id] = renderKey(pin.styleHash, quantized)
+            }
+        }
+
         // MARK: - GMSMapViewDelegate
 
         func mapView(_ mapView: GMSMapView, willMove gesture: Bool) {
             if gesture { onInteraction?() }
+        }
+
+        // Pan/zoom don't re-run updateUIView, so re-declutter when the camera settles.
+        func mapView(_ mapView: GMSMapView, idleAt position: GMSCameraPosition) {
+            resolveCollisions(on: mapView)
         }
     }
 }

@@ -1475,10 +1475,13 @@ struct WaypointPin: View {
                 .font(.system(size: 7, weight: .black, design: .monospaced))
                 .foregroundColor(Color.onSurface)
                 .tracking(0.5)
-                .lineLimit(1)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 104)
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(Color.surfaceContainerHigh.opacity(0.92))
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 }
@@ -1502,10 +1505,13 @@ struct DestinationPin: View {
                 .font(.system(size: 8, weight: .black, design: .monospaced))
                 .foregroundColor(Color.onSurface)
                 .tracking(0.5)
-                .lineLimit(1)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 112)
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(Color.surfaceContainerHigh.opacity(0.92))
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
     }
 }

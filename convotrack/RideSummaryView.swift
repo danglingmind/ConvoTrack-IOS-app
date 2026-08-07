@@ -357,7 +357,7 @@ struct RideSummaryView: View {
         isGeneratingShare = true
         defer { isGeneratingShare = false }
 
-        let mapImg = await generateMapSnapshot(waypoints: mapWaypoints)
+        let snapshot = await generateMapSnapshot(waypoints: mapWaypoints)
         let qrImg = generateQRCode(from: "https://vynl.in/convotrack")
 
         let distStr: String
@@ -365,6 +365,7 @@ struct RideSummaryView: View {
         let durUnitStr: String
         let speedStr: String
         let count: Int
+        let dateStr: String
 
         if let s = summary {
             distStr = formatDistance(s.distanceMeters)
@@ -372,24 +373,28 @@ struct RideSummaryView: View {
             durUnitStr = durationUnit(s.durationSeconds)
             speedStr = s.avgSpeedKmh.map { String(format: "%.0f", $0) } ?? "--"
             count = s.participants.count
+            dateStr = formatShareDate(s.createdAt)
         } else if let f = fallback {
             distStr = String(format: "%.1f", f.distanceMeters / 1000)
             durStr = f.durationSeconds.map { formatDuration($0) } ?? "--"
             durUnitStr = f.durationSeconds.map { durationUnit($0) } ?? ""
             speedStr = f.avgSpeedKmh.map { String(format: "%.0f", $0) } ?? "--"
             count = 0
+            dateStr = formatShareDate(f.endedAt ?? f.createdAt ?? "")
         } else {
-            distStr = "--"; durStr = "--"; durUnitStr = ""; speedStr = "--"; count = 0
+            distStr = "--"; durStr = "--"; durUnitStr = ""; speedStr = "--"; count = 0; dateStr = ""
         }
 
         let card = RideSummaryShareCard(
             rideTitle: effectiveTitle,
-            mapImage: mapImg,
+            snapshot: snapshot,
+            waypoints: mapWaypoints,
             distanceKm: distStr,
             durationFormatted: durStr,
             durationUnit: durUnitStr,
             avgSpeedKmh: speedStr,
             riderCount: count,
+            dateText: dateStr,
             qrImage: qrImg
         )
 
@@ -401,11 +406,11 @@ struct RideSummaryView: View {
         showShareSheet = true
     }
 
-    private func generateMapSnapshot(waypoints: [Waypoint]) async -> UIImage? {
+    private func generateMapSnapshot(waypoints: [Waypoint]) async -> StaticMapSnapshot? {
         await GoogleStaticMapsService.snapshot(
             routeCoordinates: routeCoordinates,
             waypoints:        waypoints,
-            size:             CGSize(width: 390, height: 700),
+            size:             CGSize(width: 390, height: 640),
             scale:            2
         )
     }
@@ -447,6 +452,21 @@ struct RideSummaryView: View {
 
     private func durationUnit(_ seconds: Int) -> String {
         seconds < 3600 ? "MIN" : "HRS"
+    }
+
+    /// ISO8601 → "AUG 5, 2026" for the share card meta line. Empty if unparseable.
+    private func formatShareDate(_ iso: String) -> String {
+        guard !iso.isEmpty else { return "" }
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = parser.date(from: iso) ?? {
+            parser.formatOptions = [.withInternetDateTime]
+            return parser.date(from: iso)
+        }()
+        guard let date else { return "" }
+        let out = DateFormatter()
+        out.dateFormat = "MMM d, yyyy"
+        return out.string(from: date)
     }
 
     private func roleLabel(_ p: SummaryParticipant) -> String {

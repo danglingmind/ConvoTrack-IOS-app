@@ -51,11 +51,15 @@ final class LobbyViewModel: ObservableObject {
 
         socket.onLobbyRoster = { [weak self] participants, leaderId in
             guard let self else { return }
-            // Membership snapshot — seed only if REST hasn't populated the roster yet (fallback).
-            // Live additions/removals come via onParticipantJoined / _Left / _Removed. Presence
-            // (green dot) is separate (ride:presence).
-            if self.participants.isEmpty { self.participants = participants }
-            if self.leaderId.isEmpty { self.leaderId = leaderId }
+            // Authoritative membership snapshot — the server sends this on every room join, so
+            // apply it UNCONDITIONALLY. This reconciles any live delta (a rider joining or marking
+            // ready) that was missed during the socket-connect window — the root cause of the
+            // leader being stuck on WAITING until a manual reopen. Safe because: the local user's
+            // optimistic ready is overlaid via myStatus at render, and every other rider's status
+            // comes straight from this DB-backed snapshot (ready is persisted before it's sent).
+            // Presence (green dot) remains separate (ride:presence).
+            self.participants = participants
+            if !leaderId.isEmpty { self.leaderId = leaderId }
         }
 
         socket.onParticipantJoined = { [weak self] participant in
@@ -271,6 +275,20 @@ struct RideLobbyView: View {
         return name.isEmpty ? clerk.user?.username : name
     }
 
+    /// The leader may edit the ride whenever the Start button is available (leader,
+    /// ride not yet ACTIVE). Kept in lockstep with the `bottomBar` Start-button gate
+    /// so the pencil never disappears while the Start button is showing. Leadership is
+    /// read from both the reactive Clerk identity AND the VM's cached `amILeader` — the
+    /// former survives app relaunch before the cache is seeded, the latter survives a
+    /// transient render where `clerk.user` reads nil. Requires `currentRide` since
+    /// `EditRideView` needs a ride to edit.
+    private var canEditRide: Bool {
+        guard let ride = appState.currentRide, ride.status != "ACTIVE" else { return false }
+        if vm.amILeader { return true }
+        if let uid = clerk.user?.id, !uid.isEmpty, uid == ride.leaderId { return true }
+        return false
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -304,7 +322,7 @@ struct RideLobbyView: View {
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.6), radius: 4)
                     Spacer()
-                    if vm.amILeader && appState.currentRide?.status == "LOBBY" {
+                    if canEditRide {
                         Button(action: { showEditSheet = true }) {
                             Image(systemName: "pencil")
                                 .font(.system(size: 17, weight: .semibold))
