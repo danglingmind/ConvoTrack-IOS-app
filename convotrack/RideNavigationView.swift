@@ -143,7 +143,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             myDistanceToGoalKm = ride.distanceMeters / 1000
         }
 
-        await calculateRoute(from: ride.waypoints)
+        await calculateRoute(from: ride.waypoints, polyline: ride.routePolyline)
 
         bind(to: session)
 
@@ -379,7 +379,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         }
     }
 
-    private func calculateRoute(from waypoints: [Waypoint]) async {
+    private func calculateRoute(from waypoints: [Waypoint], polyline: String? = nil) async {
         let sorted = waypoints.sorted { $0.order < $1.order }
         guard sorted.count >= 2 else { return }
 
@@ -405,8 +405,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             currentInstruction       = first.instruction
             distanceToNextTurnMeters = first.distanceMeters
         }
-        routeCoordinates         = allCoords
-        activeRouteCoordinates   = allCoords   // full route until first GPS update trims it
+        // Draw and track the leader-selected route geometry when available; the steps
+        // above (turn instructions) come from the live recompute either way.
+        let geometry = GoogleDirectionsService.decodedRoute(polyline) ?? allCoords
+        routeCoordinates         = geometry
+        activeRouteCoordinates   = geometry   // full route until first GPS update trims it
         routeExpectedTravelTime  = totalTime
         currentRouteSegmentIndex = 0
         consecutiveOffCount      = 0

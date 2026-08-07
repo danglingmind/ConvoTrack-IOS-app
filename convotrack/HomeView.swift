@@ -838,6 +838,12 @@ struct ActiveRideCard: View {
 
     @MainActor
     private func computeRoute(_ ride: Ride) async {
+        // Prefer the leader-selected route geometry stored on the ride.
+        if let stored = GoogleDirectionsService.decodedRoute(ride.routePolyline) {
+            routeCoordinates = stored
+            cameraCommand = MapCameraCommand.fitRoute(stored, padding: 48)
+            return
+        }
         let sorted = ride.waypoints.sorted { $0.order < $1.order }
         guard sorted.count >= 2 else { return }
         var allCoords: [CLLocationCoordinate2D] = []

@@ -16,6 +16,15 @@ struct DirectionsStep {
     let distanceMeters: Double
 }
 
+/// One selectable alternative for a direct origin→destination route.
+struct RouteOption: Identifiable {
+    let id = UUID()
+    let coordinates: [CLLocationCoordinate2D]
+    let distanceMeters: Double
+    let durationSeconds: TimeInterval
+    let label: String?   // Routes API routeLabels, e.g. DEFAULT_ROUTE / FUEL_EFFICIENT
+}
+
 // MARK: - Service
 
 enum GoogleDirectionsService {
@@ -63,7 +72,7 @@ enum GoogleDirectionsService {
         let response = try JSONDecoder().decode(RoutesResponse.self, from: data)
 
         guard let route = response.routes.first,
-              let leg   = route.legs.first else {
+              let leg   = route.legs?.first else {
             throw URLError(.cannotParseResponse)
         }
 
@@ -87,10 +96,71 @@ enum GoogleDirectionsService {
         )
     }
 
+    /// Alternative whole-trip routes for a DIRECT origin→destination request.
+    /// Google's Routes API returns no alternatives when intermediate waypoints are
+    /// present, so callers use this only for the no-middle-stop case.
+    static func alternativeRoutes(
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D,
+        trafficAware: Bool = true
+    ) async throws -> [RouteOption] {
+        let url = URL(string: "https://routes.googleapis.com/directions/v2:computeRoutes")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(GoogleMapsConfig.apiKey, forHTTPHeaderField: "X-Goog-Api-Key")
+        // Whole-route fields (one polyline per alternative) — no per-step data needed here
+        request.setValue(
+            "routes.polyline.encodedPolyline,routes.distanceMeters," +
+            "routes.duration,routes.routeLabels",
+            forHTTPHeaderField: "X-Goog-FieldMask"
+        )
+
+        let body: [String: Any] = [
+            "origin": [
+                "location": ["latLng": ["latitude": origin.latitude, "longitude": origin.longitude]]
+            ],
+            "destination": [
+                "location": ["latLng": ["latitude": destination.latitude, "longitude": destination.longitude]]
+            ],
+            "travelMode": "DRIVE",
+            "routingPreference": trafficAware ? "TRAFFIC_AWARE" : "TRAFFIC_UNAWARE",
+            "polylineQuality": "HIGH_QUALITY",
+            "computeAlternativeRoutes": true,
+            "languageCode": "en-US",
+            "units": "METRIC"
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, urlResponse) = try await URLSession.shared.data(for: request)
+        if let http = urlResponse as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        let response = try JSONDecoder().decode(RoutesResponse.self, from: data)
+
+        return response.routes.compactMap { route in
+            guard let encoded = route.polyline?.encodedPolyline else { return nil }
+            return RouteOption(
+                coordinates:     decodePolyline(encoded),
+                distanceMeters:  Double(route.distanceMeters ?? 0),
+                durationSeconds: parseDuration(route.duration ?? "0s"),
+                label:           route.routeLabels?.first
+            )
+        }
+    }
+
     // Routes API duration comes as "123s" or "1.5s"
     private static func parseDuration(_ raw: String) -> TimeInterval {
         let s = raw.hasSuffix("s") ? String(raw.dropLast()) : raw
         return TimeInterval(Double(s) ?? 0)
+    }
+
+    /// Decodes a stored route polyline into coordinates, or nil if absent/too short to draw.
+    /// Used by ride views to render the leader-selected route instead of recomputing a default.
+    static func decodedRoute(_ polyline: String?) -> [CLLocationCoordinate2D]? {
+        guard let encoded = polyline, !encoded.isEmpty else { return nil }
+        let coords = decodePolyline(encoded)
+        return coords.count >= 2 ? coords : nil
     }
 
     // MARK: - Polyline codec (Google encoded polyline algorithm — unchanged)
@@ -164,7 +234,15 @@ private struct RoutesResponse: Decodable {
     let routes: [Route]
 
     struct Route: Decodable {
-        let legs: [Leg]
+        let legs: [Leg]?                 // absent in the alternatives field mask
+        let polyline: RoutePolyline?     // whole-route polyline (alternatives request)
+        let distanceMeters: Int?
+        let duration: String?
+        let routeLabels: [String]?
+    }
+
+    struct RoutePolyline: Decodable {
+        let encodedPolyline: String
     }
 
     struct Leg: Decodable {

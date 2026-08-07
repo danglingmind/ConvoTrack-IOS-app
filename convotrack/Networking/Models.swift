@@ -22,6 +22,7 @@ struct Ride: Codable {
     let distanceMeters: Double
     let estimatedDurationSeconds: Int
     let maxAllowedParticipants: Int
+    let routePolyline: String?   // leader-selected route geometry (Google encoded polyline)
     let startedAt: String?
     let endedAt: String?
     let createdAt: String?
@@ -37,7 +38,8 @@ extension Ride {
             id: id, title: title, status: status, leaderId: leaderId, inviteCode: inviteCode,
             destinationName: destinationName, destinationLat: destinationLat, destinationLng: destinationLng,
             distanceMeters: distanceMeters, estimatedDurationSeconds: estimatedDurationSeconds,
-            maxAllowedParticipants: maxAllowedParticipants, startedAt: startedAt, endedAt: endedAt,
+            maxAllowedParticipants: maxAllowedParticipants, routePolyline: routePolyline,
+            startedAt: startedAt, endedAt: endedAt,
             createdAt: createdAt, waypoints: waypoints, participants: participants
         )
     }
@@ -110,6 +112,7 @@ struct RideUpdatedEvent: Codable {
     let distanceMeters: Double
     let estimatedDurationSeconds: Int
     let maxAllowedParticipants: Int
+    let routePolyline: String?
     let waypoints: [Waypoint]
 }
 

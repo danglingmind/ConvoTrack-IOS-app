@@ -324,11 +324,18 @@ struct RideSummaryView: View {
         guard let id = rideId,
               let ride = try? await APIClient.shared.getRide(id) else { return }
         mapWaypoints = ride.waypoints
-        await calculateRoute(from: ride.waypoints)
+        await calculateRoute(from: ride.waypoints, polyline: ride.routePolyline)
     }
 
     @MainActor
-    private func calculateRoute(from waypoints: [Waypoint]) async {
+    private func calculateRoute(from waypoints: [Waypoint], polyline: String? = nil) async {
+        // Prefer the leader-selected route geometry stored on the ride.
+        if let stored = GoogleDirectionsService.decodedRoute(polyline) {
+            routeCoordinates = stored
+            cameraCommand = MapCameraCommand.fitRoute(stored, padding: 60)
+            return
+        }
+
         let sorted = waypoints.sorted { $0.order < $1.order }
         guard sorted.count >= 2 else { return }
 

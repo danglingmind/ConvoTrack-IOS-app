@@ -85,6 +85,11 @@ struct GoogleMapView: UIViewRepresentable {
     var cameraCommand: MapCameraCommand? = nil
     var isInteractive: Bool = true
     var onInteraction: (() -> Void)? = nil
+    /// All alternative routes (index == position). The one at `selectedRouteIndex`
+    /// is drawn bright via `routeCoords`; the rest render dim + tappable.
+    var alternativeRoutes: [[CLLocationCoordinate2D]] = []
+    var selectedRouteIndex: Int = 0
+    var onSelectRoute: ((Int) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -104,8 +109,11 @@ struct GoogleMapView: UIViewRepresentable {
     func updateUIView(_ mapView: GMSMapView, context: Context) {
         let c = context.coordinator
         c.onInteraction = onInteraction
+        c.onSelectRoute = onSelectRoute
         mapView.isUserInteractionEnabled = isInteractive
 
+        // Dim, tappable alternatives sit below the bright selected route.
+        c.applyAlternatives(alternativeRoutes, selectedIndex: selectedRouteIndex, to: mapView)
         c.applyRoute(originalRouteCoords, to: mapView, key: &c.originalRouteVersion, line: &c.originalRouteLine, color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 0.28), width: 3, dashed: false, zIndex: 98)
         c.applyRoute(routeCoords,         to: mapView, key: &c.routeVersion,         line: &c.routeLine,         color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1),    width: 5, dashed: false, zIndex: 100)
         c.applyRouteDecorations(routeCoords: routeCoords, originalCoords: originalRouteCoords, stopCoords: stopCoords, to: mapView)
@@ -144,11 +152,16 @@ extension GoogleMapView {
 
     final class Coordinator: NSObject, GMSMapViewDelegate {
         var onInteraction: (() -> Void)?
+        var onSelectRoute: ((Int) -> Void)?
 
         var routeLine:         GMSPolyline? = nil
         var originalRouteLine: GMSPolyline? = nil
         var routeVersion         = 0
         var originalRouteVersion = 0
+
+        // Dim, tappable alternative routes (userData carries the global index)
+        var altLines:   [GMSPolyline] = []
+        var altVersion: Int = 0
 
         var markers:       [String: GMSMarker] = [:]
         var pinRenderKeys: [String: Int]        = [:]   // styleHash ⊕ quantized offset
@@ -175,6 +188,48 @@ extension GoogleMapView {
         var endCapMarkers:    [GMSMarker]   = []
         var connectorLines:   [GMSPolyline] = []
         var decorationVersion: Int = 0
+
+        // MARK: Alternatives
+
+        /// Draws every alternative except the selected one as a dim, tappable line.
+        /// The selected route is drawn bright by `applyRoute(routeCoords:)`.
+        func applyAlternatives(
+            _ alts: [[CLLocationCoordinate2D]],
+            selectedIndex: Int,
+            to mapView: GMSMapView
+        ) {
+            let newVersion: Int = {
+                var h = Hasher()
+                h.combine(alts.count)
+                h.combine(selectedIndex)
+                for route in alts {
+                    h.combine(route.count)
+                    if let f = route.first { h.combine(f.latitude.bitPattern); h.combine(f.longitude.bitPattern) }
+                    if let l = route.last  { h.combine(l.latitude.bitPattern); h.combine(l.longitude.bitPattern) }
+                }
+                return h.finalize()
+            }()
+            guard newVersion != altVersion else { return }
+            altVersion = newVersion
+
+            altLines.forEach { $0.map = nil }
+            altLines = []
+            guard alts.count > 1 else { return }   // nothing to choose between
+
+            for (i, coords) in alts.enumerated() where i != selectedIndex && !coords.isEmpty {
+                let path = GMSMutablePath()
+                coords.forEach { path.add($0) }
+                let line = GMSPolyline(path: path)
+                line.strokeWidth = 4
+                line.strokeColor = UIColor(white: 0.78, alpha: 0.42)
+                line.geodesic    = false
+                line.zIndex      = 97   // below selected (100) and original (98)
+                line.isTappable  = true
+                line.userData    = i
+                line.map         = mapView
+                altLines.append(line)
+            }
+        }
 
         // MARK: Route
 
@@ -743,6 +798,13 @@ extension GoogleMapView {
 
         func mapView(_ mapView: GMSMapView, willMove gesture: Bool) {
             if gesture { onInteraction?() }
+        }
+
+        // Tapping a dim alternative line selects it.
+        func mapView(_ mapView: GMSMapView, didTap overlay: GMSOverlay) {
+            if let idx = (overlay as? GMSPolyline)?.userData as? Int {
+                onSelectRoute?(idx)
+            }
         }
 
         // Pan/zoom don't re-run updateUIView, so re-declutter when the camera settles.

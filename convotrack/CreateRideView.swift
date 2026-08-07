@@ -176,6 +176,10 @@ struct CreateRideView: View {
     @State private var routeDuration: TimeInterval = 0
     @State private var cameraCommand: MapCameraCommand? = nil
 
+    // Alternative routes — only populated for a direct start→destination (no middle stops)
+    @State private var routeAlternatives: [RouteOption] = []
+    @State private var selectedRouteIndex = 0
+
     // API state
     @State private var isCreating = false
     @State private var errorMessage: String?
@@ -408,11 +412,53 @@ struct CreateRideView: View {
         VStack(alignment: .leading, spacing: 8) {
             routeMapHeader
             routeMapCanvas
+            routeSelectorChips
             HStack(spacing: 12) {
                 RouteStatCard(icon: "timer", label: "EST. TIME", value: durationText)
                 RouteStatCard(icon: "arrow.triangle.turn.up.right.diamond", label: "DISTANCE", value: distanceText)
             }
         }
+    }
+
+    // Horizontally scrollable route options — shown only for a direct start→destination
+    // route with more than one alternative. Tapping a chip (or the dim map line) selects it.
+    @ViewBuilder
+    private var routeSelectorChips: some View {
+        if routeAlternatives.count > 1 {
+            let fastest = routeAlternatives.map(\.durationSeconds).min() ?? 0
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(routeAlternatives.enumerated()), id: \.element.id) { index, option in
+                        let isSelected = index == selectedRouteIndex
+                        let delta = Int((option.durationSeconds - fastest) / 60)
+                        Button { selectRoute(index) } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(delta == 0 ? "FASTEST" : "+\(delta) MIN")
+                                    .font(.labelCaps).tracking(1)
+                                    .foregroundColor(isSelected ? Color.onPrimaryFixed.opacity(0.7) : Color.tertiaryFixed)
+                                Text(durationString(Int(option.durationSeconds / 60)))
+                                    .font(.dataMono)
+                                    .foregroundColor(isSelected ? Color.onPrimaryFixed : Color.onSurface)
+                                Text(String(format: "%.1f KM", option.distanceMeters / 1000))
+                                    .font(.labelCaps).tracking(1)
+                                    .foregroundColor(isSelected ? Color.onPrimaryFixed.opacity(0.7) : Color.onSurfaceVariant)
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 10)
+                            .background(isSelected ? Color.primaryFixed : Color.surfaceContainerHigh)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10)
+                                .stroke(isSelected ? Color.clear : Color.outline.opacity(0.3), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+    }
+
+    private func durationString(_ minutes: Int) -> String {
+        minutes >= 60 ? "\(minutes / 60)h \(minutes % 60)m" : "\(minutes)m"
     }
 
     private var routeMapHeader: some View {
@@ -447,7 +493,10 @@ struct CreateRideView: View {
             routeCoords:   routeCoordinates,
             pins:          stopPins,
             cameraCommand: cameraCommand,
-            isInteractive: false
+            isInteractive: !routeAlternatives.isEmpty,   // enable taps to pick alternatives
+            alternativeRoutes: routeAlternatives.map { $0.coordinates },
+            selectedRouteIndex: selectedRouteIndex,
+            onSelectRoute: { index in selectRoute(index) }
         )
     }
 
@@ -533,14 +582,33 @@ struct CreateRideView: View {
     private func recalculateRoute() async {
         let stops = confirmedStops
         guard stops.count >= 2 else {
-            routeCoordinates = []
-            routeDistance    = 0
-            routeDuration    = 0
+            routeAlternatives  = []
+            selectedRouteIndex = 0
+            routeCoordinates   = []
+            routeDistance      = 0
+            routeDuration      = 0
             if let first = stops.first {
                 cameraCommand = MapCameraCommand.focus(lat: first.coordinate.latitude, lng: first.coordinate.longitude, zoom: 13)
             }
             return
         }
+
+        // Direct start→destination: offer selectable alternatives.
+        // (Google returns none once intermediate waypoints are present.)
+        if stops.count == 2 {
+            do {
+                let options = try await GoogleDirectionsService.alternativeRoutes(from: stops[0].coordinate, to: stops[1].coordinate)
+                if options.count > 1 {
+                    routeAlternatives = options
+                    selectRoute(0, fitCamera: true)
+                    return
+                }
+            } catch { /* fall through to the single-route path below */ }
+        }
+
+        // Has middle stops, or only one/zero alternatives: single stitched route.
+        routeAlternatives  = []
+        selectedRouteIndex = 0
 
         var allCoords: [CLLocationCoordinate2D] = []
         var totalDist: Double = 0
@@ -561,6 +629,21 @@ struct CreateRideView: View {
 
         if !allCoords.isEmpty {
             cameraCommand = MapCameraCommand.fitRoute(allCoords, padding: 40)
+        }
+    }
+
+    /// Applies the alternative at `index` as the active route. `fitCamera` is true only
+    /// for the initial pick; manual selection keeps the camera steady (endpoints match).
+    @MainActor
+    private func selectRoute(_ index: Int, fitCamera: Bool = false) {
+        guard routeAlternatives.indices.contains(index) else { return }
+        selectedRouteIndex = index
+        let option = routeAlternatives[index]
+        routeCoordinates = option.coordinates
+        routeDistance    = option.distanceMeters
+        routeDuration    = option.durationSeconds
+        if fitCamera, !option.coordinates.isEmpty {
+            cameraCommand = MapCameraCommand.fitRoute(option.coordinates, padding: 40)
         }
     }
 

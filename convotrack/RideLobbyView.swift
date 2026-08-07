@@ -476,18 +476,7 @@ struct RideLobbyView: View {
                 if vm.startError == nil {
                     // Mark ride as ACTIVE locally so resuming correctly shows RESUME NAVIGATION
                     if let ride = appState.currentRide {
-                        appState.currentRide = Ride(
-                            id: ride.id, title: ride.title, status: "ACTIVE",
-                            leaderId: ride.leaderId, inviteCode: ride.inviteCode,
-                            destinationName: ride.destinationName,
-                            destinationLat: ride.destinationLat, destinationLng: ride.destinationLng,
-                            distanceMeters: ride.distanceMeters,
-                            estimatedDurationSeconds: ride.estimatedDurationSeconds,
-                            maxAllowedParticipants: ride.maxAllowedParticipants,
-                            startedAt: ride.startedAt, endedAt: ride.endedAt,
-                            createdAt: ride.createdAt,
-                            waypoints: ride.waypoints, participants: ride.participants
-                        )
+                        appState.currentRide = ride.with(status: "ACTIVE")
                     }
                     showNavigation = true
                 }
@@ -569,8 +558,8 @@ struct RideLobbyView: View {
             }
         }
 
-        if let waypoints = appState.currentRide?.waypoints {
-            await calculateRoute(from: waypoints)
+        if let ride = appState.currentRide {
+            await calculateRoute(from: ride.waypoints, polyline: ride.routePolyline)
         }
 
         vm.onRideUpdated = { [appState] event in
@@ -587,13 +576,14 @@ struct RideLobbyView: View {
                 distanceMeters: event.distanceMeters,
                 estimatedDurationSeconds: event.estimatedDurationSeconds,
                 maxAllowedParticipants: event.maxAllowedParticipants,
+                routePolyline: event.routePolyline,
                 startedAt: existing.startedAt,
                 endedAt: existing.endedAt,
                 createdAt: existing.createdAt,
                 waypoints: event.waypoints,
                 participants: existing.participants
             )
-            Task { await calculateRoute(from: event.waypoints) }
+            Task { await calculateRoute(from: event.waypoints, polyline: event.routePolyline) }
         }
 
         // Ride is/became ACTIVE: reflect the status locally so the bottom bar shows
@@ -624,12 +614,19 @@ struct RideLobbyView: View {
         guard let rideId = appState.currentRideId else { return }
         if let ride = try? await APIClient.shared.getRide(rideId) {
             appState.currentRide = ride
-            await calculateRoute(from: ride.waypoints)
+            await calculateRoute(from: ride.waypoints, polyline: ride.routePolyline)
         }
     }
 
     @MainActor
-    private func calculateRoute(from waypoints: [Waypoint]) async {
+    private func calculateRoute(from waypoints: [Waypoint], polyline: String? = nil) async {
+        // Prefer the leader-selected route geometry stored on the ride.
+        if let stored = GoogleDirectionsService.decodedRoute(polyline) {
+            routeCoordinates = stored
+            cameraCommand = MapCameraCommand.fitRoute(stored, padding: 60)
+            return
+        }
+
         let sorted = waypoints.sorted { $0.order < $1.order }
         guard sorted.count >= 2 else { return }
 
