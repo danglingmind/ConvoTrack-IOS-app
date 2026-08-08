@@ -60,10 +60,14 @@ struct MainTabView: View {
         }
         .onAppear {
             // Cold-launch deep link: MainTabView wasn't listening when the link arrived, so drain
-            // the buffered code now that we're on screen.
+            // the buffered code now that we're on screen. MainTabView is presented via a
+            // fullScreenCover (Splash → Auth → Main); presenting a sheet while that cover is still
+            // animating is silently dropped, so defer until the transition settles.
             if let code = DeepLinkRouter.pendingJoinCode {
                 DeepLinkRouter.pendingJoinCode = nil
-                joinSheet = JoinSheetContext(code: code)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                    joinSheet = JoinSheetContext(code: code)
+                }
             }
         }
         .task {
