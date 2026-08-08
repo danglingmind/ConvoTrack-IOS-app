@@ -127,7 +127,7 @@ struct SplashView: View {
         VStack(spacing: 8) {
             // font-display-metrics text-display-metrics: 48px bold tracking-tighter uppercase
             Text("convotrack")
-                .font(.system(size: 48, weight: .bold))
+                .font(.norwester(size: 48))
                 .foregroundColor(Color.primaryFixed)
                 .tracking(-1)
                 .textCase(.uppercase)

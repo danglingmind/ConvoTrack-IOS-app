@@ -177,15 +177,15 @@ struct RideLobbyView: View {
         return name.isEmpty ? clerk.user?.username : name
     }
 
-    /// The leader may edit the ride whenever the Start button is available (leader,
-    /// ride not yet ACTIVE). Kept in lockstep with the `bottomBar` Start-button gate
-    /// so the pencil never disappears while the Start button is showing. Leadership is
-    /// read from both the reactive Clerk identity AND the VM's cached `amILeader` — the
-    /// former survives app relaunch before the cache is seeded, the latter survives a
-    /// transient render where `clerk.user` reads nil. Requires `currentRide` since
-    /// `EditRideView` needs a ride to edit.
+    /// The leader may edit the ride in any state except COMPLETED (LOBBY, ACTIVE and PAUSED are
+    /// all editable). Editing an ACTIVE ride re-routes everyone live (backend swaps the in-memory
+    /// route geometry and broadcasts `ride:updated`; riders in navigation reroute with an alert).
+    /// Leadership is read from both the reactive Clerk identity AND the VM's cached `amILeader` —
+    /// the former survives app relaunch before the cache is seeded, the latter survives a transient
+    /// render where `clerk.user` reads nil. Requires `currentRide` since `EditRideView` needs a
+    /// ride to edit.
     private var canEditRide: Bool {
-        guard let ride = appState.currentRide, ride.status != "ACTIVE" else { return false }
+        guard let ride = appState.currentRide, ride.status != "COMPLETED" else { return false }
         if vm.amILeader { return true }
         if let uid = clerk.user?.id, !uid.isEmpty, uid == ride.leaderId { return true }
         return false
@@ -419,7 +419,7 @@ struct RideLobbyView: View {
                         // The leader can tap any non-leader rider to open the
                         // management sheet (remove from ride).
                         let canManage = vm.amILeader && participant.userId != vm.leaderId
-                        let row = ParticipantRiderRow(participant: participant, nameOverride: name, statusOverride: status, isOnline: vm.onlineUserIds.contains(participant.userId))
+                        let row = ParticipantRiderRow(participant: participant, nameOverride: name, statusOverride: status, isOnline: vm.onlineUserIds.contains(participant.userId), rideActive: appState.currentRide?.status == "ACTIVE")
                         if canManage {
                             Button { participantToManage = participant } label: { row }
                                 .buttonStyle(.plain)
@@ -655,10 +655,52 @@ struct ParticipantRiderRow: View {
     var nameOverride: String? = nil
     var statusOverride: String? = nil
     var isOnline: Bool = false
+    /// True once the ride has left the lobby (status ACTIVE). Everyone is riding, so the
+    /// ready/waiting distinction is moot and the badge reads "RIDING".
+    var rideActive: Bool = false
+
+    private enum RosterState: Equatable { case waiting, ready, riding }
 
     private var displayName: String { nameOverride ?? participant.name }
     private var displayStatus: String { statusOverride ?? participant.status }
-    private var isReady: Bool { displayStatus == "READY" }
+
+    // The leader starts the ride rather than readying up, so a leader must never render as
+    // WAITING. Once the ride is ACTIVE everyone is riding.
+    private var rosterState: RosterState {
+        if rideActive { return .riding }
+        if participant.isLeader || displayStatus == "READY" { return .ready }
+        return .waiting
+    }
+    private var isActive: Bool { rosterState != .waiting }
+
+    private var badgeText: String {
+        switch rosterState {
+        case .waiting: return "WAITING"
+        case .ready:   return "READY"
+        case .riding:  return "RIDING"
+        }
+    }
+    private var badgeTextColor: Color {
+        switch rosterState {
+        case .waiting: return Color.onSurfaceVariant
+        case .ready:   return Color.onPrimaryContainer
+        case .riding:  return Color.onPrimaryFixed
+        }
+    }
+    private var badgeBackground: Color {
+        switch rosterState {
+        case .waiting: return Color.surfaceVariant
+        case .ready:   return Color.primaryContainer
+        case .riding:  return Color.tertiaryFixed
+        }
+    }
+    private var accentColor: Color {
+        switch rosterState {
+        case .waiting: return Color.outline
+        case .ready:   return Color.primaryFixed
+        case .riding:  return Color.tertiaryFixed
+        }
+    }
 
     var body: some View {
         HStack(spacing: 16) {
@@ -705,29 +747,29 @@ struct ParticipantRiderRow: View {
 
             Spacer()
 
-            // Ready-state only — connection state is shown by the presence dot, never as a
-            // "DISCONNECTED" badge (which conflated roster status with liveness).
-            Text(isReady ? "READY" : "WAITING")
+            // Roster state (waiting / ready / riding) — connection state is shown by the presence
+            // dot, never as a "DISCONNECTED" badge (which conflated roster status with liveness).
+            Text(badgeText)
                 .font(.labelCaps)
-                .foregroundColor(isReady ? Color.onPrimaryContainer : Color.onSurfaceVariant)
+                .foregroundColor(badgeTextColor)
                 .tracking(1)
                 .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(isReady ? Color.primaryContainer : Color.surfaceVariant)
+                .background(badgeBackground)
                 .clipShape(Capsule())
         }
         .padding(16)
         .background(Color.surfaceContainerHigh.opacity(0.7))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(isReady ? Color.primaryFixed : Color.outline, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(isActive ? accentColor : Color.outline, lineWidth: 1))
         .overlay(
             HStack {
                 Rectangle()
-                    .fill(isReady ? Color.primaryFixed : Color.outline)
+                    .fill(accentColor)
                     .frame(width: 4).clipShape(RoundedRectangle(cornerRadius: 2))
                 Spacer()
             }
         )
-        .animation(.easeInOut(duration: 0.2), value: displayStatus)
+        .animation(.easeInOut(duration: 0.2), value: rosterState)
     }
 }
 

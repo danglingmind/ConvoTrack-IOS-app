@@ -87,7 +87,7 @@ struct AuthView: View {
 
             // font-display-metrics 48px tracking-[0.2em]
             Text("CONVOTRACK")
-                .font(.system(size: 42, weight: .bold))
+                .font(.norwester(size: 42))
                 .foregroundColor(Color.primaryFixed)
                 .tracking(9.6)
 

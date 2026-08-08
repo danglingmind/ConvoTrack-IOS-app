@@ -34,7 +34,6 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var mySpeedKmh: Double = 0
     @Published var myRank: Int = 0
     @Published var myDistanceToGoalKm: Double = 0
-    @Published var riderCount: Int = 0
     @Published var onlineUserIds: Set<String> = []   // authoritative presence for offline markers
     @Published var connectionState: RideRealtimeSession.ConnectionState = .connected
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
@@ -60,6 +59,15 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var activeEmergency: EmergencyEvent? = nil
 
     var amILeader: Bool { !myUserId.isEmpty && myUserId == leaderId }
+
+    /// Live rider count for the top-bar dot. Uses the SAME presence rule as the leaderboard rows
+    /// (self is always live; every other rider must have a current heartbeat in `onlineUserIds`),
+    /// so the number can never disagree with the greyed-out rows. Derived from the roster +
+    /// presence rather than the fluctuating `ride:state_update` participant array, which only
+    /// carries riders that have posted a location tick.
+    var liveRiderCount: Int {
+        leaderboardRows.filter { $0.isMe || onlineUserIds.contains($0.id) }.count
+    }
 
     var emergencyReporterName: String {
         guard let e = activeEmergency else { return "" }
@@ -137,7 +145,6 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
                 isMe: p.userId == myUserId
             )
         }
-        riderCount = active.count
         if let myRow = leaderboardRows.first(where: { $0.isMe }) {
             myRank = myRow.rank
             myDistanceToGoalKm = ride.distanceMeters / 1000
@@ -195,6 +202,14 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         session.$latestEmergency
             .compactMap { $0 }
             .sink { [weak self] event in self?.handleEmergencyStarted(event) }
+            .store(in: &cancellables)
+        // Leader edited the ride mid-flight → reroute live. `dropFirst` skips the value the
+        // publisher replays on subscribe, so entering navigation after an earlier edit doesn't
+        // fire a spurious "rerouting" announcement.
+        session.$rideUpdated
+            .dropFirst()
+            .compactMap { $0 }
+            .sink { [weak self] event in self?.handleRideUpdated(event) }
             .store(in: &cancellables)
     }
 
@@ -255,9 +270,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private func handleRegroupStarted(_ event: RegroupEvent) {
         activeRegroup = event
         hasMarkedArrived = false
-        // Only toast for riders who didn't broadcast it
+        // Alert riders who didn't broadcast it — toast + a gentle chime that's clearly
+        // distinct from the emergency siren. The initiator already knows, so stays silent.
         if event.createdBy != myUserId {
             showRegroupToast = true
+            SirenPlayer.shared.play(.regroup)
         }
     }
 
@@ -272,6 +289,32 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             try? await Task.sleep(for: .seconds(2.5))
             self?.showRegroupResolvedToast = false
         }
+    }
+
+    /// The leader edited the ride while it's live (destination / stops / route changed). Re-seed the
+    /// waypoint geometry and recompute the route so the map + turn steps follow the new plan, and
+    /// alert riders with a chime + spoken "rerouting" cue. The backend has already swapped the
+    /// authoritative route geometry, so progress/leaderboard re-sync on the next state update.
+    private func handleRideUpdated(_ event: RideUpdatedEvent) {
+        totalDistanceMeters = event.distanceMeters
+
+        let sorted = event.waypoints.sorted { $0.order < $1.order }
+        if let dest = sorted.last {
+            destinationCoordinate = CLLocationCoordinate2D(latitude: dest.lat, longitude: dest.lng)
+        }
+        if let start = sorted.first {
+            startCoordinate = CLLocationCoordinate2D(latitude: start.lat, longitude: start.lng)
+        }
+        middleWaypoints = sorted.filter { $0.type == "WAYPOINT" }
+        remainingStops = sorted
+            .filter { $0.type == "WAYPOINT" || $0.type == "DESTINATION" }
+            .map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
+
+        // Attention chime, then a spoken cue once the chime has cleared the audio session.
+        SirenPlayer.shared.play(.regroup)
+        VoiceAnnouncer.shared.announce("Ride updated, rerouting", after: 0.8)
+
+        Task { await calculateRoute(from: event.waypoints, polyline: event.routePolyline) }
     }
 
     private func handleEmergencyStarted(_ event: EmergencyEvent) {
@@ -331,8 +374,6 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     // MARK: - Private
 
     private func handleStateUpdate(_ update: RideStateUpdate) {
-        riderCount = update.participants.count
-
         // Only overwrite the pre-populated leaderboard when the server actually has data.
         // The initial ride:state_update emitted on start has leaderboard: [] before any
         // location updates have been processed — don't let that clear what we pre-seeded.
@@ -1017,7 +1058,7 @@ struct RideNavigationView: View {
                     HStack(spacing: 6) {
                         Circle().fill(Color.primaryFixed).frame(width: 6, height: 6)
                             .shadow(color: Color.primaryFixed, radius: 4)
-                        Text(vm.riderCount > 0 ? "\(vm.riderCount)" : "--")
+                        Text(vm.liveRiderCount > 0 ? "\(vm.liveRiderCount)" : "--")
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(Color.primaryFixed)
                     }

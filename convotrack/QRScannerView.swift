@@ -29,7 +29,7 @@ struct QRScannerView: UIViewControllerRepresentable {
                 return String(segment.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
             }
             // https://<host>/convotrack/join/ABC123 (Universal Link) — validate the host to
-            // match ConvoTrackApp.handleDeepLink, so an off-domain link can't masquerade as an invite.
+            // match DeepLinkRouter.handle, so an off-domain link can't masquerade as an invite.
             if url.scheme == "https", url.host == AppURLs.joinLinkHost, url.path.hasPrefix("/convotrack/join/") {
                 return String(url.lastPathComponent.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
             }

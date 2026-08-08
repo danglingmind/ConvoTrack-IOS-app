@@ -80,6 +80,10 @@ extension Font {
     static let captionMd = Font.system(size: 12, weight: .regular)
     static let captionSm = Font.system(size: 10, weight: .regular)
 
+    static func norwester(size: CGFloat) -> Font {
+        .custom("Norwester", size: size)
+    }
+
     // Icon sizes — use these on Image(systemName:) instead of inline .font(.system(...))
     static let iconXS   = Font.system(size: 14, weight: .semibold)
     static let iconSm   = Font.system(size: 15)

@@ -46,6 +46,14 @@ struct JoinRideView: View {
                     VStack(spacing: 32) {
                         heroSection
 
+                        // The active Join button sits directly beneath the verified ride details so
+                        // it's reachable without scrolling to the bottom. Hidden until a ride is
+                        // looked up (via code, link, or QR).
+                        if ridePreview != nil {
+                            joinButton
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+
                         codeInputSection
 
                         // Divider
@@ -57,12 +65,11 @@ struct JoinRideView: View {
 
                         qrSection
 
-                        joinButton
-
                         Color.clear.frame(height: 40)
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
+                    .animation(.easeInOut(duration: 0.25), value: ridePreview != nil)
                 }
                 .scrollDismissesKeyboard(.interactively)
             }

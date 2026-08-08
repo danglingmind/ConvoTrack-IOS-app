@@ -166,6 +166,11 @@ extension GoogleMapView {
         var markers:       [String: GMSMarker] = [:]
         var pinRenderKeys: [String: Int]        = [:]   // styleHash ⊕ quantized offset
 
+        // Avatar photos for rider markers. Baking a marker icon is synchronous, so each avatar
+        // is fetched once, cached by URL, and the affected rider marker(s) re-baked when it lands.
+        var avatarImages:   [String: UIImage] = [:]
+        var avatarInFlight: Set<String>       = []
+
         // Marker collision state — see resolveCollisions(on:)
         var pinModels:   [String: MapPin]   = [:]       // last pin per id, to re-bake on offset change
         var pinOffsets:  [String: CGVector] = [:]       // current (quantized) body displacement per id
@@ -525,9 +530,12 @@ extension GoogleMapView {
             case .emergency:
                 guard let img = renderSwiftUI(EmergencyPin(), size: CGSize(width: 70, height: 90)) else { return nil }
                 return (img, CGPoint(x: img.size.width / 2, y: img.size.height), UIColor(red: 1, green: 0.706, blue: 0.671, alpha: 1))
-            case .rider(let name, _, let isMe, let rank, let isSelected):
+            case .rider(let name, let avatarUrl, let isMe, let rank, let isSelected):
                 let size: CGFloat = isSelected ? 54 : 46
-                guard let img = renderRiderIcon(name: name, isMe: isMe, rank: rank, isSelected: isSelected) else { return nil }
+                // Cached photo if we have it; nil triggers an async fetch + re-bake and draws the
+                // letter fallback in the meantime.
+                let avatar = avatarImage(for: avatarUrl)
+                guard let img = renderRiderIcon(name: name, avatar: avatar, isMe: isMe, rank: rank, isSelected: isSelected) else { return nil }
                 // Triangle tip within the rider canvas is at (width/2, size+6).
                 return (img, CGPoint(x: img.size.width / 2, y: size + 6), (isMe || isSelected) ? lime : .white)
             default:
@@ -689,45 +697,72 @@ extension GoogleMapView {
             }
         }
 
-        private func renderRiderIcon(name: String, isMe: Bool, rank: Int, isSelected: Bool) -> UIImage? {
+        private func renderRiderIcon(name: String, avatar: UIImage?, isMe: Bool, rank: Int, isSelected: Bool) -> UIImage? {
             let size: CGFloat = isSelected ? 54 : 46
             let lime = UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1)
-            let border = isSelected ? lime : (isMe ? lime : UIColor.white.withAlphaComponent(0.9))
-            let totalH = size + 6 + 18  // circle + triangle + label
+            let border = (isSelected || isMe) ? lime : UIColor.white.withAlphaComponent(0.9)
+
+            // Measure the label up front so the canvas can widen to fit it. Previously the canvas
+            // was a fixed `size + 8` wide and any name longer than the circle was clipped.
+            let label = (name.components(separatedBy: " ").first?.uppercased() ?? "") as NSString
+            let labelAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.monospacedSystemFont(ofSize: isSelected ? 9 : 8, weight: .black),
+                .foregroundColor: UIColor.white
+            ]
+            let ls = label.size(withAttributes: labelAttrs)
+            let labelBoxW = ceil(ls.width) + 8          // capsule horizontal padding
+            let canvasW   = max(size + 8, labelBoxW)
+            let totalH    = size + 6 + 18               // circle + triangle + label
+            let cx        = canvasW / 2
+            let circleRect = CGRect(x: cx - size / 2, y: 0, width: size, height: size)
+
             let scale  = UIScreen.main.scale
-            let renderer = UIGraphicsImageRenderer(size: CGSize(width: size + 8, height: totalH), format: {
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: canvasW, height: totalH), format: {
                 let f = UIGraphicsImageRendererFormat(); f.scale = scale; return f
             }())
             return renderer.image { ctx in
-                let cx = (size + 8) / 2
-                // Circle background
-                UIColor(red: 0.12, green: 0.12, blue: 0.12, alpha: 1).setFill()
-                ctx.cgContext.fillEllipse(in: CGRect(x: (8/2), y: 0, width: size, height: size))
-                // Initials
-                let initial = String(name.prefix(1)).uppercased()
-                let attrs: [NSAttributedString.Key: Any] = [
-                    .font: UIFont.boldSystemFont(ofSize: size * 0.32),
-                    .foregroundColor: isMe ? lime : UIColor.white
-                ]
-                let textSize = (initial as NSString).size(withAttributes: attrs)
-                (initial as NSString).draw(at: CGPoint(x: cx - textSize.width / 2 + 4, y: size / 2 - textSize.height / 2), withAttributes: attrs)
+                let cg = ctx.cgContext
+
+                if let avatar {
+                    // Aspect-fill the photo into the circle.
+                    cg.saveGState()
+                    cg.addEllipse(in: circleRect); cg.clip()
+                    let s = max(size / avatar.size.width, size / avatar.size.height)
+                    let dw = avatar.size.width * s, dh = avatar.size.height * s
+                    avatar.draw(in: CGRect(x: circleRect.midX - dw / 2, y: circleRect.midY - dh / 2, width: dw, height: dh))
+                    cg.restoreGState()
+                } else {
+                    // Letter fallback while the photo loads or when there's no avatar URL.
+                    UIColor(red: 0.12, green: 0.12, blue: 0.12, alpha: 1).setFill()
+                    cg.fillEllipse(in: circleRect)
+                    let initial = String(name.prefix(1)).uppercased() as NSString
+                    let attrs: [NSAttributedString.Key: Any] = [
+                        .font: UIFont.boldSystemFont(ofSize: size * 0.32),
+                        .foregroundColor: isMe ? lime : UIColor.white
+                    ]
+                    let ts = initial.size(withAttributes: attrs)
+                    initial.draw(at: CGPoint(x: circleRect.midX - ts.width / 2, y: circleRect.midY - ts.height / 2), withAttributes: attrs)
+                }
+
                 // Border ring
                 border.setStroke()
-                ctx.cgContext.setLineWidth(isSelected ? 3 : 2.5)
-                ctx.cgContext.strokeEllipse(in: CGRect(x: 4 + 1.5, y: 1.5, width: size - 3, height: size - 3))
-                // Rank badge
+                cg.setLineWidth(isSelected ? 3 : 2.5)
+                cg.strokeEllipse(in: circleRect.insetBy(dx: 1.5, dy: 1.5))
+
+                // Rank badge (bottom-right of the circle)
                 let rankText = "#\(rank)" as NSString
                 let badgeAttrs: [NSAttributedString.Key: Any] = [
                     .font: UIFont.monospacedSystemFont(ofSize: 7, weight: .black),
                     .foregroundColor: rank == 1 ? UIColor(red: 0.09, green: 0.12, blue: 0, alpha: 1) : UIColor.white
                 ]
                 let badgeSize = rankText.size(withAttributes: badgeAttrs)
-                let bx = (8/2) + size - badgeSize.width - 4
+                let bx = circleRect.maxX - badgeSize.width - 4
                 let by = size - badgeSize.height - 2
                 (rank == 1 ? lime : UIColor(white: 0.22, alpha: 0.95)).setFill()
                 UIBezierPath(roundedRect: CGRect(x: bx - 2, y: by - 1, width: badgeSize.width + 4, height: badgeSize.height + 2), cornerRadius: 4).fill()
                 rankText.draw(at: CGPoint(x: bx, y: by), withAttributes: badgeAttrs)
-                // Triangle pointer
+
+                // Triangle pointer (tip at cx, size+6 — the marker's semantic anchor)
                 let triPath = UIBezierPath()
                 triPath.move(to:    CGPoint(x: cx, y: size + 6))
                 triPath.addLine(to: CGPoint(x: cx - 5, y: size))
@@ -735,18 +770,50 @@ extension GoogleMapView {
                 triPath.close()
                 UIColor.white.setFill()
                 triPath.fill()
-                // Name label
-                let label = name.components(separatedBy: " ").first?.uppercased() ?? ""
-                let labelAttrs: [NSAttributedString.Key: Any] = [
-                    .font: UIFont.monospacedSystemFont(ofSize: isSelected ? 9 : 8, weight: .black),
-                    .foregroundColor: UIColor.white
-                ]
-                let ls = (label as NSString).size(withAttributes: labelAttrs)
+
+                // Name label — canvas is guaranteed wide enough, so it never clips.
                 let lx = cx - ls.width / 2
                 let ly = size + 8
                 UIColor(white: 0.1, alpha: 0.75).setFill()
                 UIBezierPath(roundedRect: CGRect(x: lx - 4, y: ly - 2, width: ls.width + 8, height: ls.height + 4), cornerRadius: 6).fill()
-                (label as NSString).draw(at: CGPoint(x: lx, y: ly), withAttributes: labelAttrs)
+                label.draw(at: CGPoint(x: lx, y: ly), withAttributes: labelAttrs)
+            }
+        }
+
+        // MARK: - Avatar loading
+
+        /// Returns the cached avatar for `urlString`, or nil after kicking off a one-shot fetch.
+        /// When the fetch completes, the rider marker(s) using that URL are re-baked with the photo.
+        private func avatarImage(for urlString: String?) -> UIImage? {
+            guard let urlString, let url = URL(string: urlString) else { return nil }
+            if let cached = avatarImages[urlString] { return cached }
+            guard !avatarInFlight.contains(urlString) else { return nil }
+            avatarInFlight.insert(urlString)
+            URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+                let image = data.flatMap { UIImage(data: $0) }
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.avatarInFlight.remove(urlString)
+                    guard let image else { return }
+                    self.avatarImages[urlString] = image
+                    self.rebakeRiders(withAvatarURL: urlString)
+                }
+            }.resume()
+            return nil   // photo will arrive asynchronously and trigger a re-bake
+        }
+
+        /// Re-bake any live rider markers whose pin references `urlString`, now that its photo is
+        /// available. The style hash is unchanged, so a plain `applyPins` wouldn't repaint them.
+        private func rebakeRiders(withAvatarURL urlString: String) {
+            for (id, pin) in pinModels {
+                guard case .rider(_, let avatarUrl, _, _, _) = pin.style,
+                      avatarUrl == urlString,
+                      let marker = markers[id] else { continue }
+                let offset = pinOffsets[id] ?? .zero
+                let baked = renderMarker(pin, offset: offset)
+                marker.icon             = baked.image
+                pinBodyGeom[id]         = baked.geom
+                pinRenderKeys[id]       = renderKey(pin.styleHash, offset)
             }
         }
 
