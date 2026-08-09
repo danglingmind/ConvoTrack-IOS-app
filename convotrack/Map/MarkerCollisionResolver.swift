@@ -13,6 +13,11 @@ import Foundation
 // colliding pair is pushed apart along its axis of least penetration, iterated a few
 // times so clusters relax. Displacement is clamped to `maxLeader`; a very tight cluster
 // keeps some residual overlap rather than flinging bodies far from their tips.
+//
+// Each iteration also applies a gentle restoring pull toward each movable body's resting
+// center *before* separation, so a body that no longer overlaps anyone relaxes back to its
+// tip (offset → 0, leader line gone). Separation runs last, so bodies that still collide
+// end the iteration cleanly apart — the pull only wins once the crowd clears.
 enum MarkerCollisionResolver {
 
     struct Marker {
@@ -29,7 +34,8 @@ enum MarkerCollisionResolver {
         _ markers: [Marker],
         maxLeader: CGFloat = 60,
         padding: CGFloat = 3,
-        iterations: Int = 12
+        iterations: Int = 12,
+        restore: CGFloat = 0.2
     ) -> [String: CGVector] {
 
         guard markers.count > 1 else { return [:] }
@@ -48,6 +54,15 @@ enum MarkerCollisionResolver {
         }
 
         for _ in 0..<iterations {
+            // Restoring pull toward each movable body's resting center. Applied before
+            // separation so a body that still overlaps is pushed back out below and ends the
+            // iteration cleanly apart, while a body with no remaining overlap keeps decaying
+            // toward its tip until its offset (and leader line) vanish.
+            for id in ids where movable[id]! {
+                pos[id]!.x += (def[id]!.x - pos[id]!.x) * restore
+                pos[id]!.y += (def[id]!.y - pos[id]!.y) * restore
+            }
+
             for i in 0..<ids.count {
                 for j in (i + 1)..<ids.count {
                     let a = ids[i], b = ids[j]

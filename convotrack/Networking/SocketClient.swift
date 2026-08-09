@@ -150,8 +150,14 @@ final class SocketClient {
         socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
             DispatchQueue.main.async { self?.onReconnecting?() }
         }
-        socket.on(clientEvent: .error) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.onReconnecting?() }
+        // Authoritative recovery signal. `.connect` doesn't reliably re-fire on an auto-reconnect,
+        // which left the "reconnecting" banner stuck on forever; the manager's `.statusChange`
+        // always reports the real transition, so a return to `.connected` clears it every time.
+        // (Intentionally NOT mapping `.error` → reconnecting: it fires for non-fatal errors while
+        // still connected and would flip the banner on with nothing to turn it back off.)
+        socket.on(clientEvent: .statusChange) { [weak self] data, _ in
+            guard let self, (data.first as? SocketIOStatus) == .connected else { return }
+            DispatchQueue.main.async { self.onConnect?() }
         }
 
         socket.on("ride:state_update") { [weak self] data, _ in

@@ -7,7 +7,7 @@ import UIKit
 
 /// Single funnel for every ride-invite deep link, regardless of how iOS delivered it. Parses both
 /// the legacy custom scheme (convotrack://join/CODE) and the HTTPS Universal Link
-/// (https://<host>/convotrack/join/CODE), then hands the 6-char code to the UI.
+/// (https://convotrack.in/join/CODE), then hands the 6-char code to the UI.
 enum DeepLinkRouter {
     /// Buffers a code parsed before `MainTabView` is on screen and listening (cold launch through
     /// splash → auth). `MainTabView` drains this on appear; the live `NotificationCenter` post
@@ -20,7 +20,7 @@ enum DeepLinkRouter {
             rawSegment = url.pathComponents.first(where: { $0 != "/" })
         } else if url.scheme == "https",
                   url.host == AppURLs.joinLinkHost,
-                  url.path.hasPrefix("/convotrack/join/") {
+                  url.path.hasPrefix(AppURLs.joinPathPrefix) {
             rawSegment = url.lastPathComponent
         } else {
             return

@@ -270,8 +270,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private func handleRegroupStarted(_ event: RegroupEvent) {
         activeRegroup = event
         hasMarkedArrived = false
-        // Alert riders who didn't broadcast it — toast + a gentle chime that's clearly
-        // distinct from the emergency siren. The initiator already knows, so stays silent.
+        // Alert riders who didn't broadcast it — toast + a bold two-tone siren that's clearly
+        // distinct from the emergency wail. The initiator already knows, so stays silent.
         if event.createdBy != myUserId {
             showRegroupToast = true
             SirenPlayer.shared.play(.regroup)
@@ -310,9 +310,9 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             .filter { $0.type == "WAYPOINT" || $0.type == "DESTINATION" }
             .map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
 
-        // Attention chime, then a spoken cue once the chime has cleared the audio session.
+        // Attention siren, then a spoken cue once the siren has cleared the audio session.
         SirenPlayer.shared.play(.regroup)
-        VoiceAnnouncer.shared.announce("Ride updated, rerouting", after: 0.8)
+        VoiceAnnouncer.shared.announce("Ride updated, rerouting", after: 1.8)
 
         Task { await calculateRoute(from: event.waypoints, polyline: event.routePolyline) }
     }
