@@ -139,8 +139,9 @@ struct RegroupEvent: Codable, Equatable {
     let createdAt: String
 }
 
-// Fire-and-forget critical alert. Unlike RegroupEvent it has no server-side
-// resolve/arrived flow — it is broadcast once and dismissed locally.
+// Critical alert. Stays open server-side (pin + repeating siren persist on every client) until
+// the creator or the ride leader dismisses it via `ride:emergency_dismiss` → `ride:emergency_resolved`.
+// Unlike RegroupEvent there is no proximity/arrival auto-resolve.
 struct EmergencyEvent: Codable, Equatable {
     let emergencyId: String
     let userId: String
@@ -156,6 +157,7 @@ struct RideStateUpdate: Codable {
     let participants: [LiveParticipant]
     let leaderboard: [LiveLeaderboardEntry]
     let openRegroup: RegroupEvent?
+    let openEmergency: EmergencyEvent?
 }
 
 struct LiveParticipant: Codable {

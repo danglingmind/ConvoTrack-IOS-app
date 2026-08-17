@@ -5,7 +5,6 @@ struct CoordinationOverlayView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showGroupSplitAlert = true
     @State private var showRegroupSheet = false
-    @State private var selectedReason: RegroupReason? = nil
     @State private var broadcasting = false
 
     enum RegroupReason: String, CaseIterable {
@@ -129,8 +128,7 @@ struct CoordinationOverlayView: View {
         }
         .sheet(isPresented: $showRegroupSheet) {
             RegroupBottomSheet(
-                selectedReason: $selectedReason,
-                onBroadcast: { _ in
+                onBroadcast: { _, _, _ in
                     broadcasting = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                         showRegroupSheet = false
@@ -241,20 +239,34 @@ struct GroupSplitAlert: View {
 
 struct RegroupBottomSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Binding var selectedReason: CoordinationOverlayView.RegroupReason?
-    let onBroadcast: (CLLocationCoordinate2D?) -> Void
+    /// (reason, searched meet coordinate or nil, meters ahead on route when no searched coordinate)
+    let onBroadcast: (CoordinationOverlayView.RegroupReason, CLLocationCoordinate2D?, Double) -> Void
     let isBroadcasting: Bool
 
-    private enum LocationMode { case myPosition, searchedLocation }
+    /// How far ahead on the route to place the meet point when broadcasting from the rider's position.
+    enum RegroupDistance: CaseIterable {
+        case current, ahead100, ahead500
+        var meters: Double { switch self { case .current: 0; case .ahead100: 100; case .ahead500: 500 } }
+        var label: String  { switch self { case .current: "Current"; case .ahead100: "100 m"; case .ahead500: "500 m" } }
+    }
 
-    @State private var locationMode: LocationMode = .myPosition
+    @State private var selectedReason: CoordinationOverlayView.RegroupReason? = nil
+    @State private var selectedDistance: RegroupDistance = .current
     @State private var locationQuery = ""
     @State private var locationResults: [PlaceResult] = []
     @State private var pickedLocation: (name: String, coordinate: CLLocationCoordinate2D)? = nil
     @State private var searchTask: Task<Void, Never>? = nil
 
-    private var broadcastBlocked: Bool {
-        isBroadcasting || selectedReason == nil || (locationMode == .searchedLocation && pickedLocation == nil)
+    // Tiles broadcast instantly (fast path). But once a specific meet location is picked, the tap only
+    // selects the reason — the rider confirms with the Broadcast button so a stray tap can't fire.
+    private func handleReasonTap(_ reason: CoordinationOverlayView.RegroupReason) {
+        selectedReason = reason
+        if pickedLocation == nil { broadcast() }
+    }
+
+    private func broadcast() {
+        guard let reason = selectedReason, !isBroadcasting else { return }
+        onBroadcast(reason, pickedLocation?.coordinate, pickedLocation == nil ? selectedDistance.meters : 0)
     }
 
     var body: some View {
@@ -279,7 +291,9 @@ struct RegroupBottomSheet: View {
                     }
                     .padding(.horizontal, 20)
 
-                    Text("Select a reason for the broadcast:")
+                    Text(pickedLocation == nil
+                         ? "Tap a reason to broadcast instantly:"
+                         : "Pick a reason, then broadcast to the location below:")
                         .font(.bodyLg)
                         .foregroundColor(Color.onSurfaceVariant)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -287,10 +301,38 @@ struct RegroupBottomSheet: View {
                         .padding(.top, 12)
                         .padding(.bottom, 24)
 
+                    // Distance selector — offsets the meet point this far ahead on the route. Ignored
+                    // (and dimmed) once a specific searched location is chosen below.
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("MEET POINT")
+                            .font(.labelCaps)
+                            .foregroundColor(Color.onSurfaceVariant)
+                            .tracking(2)
+
+                        HStack(spacing: 0) {
+                            ForEach(RegroupDistance.allCases, id: \.self) { dist in
+                                Button(action: { selectedDistance = dist }) {
+                                    Text(dist.label)
+                                        .font(.toggleLabel)
+                                        .foregroundColor(selectedDistance == dist ? Color.onPrimaryFixed : Color.onSurfaceVariant)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                        .background(selectedDistance == dist ? Color.primaryFixed : Color.clear)
+                                }
+                            }
+                        }
+                        .background(Color.surfaceContainerHigh)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .opacity(pickedLocation == nil ? 1 : 0.4)
+                        .disabled(pickedLocation != nil)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
+
                     // Reason Grid
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         ForEach(CoordinationOverlayView.RegroupReason.allCases, id: \.self) { reason in
-                            Button(action: { selectedReason = reason }) {
+                            Button(action: { handleReasonTap(reason) }) {
                                 VStack(spacing: 10) {
                                     Image(systemName: reason.icon)
                                         .font(.system(size: 28))
@@ -323,100 +365,71 @@ struct RegroupBottomSheet: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 24)
 
-                    // Location Section
+                    // Location Section — search a specific meet spot. Picking one switches the flow:
+                    // reason taps stop auto-broadcasting and the rider confirms via the button below.
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("MEET LOCATION")
+                        Text("OR MEET AT A SPECIFIC LOCATION")
                             .font(.labelCaps)
                             .foregroundColor(Color.onSurfaceVariant)
                             .tracking(2)
 
-                        // Mode toggle
-                        HStack(spacing: 0) {
-                            Button(action: {
-                                searchTask?.cancel()
-                                locationMode = .myPosition
-                                pickedLocation = nil
-                                locationQuery = ""
-                                locationResults = []
-                            }) {
-                                Text("My Position")
-                                    .font(.toggleLabel)
-                                    .foregroundColor(locationMode == .myPosition ? Color.onPrimaryFixed : Color.onSurfaceVariant)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                    .background(locationMode == .myPosition ? Color.primaryFixed : Color.clear)
+                        if let picked = pickedLocation {
+                            // Confirmed location chip
+                            HStack(spacing: 12) {
+                                Image(systemName: "mappin.circle.fill")
+                                    .foregroundColor(Color.primaryFixed)
+                                    .font(.system(size: 16))
+                                Text(picked.name)
+                                    .font(.bodyMd)
+                                    .foregroundColor(Color.onSurface)
+                                    .lineLimit(1)
+                                Spacer()
+                                Button(action: {
+                                    pickedLocation = nil
+                                    locationQuery = ""
+                                    locationResults = []
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
+                                        .font(.system(size: 18))
+                                }
                             }
-                            Button(action: { locationMode = .searchedLocation }) {
-                                Text("Search Location")
-                                    .font(.toggleLabel)
-                                    .foregroundColor(locationMode == .searchedLocation ? Color.onPrimaryFixed : Color.onSurfaceVariant)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                    .background(locationMode == .searchedLocation ? Color.primaryFixed : Color.clear)
-                            }
-                        }
-                        .background(Color.surfaceContainerHigh)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                        if locationMode == .searchedLocation {
-                            if let picked = pickedLocation {
-                                // Confirmed location chip
-                                HStack(spacing: 12) {
-                                    Image(systemName: "mappin.circle.fill")
-                                        .foregroundColor(Color.primaryFixed)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(Color.surfaceContainerHigh)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primaryFixed.opacity(0.4), lineWidth: 1))
+                        } else {
+                            // Search field
+                            VStack(spacing: 0) {
+                                HStack(spacing: 0) {
+                                    Image(systemName: "magnifyingglass")
+                                        .foregroundColor(Color.outline.opacity(0.6))
                                         .font(.system(size: 16))
-                                    Text(picked.name)
+                                        .padding(.leading, 16)
+                                    TextField("Search for a meet location...", text: $locationQuery)
                                         .font(.bodyMd)
                                         .foregroundColor(Color.onSurface)
-                                        .lineLimit(1)
-                                    Spacer()
-                                    Button(action: {
-                                        pickedLocation = nil
-                                        locationQuery = ""
-                                        locationResults = []
-                                    }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
-                                            .font(.system(size: 18))
-                                    }
+                                        .tint(Color.primaryFixed)
+                                        .padding(.leading, 12)
+                                        .padding(.trailing, 16)
+                                        .frame(height: 48)
+                                        .onChange(of: locationQuery) { _, newValue in
+                                            searchTask?.cancel()
+                                            guard newValue.count >= 2 else { locationResults = []; return }
+                                            searchTask = Task {
+                                                try? await Task.sleep(for: .milliseconds(300))
+                                                guard !Task.isCancelled else { return }
+                                                await performLocationSearch(newValue)
+                                            }
+                                        }
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
                                 .background(Color.surfaceContainerHigh)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primaryFixed.opacity(0.4), lineWidth: 1))
-                            } else {
-                                // Search field
-                                VStack(spacing: 0) {
-                                    HStack(spacing: 0) {
-                                        Image(systemName: "magnifyingglass")
-                                            .foregroundColor(Color.outline.opacity(0.6))
-                                            .font(.system(size: 16))
-                                            .padding(.leading, 16)
-                                        TextField("Search for a meet location...", text: $locationQuery)
-                                            .font(.bodyMd)
-                                            .foregroundColor(Color.onSurface)
-                                            .tint(Color.primaryFixed)
-                                            .padding(.leading, 12)
-                                            .padding(.trailing, 16)
-                                            .frame(height: 48)
-                                            .onChange(of: locationQuery) { _, newValue in
-                                                searchTask?.cancel()
-                                                guard newValue.count >= 2 else { locationResults = []; return }
-                                                searchTask = Task {
-                                                    try? await Task.sleep(for: .milliseconds(300))
-                                                    guard !Task.isCancelled else { return }
-                                                    await performLocationSearch(newValue)
-                                                }
-                                            }
-                                    }
-                                    .background(Color.surfaceContainerHigh)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outline.opacity(0.3), lineWidth: 1))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outline.opacity(0.3), lineWidth: 1))
 
-                                    if !locationResults.isEmpty {
-                                        locationSearchResults
-                                    }
+                                if !locationResults.isEmpty {
+                                    locationSearchResults
                                 }
                             }
                         }
@@ -424,25 +437,26 @@ struct RegroupBottomSheet: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 24)
 
-                    // Broadcast Button
-                    Button(action: {
-                        onBroadcast(locationMode == .myPosition ? nil : pickedLocation?.coordinate)
-                    }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: isBroadcasting ? "arrow.clockwise" : "dot.radiowaves.left.and.right")
-                                .font(.system(size: 24))
-                            Text(isBroadcasting ? "TRANSMITTING..." : "Broadcast Regroup")
-                                .font(.headlineMd)
+                    // Broadcast Button — only for the searched-location flow. The quick tiles above
+                    // fire on their own, so no confirm button is needed for them.
+                    if pickedLocation != nil {
+                        Button(action: { broadcast() }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: isBroadcasting ? "arrow.clockwise" : "dot.radiowaves.left.and.right")
+                                    .font(.system(size: 24))
+                                Text(isBroadcasting ? "TRANSMITTING..." : "Broadcast Regroup")
+                                    .font(.headlineMd)
+                            }
+                            .modifier(LimePrimaryButton())
+                            .frame(height: 64)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: Color.primaryFixed.opacity(0.4), radius: 20)
+                            .contentShape(Rectangle())
                         }
-                        .modifier(LimePrimaryButton())
-                        .frame(height: 64)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: Color.primaryFixed.opacity(0.4), radius: 20)
-                        .contentShape(Rectangle())
+                        .padding(.horizontal, 20)
+                        .disabled(isBroadcasting || selectedReason == nil)
+                        .opacity(isBroadcasting || selectedReason == nil ? 0.5 : 1)
                     }
-                    .padding(.horizontal, 20)
-                    .disabled(broadcastBlocked)
-                    .opacity(broadcastBlocked ? 0.5 : 1)
 
                     Button(action: { dismiss() }) {
                         Text("Cancel Request")

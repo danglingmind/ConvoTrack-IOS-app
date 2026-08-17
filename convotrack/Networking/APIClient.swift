@@ -125,6 +125,10 @@ final class APIClient {
         return try await fetch("/rides/\(rideId)")
     }
 
+    func deleteRide(_ rideId: String) async throws {
+        try await fetchVoid("/rides/\(rideId)", method: "DELETE")
+    }
+
     func getRideByInviteCode(_ code: String) async throws -> InviteCodeResponse {
         return try await fetch("/rides/join/\(code)")
     }

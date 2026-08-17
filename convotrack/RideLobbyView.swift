@@ -27,6 +27,8 @@ final class LobbyViewModel: ObservableObject {
     var onRideStarted: (() -> Void)?
     // Fired when *this* rider is removed from the ride by the leader.
     var onRemovedFromRide: (() -> Void)?
+    // Fired when the leader deletes the entire ride (received via ride:deleted).
+    var onRideDeleted: (() -> Void)?
 
     // Leader can start when alone OR when all non-leaders have readied up
     var canStart: Bool {
@@ -77,6 +79,10 @@ final class LobbyViewModel: ObservableObject {
         session.$wasRemoved
             .filter { $0 }
             .sink { [weak self] _ in self?.onRemovedFromRide?() }
+            .store(in: &cancellables)
+        session.$wasDeleted
+            .filter { $0 }
+            .sink { [weak self] _ in self?.onRideDeleted?() }
             .store(in: &cancellables)
     }
 
@@ -145,6 +151,13 @@ struct RideLobbyView: View {
     @State private var participantToManage: RideParticipant? = nil
     @State private var showRemovedAlert = false
     @State private var showRemoveError = false
+    @State private var wasDeleted = false
+    @State private var showRideDeletedAlert = false
+    // Chrome floating over the map preview, measured so the camera fit can frame the route
+    // in the band that's actually visible. Defaults are first-frame fallbacks only — the
+    // fit re-runs once the real values land.
+    @State private var topChromeBottom: CGFloat = 100
+    @State private var statPillsHeight: CGFloat = 76
 
     // MARK: - Derived
 
@@ -191,9 +204,63 @@ struct RideLobbyView: View {
         return false
     }
 
+    // MARK: - Top Overlay
+
+    private var topOverlay: some View {
+        VStack {
+            HStack(spacing: 12) {
+                Button(action: {
+                    rideSession.stop()
+                    dismiss()
+                }) {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color.black.opacity(0.4))
+                        .clipShape(Circle())
+                }
+                Text(rideTitle)
+                    .font(.bodyLg)
+                    .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.6), radius: 4)
+                Spacer()
+                if canEditRide {
+                    Button(action: { showEditSheet = true }) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.black.opacity(0.4))
+                            .clipShape(Circle())
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            // Bottom edge of the top chrome in SCREEN coords. The map's top edge is screen
+            // y=0 (the scroll view ignores the top safe area), so this single number is the
+            // whole obscured region — notch/status bar included, with no assumption about
+            // how SwiftUI propagated the safe area and no per-device constant.
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(in: .global).maxY.rounded(.up)
+            } action: { bottom in
+                topChromeBottom = bottom
+            }
+            if rideSession.connectionState == .reconnecting {
+                ConnectionBanner(state: rideSession.connectionState)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(), value: rideSession.connectionState)
+            }
+            Spacer()
+        }
+    }
+
     // MARK: - Body
 
-    var body: some View {
+    private var mainContent: some View {
         ZStack(alignment: .bottom) {
             Color.surfaceDim.ignoresSafeArea()
 
@@ -206,49 +273,19 @@ struct RideLobbyView: View {
             }
             .ignoresSafeArea(edges: .top)
 
-            VStack {
-                HStack(spacing: 12) {
-                    Button(action: {
-                        rideSession.stop()
-                        dismiss()
-                    }) {
-                        Image(systemName: "arrow.left")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-                    Text(rideTitle)
-                        .font(.bodyLg)
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.6), radius: 4)
-                    Spacer()
-                    if canEditRide {
-                        Button(action: { showEditSheet = true }) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 36, height: 36)
-                                .background(Color.black.opacity(0.4))
-                                .clipShape(Circle())
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                if rideSession.connectionState == .reconnecting {
-                    ConnectionBanner(state: rideSession.connectionState)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .animation(.spring(), value: rideSession.connectionState)
-                }
-                Spacer()
-            }
+            topOverlay
 
             bottomBar
         }
+        // The chrome is measured after the first layout pass, so a route that loaded before
+        // then was framed with the fallback insets. Re-fit when the real numbers arrive (and
+        // on rotation, when they change again).
+        .onChange(of: topChromeBottom) { _, _ in fitRouteToVisibleBand(routeCoordinates) }
+        .onChange(of: statPillsHeight) { _, _ in fitRouteToVisibleBand(routeCoordinates) }
+    }
+
+    var body: some View {
+        mainContent
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $showNavigation) {
@@ -264,10 +301,19 @@ struct RideLobbyView: View {
         .sheet(isPresented: $showRiderDetail) { RiderDetailDrawer() }
         .sheet(isPresented: $showQRModal) { QRCodeModal(inviteCode: inviteCode) }
         .sheet(isPresented: $showEditSheet, onDismiss: {
-            Task { await refreshAfterEdit() }
+            if wasDeleted {
+                // The leader deleted the ride from the edit sheet — tear down the session
+                // and exit the lobby instead of refreshing a ride that no longer exists.
+                rideSession.stop()
+                appState.currentRideId = nil   // also clears currentRide
+                appState.inviteCode = nil
+                dismiss()
+            } else {
+                Task { await refreshAfterEdit() }
+            }
         }) {
             if let ride = appState.currentRide {
-                EditRideView(ride: ride)
+                EditRideView(ride: ride, onDeleted: { wasDeleted = true })
                     .environmentObject(appState)
                     .environmentObject(membershipStore)
             }
@@ -283,33 +329,27 @@ struct RideLobbyView: View {
                 }
             }
         }
-        .alert("Couldn't Start Ride", isPresented: $showStartError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(vm.startError ?? "An error occurred.")
-        }
-        .onChange(of: vm.startError) { _, err in
-            if err != nil { showStartError = true }
-        }
-        .alert("Couldn't Remove Rider", isPresented: $showRemoveError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(vm.removeError ?? "An error occurred.")
-        }
-        .onChange(of: vm.removeError) { _, err in
-            if err != nil { showRemoveError = true }
-        }
-        .alert("Removed From Ride", isPresented: $showRemovedAlert) {
-            Button("OK", role: .cancel) {
+        .modifier(lobbyAlerts)
+        .task { await loadRideAndConnect() }
+        .preferredColorScheme(.dark)
+    }
+
+    /// The lobby's alerts + their triggers, bundled so the `body` modifier chain stays
+    /// short enough for the Swift type-checker.
+    private var lobbyAlerts: some ViewModifier {
+        LobbyAlerts(
+            showStartError: $showStartError,
+            showRemoveError: $showRemoveError,
+            showRemovedAlert: $showRemovedAlert,
+            showRideDeletedAlert: $showRideDeletedAlert,
+            startError: vm.startError,
+            removeError: vm.removeError,
+            onExit: {
                 appState.currentRideId = nil   // also clears currentRide
                 appState.inviteCode = nil
                 dismiss()
             }
-        } message: {
-            Text("The ride leader removed you from this ride.")
-        }
-        .task { await loadRideAndConnect() }
-        .preferredColorScheme(.dark)
+        )
     }
 
     // MARK: - Map Section
@@ -323,7 +363,7 @@ struct RideLobbyView: View {
                 cameraCommand: cameraCommand,
                 isInteractive: false
             )
-            .frame(maxWidth: .infinity, minHeight: 420)
+            .frame(maxWidth: .infinity, minHeight: mapPreviewHeight)
 
             LinearGradient(
                 colors: [Color.black.opacity(0.45), .clear],
@@ -336,7 +376,7 @@ struct RideLobbyView: View {
                 colors: [Color.surfaceDim, Color.surfaceDim.opacity(0.55), .clear],
                 startPoint: .bottom, endPoint: .top
             )
-            .frame(height: 420)
+            .frame(height: mapPreviewHeight)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -355,9 +395,21 @@ struct RideLobbyView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
             }
+            // Pills keep floating over the map; the camera fit is what moves. Measuring the
+            // row (bottom padding included) means the route is framed above it whatever the
+            // pill content does — an extra CODE pill, a longer value, a bigger text size.
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height.rounded(.up)
+            } action: { height in
+                statPillsHeight = height
+            }
         }
-        .frame(height: 420)
+        .frame(height: mapPreviewHeight)
     }
+
+    /// Height of the map preview. Shared by the frame, the fade gradient and the camera-fit
+    /// clamp so they can't drift apart.
+    private var mapPreviewHeight: CGFloat { 420 }
 
     private var lobbyMapPins: [MapPin] {
         let waypoints = appState.currentRide?.waypoints ?? []
@@ -601,6 +653,16 @@ struct RideLobbyView: View {
             showRemovedAlert = true
         }
 
+        // The leader deleted the whole ride. Non-leaders learn of it only via this
+        // broadcast and get an alert; the leader initiated it locally and exits through
+        // the edit-sheet dismissal, so it needs no second prompt for them.
+        vm.onRideDeleted = { [weak vm, rideSession] in
+            rideSession.stop()
+            if vm?.amILeader != true {
+                showRideDeletedAlert = true
+            }
+        }
+
         // Start the shared realtime session (idempotent), then mirror its state into the VM.
         if let token = try? await Clerk.shared.auth.getToken() {
             rideSession.start(rideId: rideId, token: token, myUserId: vm.myUserId,
@@ -618,12 +680,38 @@ struct RideLobbyView: View {
         }
     }
 
+    /// Frames the route inside the map's *visible* band rather than its full 420pt frame.
+    /// A uniform padding can't work here: the top is covered by the notch and the back/title
+    /// row, the bottom by the floating stat pills, and the stop pins tower 84pt above their
+    /// own coordinates — so a symmetric fit put the start and destination markers underneath
+    /// that chrome. Effectively this zooms the preview out just enough to clear it.
+    @MainActor
+    private func fitRouteToVisibleBand(_ coords: [CLLocationCoordinate2D]) {
+        guard !coords.isEmpty else { return }
+        let rawTop    = topChromeBottom + GoogleMapView.stopPinTopExtent + 8
+        let rawBottom = statPillsHeight + 8
+        // The insets must leave a usable band — asking GMS to fit into a zero-height
+        // viewport yields a nonsense zoom. Scale both back proportionally if the chrome ever
+        // grows enough to threaten that (larger text, more pills), keeping their ratio so
+        // the route stays centred in whatever band is left.
+        let maxVertical = mapPreviewHeight - 80
+        let squeeze = min(1, maxVertical / max(rawTop + rawBottom, 1))
+        cameraCommand = MapCameraCommand.fitRouteInsets(
+            coords,
+            top:    rawTop * squeeze,
+            left:   56,
+            bottom: rawBottom * squeeze,
+            right:  56,
+            animated: true
+        )
+    }
+
     @MainActor
     private func calculateRoute(from waypoints: [Waypoint], polyline: String? = nil) async {
         // Prefer the leader-selected route geometry stored on the ride.
         if let stored = GoogleDirectionsService.decodedRoute(polyline) {
             routeCoordinates = stored
-            cameraCommand = MapCameraCommand.fitRoute(stored, padding: 60)
+            fitRouteToVisibleBand(stored)
             return
         }
 
@@ -641,10 +729,55 @@ struct RideLobbyView: View {
 
         routeCoordinates = allCoords
         if !allCoords.isEmpty {
-            cameraCommand = MapCameraCommand.fitRoute(allCoords, padding: 60)
+            fitRouteToVisibleBand(allCoords)
         } else if let first = sorted.first {
             cameraCommand = MapCameraCommand.focus(lat: first.lat, lng: first.lng, zoom: 11)
         }
+    }
+}
+
+// MARK: - Lobby Alerts
+
+/// Bundles the lobby's four alerts and their `onChange` triggers. Extracted from
+/// `RideLobbyView.body` purely to keep that view's modifier chain within the Swift
+/// type-checker's complexity budget.
+private struct LobbyAlerts: ViewModifier {
+    @Binding var showStartError: Bool
+    @Binding var showRemoveError: Bool
+    @Binding var showRemovedAlert: Bool
+    @Binding var showRideDeletedAlert: Bool
+    let startError: String?
+    let removeError: String?
+    let onExit: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Couldn't Start Ride", isPresented: $showStartError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(startError ?? "An error occurred.")
+            }
+            .onChange(of: startError) { _, err in
+                if err != nil { showStartError = true }
+            }
+            .alert("Couldn't Remove Rider", isPresented: $showRemoveError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(removeError ?? "An error occurred.")
+            }
+            .onChange(of: removeError) { _, err in
+                if err != nil { showRemoveError = true }
+            }
+            .alert("Removed From Ride", isPresented: $showRemovedAlert) {
+                Button("OK", role: .cancel) { onExit() }
+            } message: {
+                Text("The ride leader removed you from this ride.")
+            }
+            .alert("Ride Cancelled", isPresented: $showRideDeletedAlert) {
+                Button("OK", role: .cancel) { onExit() }
+            } message: {
+                Text("The ride leader cancelled this ride.")
+            }
     }
 }
 
@@ -872,7 +1005,6 @@ struct LobbyStartPin: View {
             ZStack {
                 Circle().fill(Color.surfaceContainerHigh).frame(width: 36, height: 36)
                     .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2.5))
-                    .shadow(color: Color.primaryFixed.opacity(0.4), radius: 8)
                 Image(systemName: "mappin.circle.fill").font(.system(size: 20, weight: .bold))
                     .foregroundColor(Color.primaryFixed)
             }

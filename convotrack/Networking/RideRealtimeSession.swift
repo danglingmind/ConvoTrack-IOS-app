@@ -35,8 +35,10 @@ final class RideRealtimeSession: ObservableObject {
     @Published private(set) var latestRegroup: RegroupEvent? = nil
     @Published private(set) var latestRegroupResolvedId: String? = nil
     @Published private(set) var latestEmergency: EmergencyEvent? = nil
+    @Published private(set) var latestEmergencyResolvedId: String? = nil
     @Published private(set) var rideUpdated: RideUpdatedEvent? = nil
     @Published private(set) var wasRemoved: Bool = false
+    @Published private(set) var wasDeleted: Bool = false      // leader deleted the whole ride
 
     private var rideId = ""
     private var myUserId = ""
@@ -100,6 +102,7 @@ final class RideRealtimeSession: ObservableObject {
         socket.onRegroupStarted = nil
         socket.onRegroupResolved = nil
         socket.onEmergencyStarted = nil
+        socket.onEmergencyResolved = nil
         socket.disconnect()
 
         isRunning = false
@@ -115,8 +118,10 @@ final class RideRealtimeSession: ObservableObject {
         latestRegroup = nil
         latestRegroupResolvedId = nil
         latestEmergency = nil
+        latestEmergencyResolvedId = nil
         rideUpdated = nil
         wasRemoved = false
+        wasDeleted = false
     }
 
     deinit { heartbeatTimer?.invalidate() }
@@ -204,12 +209,14 @@ final class RideRealtimeSession: ObservableObject {
             self?.updateParticipantStatus(userId: userId, status: "READY")
         }
         socket.onRideUpdated = { [weak self] event in self?.rideUpdated = event }
+        socket.onRideDeleted = { [weak self] in self?.wasDeleted = true }
 
         socket.onSplitDetected = { [weak self] _ in self?.splitActive = true }
         socket.onSplitResolved = { [weak self] in self?.splitActive = false }
         socket.onRegroupStarted = { [weak self] event in self?.latestRegroup = event }
         socket.onRegroupResolved = { [weak self] id in self?.latestRegroupResolvedId = id }
         socket.onEmergencyStarted = { [weak self] event in self?.latestEmergency = event }
+        socket.onEmergencyResolved = { [weak self] id in self?.latestEmergencyResolvedId = id }
     }
 
     private func updateParticipantStatus(userId: String, status: String) {

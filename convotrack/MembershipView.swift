@@ -102,7 +102,7 @@ struct MembershipView: View {
     // MARK: - Benefits Grid
 
     private let benefits: [(icon: String, title: String, detail: String)] = [
-        ("person.3.fill",  "25 RIDERS",   "Fill every seat in the pack"),
+        ("person.3.fill",  "BIGGER PACKS", "Bring your whole crew along"),
         ("infinity",       "UNLIMITED",   "No monthly ride cap, ever"),
         ("chart.bar.fill", "ANALYTICS",   "Live stats & sync scores"),
         ("clock.fill",     "365 DAYS",    "Full ride history archive"),

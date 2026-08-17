@@ -553,7 +553,7 @@ struct CreateRideView: View {
                 Button { showMembership = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "crown.fill").font(.iconXS)
-                        Text("Pro unlocks up to 25 riders")
+                        Text("Pro unlocks bigger packs")
                             .font(.labelCaps)
                             .tracking(0.5)
                         Spacer()

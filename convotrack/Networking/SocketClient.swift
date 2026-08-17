@@ -22,9 +22,11 @@ final class SocketClient {
     var onSplitDetected: (([String: Any]) -> Void)?
     var onSplitResolved: (() -> Void)?
     var onEmergencyStarted: ((EmergencyEvent) -> Void)?
+    var onEmergencyResolved: ((String) -> Void)?   // emergencyId
     var onRegroupStarted: ((RegroupEvent) -> Void)?
     var onRegroupResolved: ((String) -> Void)?   // regroupId
     var onRideUpdated: ((RideUpdatedEvent) -> Void)?
+    var onRideDeleted: (() -> Void)?
 
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -117,6 +119,12 @@ final class SocketClient {
         socket?.emit("ride:emergency", ["rideId": rideId, "lat": lat, "lng": lng, "message": message])
     }
 
+    /// Clear an open emergency. The server authorizes it (creator or leader only) and broadcasts
+    /// `ride:emergency_resolved` so the pin + siren stop on every device.
+    func emitEmergencyDismiss(rideId: String, emergencyId: String) {
+        socket?.emit("ride:emergency_dismiss", ["rideId": rideId, "emergencyId": emergencyId])
+    }
+
     func emitRegroupArrived(rideId: String, regroupId: String) {
         socket?.emit("ride:regroup_arrived", ["rideId": rideId, "regroupId": regroupId])
     }
@@ -188,6 +196,10 @@ final class SocketClient {
             DispatchQueue.main.async { self?.onParticipantRemoved?(userId) }
         }
 
+        socket.on("ride:deleted") { [weak self] _, _ in
+            DispatchQueue.main.async { self?.onRideDeleted?() }
+        }
+
         socket.on("ride:participant_offline") { [weak self] data, _ in
             guard let dict = data.first as? [String: Any],
                   let userId = dict["userId"] as? String else { return }
@@ -231,6 +243,12 @@ final class SocketClient {
                   let json = try? JSONSerialization.data(withJSONObject: dict),
                   let event = try? self.decoder.decode(EmergencyEvent.self, from: json) else { return }
             DispatchQueue.main.async { self.onEmergencyStarted?(event) }
+        }
+
+        socket.on("ride:emergency_resolved") { [weak self] data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let emergencyId = dict["emergencyId"] as? String else { return }
+            DispatchQueue.main.async { self?.onEmergencyResolved?(emergencyId) }
         }
 
         socket.on("ride:regroup_started") { [weak self] data, _ in

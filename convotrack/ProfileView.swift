@@ -279,7 +279,7 @@ extension ProfileView {
                         .font(.labelCaps)
                         .foregroundColor(Color.primaryFixed)
                         .tracking(2)
-                    Text("Up to 25 riders · Unlimited rides")
+                    Text("Bigger packs · Unlimited rides")
                         .font(.captionMd)
                         .foregroundColor(Color.onSurfaceVariant)
                 }

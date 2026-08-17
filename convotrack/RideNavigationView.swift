@@ -60,6 +60,17 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
     var amILeader: Bool { !myUserId.isEmpty && myUserId == leaderId }
 
+    /// True while a real turn instruction is still ahead (not yet at the final
+    /// step / destination). Drives the maneuver-aware camera pull-back.
+    var hasUpcomingTurn: Bool { currentStepIndex < navSteps.count && !currentInstruction.isEmpty }
+
+    /// Only the rider who raised the emergency or the ride leader may clear it (server enforces the
+    /// same rule); everyone else sees the persistent pin + siren until one of them dismisses it.
+    var canDismissEmergency: Bool {
+        guard let e = activeEmergency else { return false }
+        return e.userId == myUserId || amILeader
+    }
+
     /// Live rider count for the top-bar dot. Uses the SAME presence rule as the leaderboard rows
     /// (self is always live; every other rider must have a current heartbeat in `onlineUserIds`),
     /// so the number can never disagree with the greyed-out rows. Derived from the roster +
@@ -77,13 +88,32 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             ?? "A rider"
     }
 
+    /// Remaining travel time (not clock arrival) to the NEXT stop on the route. On a single-stop
+    /// ride the next stop is the destination; on a multi-stop ride it's the upcoming waypoint.
+    /// Formatted in hours once ≥ 60 min, minutes below that.
     var etaString: String {
-        guard routeExpectedTravelTime > 0, totalDistanceMeters > 0, myDistanceToGoalKm >= 0 else { return "--:--" }
-        let remainingFraction = (myDistanceToGoalKm * 1000) / totalDistanceMeters
-        let remainingSecs = routeExpectedTravelTime * max(0, remainingFraction)
-        let arrival = Date().addingTimeInterval(remainingSecs)
-        let comps = Calendar.current.dateComponents([.hour, .minute], from: arrival)
-        return String(format: "%02d:%02d", comps.hour ?? 0, comps.minute ?? 0)
+        guard routeExpectedTravelTime > 0, totalDistanceMeters > 0, myDistanceToGoalKm >= 0 else { return "--" }
+        let remainingFraction = min(1, max(0, (myDistanceToGoalKm * 1000) / totalDistanceMeters))
+        let elapsedSecs = routeExpectedTravelTime * (1 - remainingFraction)
+
+        let secsToNextStop: TimeInterval
+        if !stopCumulativeDurations.isEmpty {
+            // How many stops we've already passed → index of the next one.
+            let passed = max(0, totalStopCount - remainingStops.count)
+            let idx = min(passed, stopCumulativeDurations.count - 1)
+            secsToNextStop = max(0, stopCumulativeDurations[idx] - elapsedSecs)
+        } else {
+            secsToNextStop = routeExpectedTravelTime * remainingFraction
+        }
+        return Self.formatDuration(secsToNextStop)
+    }
+
+    /// "45m", "1h", "2h 15m" — hours once ≥ 60 min, minutes below.
+    static func formatDuration(_ secs: TimeInterval) -> String {
+        let totalMins = max(0, Int((secs / 60).rounded()))
+        if totalMins < 60 { return "\(totalMins)m" }
+        let h = totalMins / 60, m = totalMins % 60
+        return m == 0 ? "\(h)h" : "\(h)h \(m)m"
     }
 
     private struct NavStep {
@@ -103,8 +133,16 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var lastBroadcastDate: Date = .distantPast
     private var lastCameraTickDate: Date = .distantPast
     private var remainingStops: [CLLocationCoordinate2D] = []
+    // Cumulative travel time from the ride start to each stop (WAYPOINT/DESTINATION), in route order.
+    // `totalStopCount` is the count captured at route-calc time; `remainingStops` shrinks as stops are
+    // passed, so `totalStopCount - remainingStops.count` yields the index of the next stop.
+    private var stopCumulativeDurations: [TimeInterval] = []
+    private var totalStopCount: Int = 0
     private var regroupResolvedToastTask: Task<Void, Never>? = nil
-    private var emergencyDismissTask: Task<Void, Never>? = nil
+    private var emergencySirenTimer: Timer? = nil
+    // Last-known map position for every rider, kept so a rider who goes offline stays pinned at
+    // their final spot (dimmed) instead of vanishing when they stop posting location ticks.
+    private var lastKnownRiderPositions: [String: CLLocationCoordinate2D] = [:]
     private var isRerouteInFlight = false
     private var lastRerouteOrigin: CLLocation? = nil
     private var needsInitialRouteCheck = false   // bypasses off-route debounce on first GPS fix
@@ -191,17 +229,29 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         session.$splitActive
             .sink { [weak self] in self?.showSplitAlert = $0 }
             .store(in: &cancellables)
+        // `dropFirst` skips the value `@Published` replays on subscribe, so re-entering navigation
+        // (lobby → route preview → navigation) never re-fires a siren for a stale regroup/emergency.
+        // Genuinely new events still arrive, and any still-open one is recovered from the authoritative
+        // `openRegroup` / `openEmergency` in the ride:state_update snapshot below.
         session.$latestRegroup
+            .dropFirst()
             .compactMap { $0 }
             .sink { [weak self] event in self?.handleRegroupStarted(event) }
             .store(in: &cancellables)
         session.$latestRegroupResolvedId
+            .dropFirst()
             .compactMap { $0 }
             .sink { [weak self] id in self?.handleRegroupResolved(id) }
             .store(in: &cancellables)
         session.$latestEmergency
+            .dropFirst()
             .compactMap { $0 }
             .sink { [weak self] event in self?.handleEmergencyStarted(event) }
+            .store(in: &cancellables)
+        session.$latestEmergencyResolvedId
+            .dropFirst()
+            .compactMap { $0 }
+            .sink { [weak self] id in self?.handleEmergencyResolved(id) }
             .store(in: &cancellables)
         // Leader edited the ride mid-flight → reroute live. `dropFirst` skips the value the
         // publisher replays on subscribe, so entering navigation after an earlier edit doesn't
@@ -215,7 +265,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
     func teardown() {
         regroupResolvedToastTask?.cancel()
-        emergencyDismissTask?.cancel()
+        emergencySirenTimer?.invalidate()
+        emergencySirenTimer = nil
         cancellables.removeAll()   // stop observing the session; the session itself keeps running
         LocationService.shared.stop()
         LocationService.shared.delegate = nil
@@ -234,19 +285,23 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         isEnding = false
     }
 
-    func broadcastRegroup(reason: CoordinationOverlayView.RegroupReason?, at coordinate: CLLocationCoordinate2D? = nil) {
+    /// - Parameters:
+    ///   - coordinate: an explicit searched meet location; when set it wins outright.
+    ///   - aheadMeters: when no explicit coordinate is given, offset the meet point this far ahead
+    ///     along the route from the rider's current position (0 = right here).
+    func broadcastRegroup(reason: CoordinationOverlayView.RegroupReason?, at coordinate: CLLocationCoordinate2D? = nil, aheadMeters: Double = 0) {
         guard let reason else { return }
-        let lat: Double
-        let lng: Double
+        let target: CLLocationCoordinate2D?
         if let coordinate {
-            lat = coordinate.latitude
-            lng = coordinate.longitude
-        } else if let last = LocationService.shared.lastLocation {
-            lat = last.coordinate.latitude
-            lng = last.coordinate.longitude
+            target = coordinate
+        } else if aheadMeters > 0 {
+            target = coordinateAhead(meters: aheadMeters) ?? LocationService.shared.lastLocation?.coordinate
         } else {
-            return
+            target = LocationService.shared.lastLocation?.coordinate
         }
+        guard let target else { return }
+        let lat = target.latitude
+        let lng = target.longitude
         if reason.isEmergency {
             SocketClient.shared.emitEmergency(rideId: rideId, lat: lat, lng: lng, message: "Emergency")
         } else {
@@ -259,6 +314,119 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             }
             SocketClient.shared.emitRegroup(rideId: rideId, type: type, lat: lat, lng: lng) { _ in }
         }
+    }
+
+    /// A coordinate `meters` further along the route from the rider's current position.
+    ///
+    /// Route choice matches what the rider is actually following:
+    /// - Off-route → the **rerouted** polyline (`activeRouteCoordinates`, rebuilt from the rider's
+    ///   position through the remaining stops), so the meet point lands `meters` along the reroute.
+    /// - On-route → the planned `routeCoordinates`. We deliberately avoid `activeRouteCoordinates`
+    ///   here because it's trimmed to a short fragment each GPS tick and, as progress nears the end,
+    ///   collapses to `[projected, destination]` — which would overrun and clamp onto the destination.
+    ///
+    /// In both cases we project the rider onto the chosen route and walk forward, so the offset is
+    /// measured from "here". Falls back to a heading offset when there's no usable route.
+    private func coordinateAhead(meters: Double) -> CLLocationCoordinate2D? {
+        let route: [CLLocationCoordinate2D]
+        if isOffRoute && activeRouteCoordinates.count >= 2 {
+            route = activeRouteCoordinates
+        } else if routeCoordinates.count >= 2 {
+            route = routeCoordinates
+        } else {
+            route = activeRouteCoordinates
+        }
+        let userLoc = LocationService.shared.lastLocation?.coordinate ?? userLocation
+
+        guard route.count >= 2 else {
+            guard let userLoc else { return nil }
+            return Self.coordinate(from: userLoc, bearingDegrees: userHeading, meters: meters)
+        }
+        guard let userLoc else { return Self.pointAlong(route, fromProjected: route[0], segmentStart: 0, meters: meters) }
+
+        let (segIdx, projected) = Self.nearestPointOnRoute(route, to: userLoc)
+        return Self.pointAlong(route, fromProjected: projected, segmentStart: segIdx, meters: meters)
+    }
+
+    /// Nearest point on `route` to `point`, projected onto the closest segment (not just the nearest
+    /// vertex). Returns the segment's start index and the projected coordinate. Uses the same
+    /// flat-earth frame as `trimActiveRoute` / `distanceToLineSegment`.
+    private static func nearestPointOnRoute(_ route: [CLLocationCoordinate2D], to point: CLLocationCoordinate2D) -> (segmentStart: Int, projected: CLLocationCoordinate2D) {
+        var bestIdx = 0
+        var bestProj = route[0]
+        var bestDist = Double.infinity
+        let cosLat = cos(point.latitude * .pi / 180)
+        let px = point.longitude * cosLat, py = point.latitude
+        for i in 0..<route.count - 1 {
+            let a = route[i], b = route[i + 1]
+            let ax = a.longitude * cosLat, ay = a.latitude
+            let bx = b.longitude * cosLat, by = b.latitude
+            let dx = bx - ax, dy = by - ay
+            let lenSq = dx * dx + dy * dy
+            let t = lenSq < 1e-18 ? 0 : max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
+            let proj = CLLocationCoordinate2D(
+                latitude:  a.latitude  + t * (b.latitude  - a.latitude),
+                longitude: a.longitude + t * (b.longitude - a.longitude)
+            )
+            let d = CLLocation(latitude: point.latitude, longitude: point.longitude)
+                .distance(from: CLLocation(latitude: proj.latitude, longitude: proj.longitude))
+            if d < bestDist { bestDist = d; bestIdx = i; bestProj = proj }
+        }
+        return (bestIdx, bestProj)
+    }
+
+    /// Walks `route` forward from `projected` (a point on segment `segmentStart`), accumulating
+    /// segment lengths, and returns the point `meters` further on; clamps to the route's end.
+    private static func pointAlong(_ route: [CLLocationCoordinate2D], fromProjected projected: CLLocationCoordinate2D, segmentStart: Int, meters: Double) -> CLLocationCoordinate2D? {
+        guard route.count >= 2 else { return nil }
+        var remaining = meters
+        var prev = projected
+        var idx = min(segmentStart + 1, route.count - 1)
+        while idx < route.count {
+            let a = CLLocation(latitude: prev.latitude, longitude: prev.longitude)
+            let b = CLLocation(latitude: route[idx].latitude, longitude: route[idx].longitude)
+            let seg = a.distance(from: b)
+            if seg >= remaining {
+                let frac = seg > 0 ? remaining / seg : 0
+                return CLLocationCoordinate2D(
+                    latitude:  prev.latitude  + (route[idx].latitude  - prev.latitude)  * frac,
+                    longitude: prev.longitude + (route[idx].longitude - prev.longitude) * frac
+                )
+            }
+            remaining -= seg
+            prev = route[idx]
+            idx += 1
+        }
+        return route.last
+    }
+
+    /// Total great-circle length of a polyline, in meters. Used to derive the local rider's
+    /// remaining distance-to-goal from `activeRouteCoordinates` (which is trimmed to start at the
+    /// rider's position each GPS tick) — a client-side truth that stays valid when the server's
+    /// nearest-point `progress` projection is unreliable (rider off-route / simulator default fix).
+    private static func routeLengthMeters(_ route: [CLLocationCoordinate2D]) -> Double {
+        guard route.count >= 2 else { return 0 }
+        var total: Double = 0
+        for i in 0..<route.count - 1 {
+            let a = CLLocation(latitude: route[i].latitude, longitude: route[i].longitude)
+            let b = CLLocation(latitude: route[i + 1].latitude, longitude: route[i + 1].longitude)
+            total += a.distance(from: b)
+        }
+        return total
+    }
+
+    /// Great-circle point `meters` from `origin` along `bearingDegrees`. Used only when no route
+    /// geometry is available so a distance-ahead regroup still lands ahead of the rider.
+    private static func coordinate(from origin: CLLocationCoordinate2D, bearingDegrees: Double, meters: Double) -> CLLocationCoordinate2D {
+        let earthRadius = 6_371_000.0
+        let angular = meters / earthRadius
+        let bearing = (bearingDegrees.isFinite ? bearingDegrees : 0) * .pi / 180
+        let lat1 = origin.latitude * .pi / 180
+        let lon1 = origin.longitude * .pi / 180
+        let lat2 = asin(sin(lat1) * cos(angular) + cos(lat1) * sin(angular) * cos(bearing))
+        let lon2 = lon1 + atan2(sin(bearing) * sin(angular) * cos(lat1),
+                                cos(angular) - sin(lat1) * sin(lat2))
+        return CLLocationCoordinate2D(latitude: lat2 * 180 / .pi, longitude: lon2 * 180 / .pi)
     }
 
     func markArrivedAtRegroup() {
@@ -318,14 +486,40 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     }
 
     private func handleEmergencyStarted(_ event: EmergencyEvent) {
+        // Ignore a re-broadcast of the emergency we're already showing (e.g. a late-join snapshot
+        // arriving after the live event) so we don't restart the siren cadence.
+        guard activeEmergency?.emergencyId != event.emergencyId else { return }
         activeEmergency = event
-        SirenPlayer.shared.play(times: 3)
-        // No server-side resolve for emergencies — auto-clear the alert locally.
-        emergencyDismissTask?.cancel()
-        emergencyDismissTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(10))
-            withAnimation { self?.activeEmergency = nil }
+        startEmergencySiren()
+    }
+
+    /// Emergency siren repeats every 10s until the emergency is resolved — an unresolved emergency
+    /// is meant to keep nagging the whole group, not chime once.
+    private func startEmergencySiren() {
+        emergencySirenTimer?.invalidate()
+        SirenPlayer.shared.play(.emergency)
+        emergencySirenTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in
+            SirenPlayer.shared.play(.emergency)
         }
+    }
+
+    private func stopEmergencySiren() {
+        emergencySirenTimer?.invalidate()
+        emergencySirenTimer = nil
+    }
+
+    private func handleEmergencyResolved(_ emergencyId: String) {
+        guard activeEmergency?.emergencyId == emergencyId else { return }
+        stopEmergencySiren()
+        withAnimation { activeEmergency = nil }
+    }
+
+    /// Creator- or leader-initiated clear. The local state clears when the server echoes
+    /// `ride:emergency_resolved`, keeping every device in sync; we stop our own siren optimistically.
+    func dismissEmergency() {
+        guard let e = activeEmergency, canDismissEmergency else { return }
+        stopEmergencySiren()
+        SocketClient.shared.emitEmergencyDismiss(rideId: rideId, emergencyId: e.emergencyId)
     }
 
     // MARK: - LocationServiceDelegate
@@ -350,6 +544,15 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         }
 
         if !isOffRoute { trimActiveRoute(to: location) }
+
+        // Drive DIST/ETA from the locally-trimmed remaining route rather than the server's
+        // `progress`. The server value is a nearest-point projection that reads ~full (zeroing
+        // distance-to-goal) whenever the rider isn't cleanly on-route — e.g. the simulator's fixed
+        // default location. `activeRouteCoordinates` starts at the rider's projected position and
+        // is frozen while off-route, so its length is a stable remaining-distance signal.
+        if activeRouteCoordinates.count >= 2 {
+            myDistanceToGoalKm = Self.routeLengthMeters(activeRouteCoordinates) / 1000
+        }
 
         let now = Date()
         // Cap camera updates at ~10 Hz so overlapping animations don't jam the map
@@ -378,7 +581,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // The initial ride:state_update emitted on start has leaderboard: [] before any
         // location updates have been processed — don't let that clear what we pre-seeded.
         if !update.leaderboard.isEmpty {
-            leaderboardRows = update.leaderboard.map { entry in
+            var rows = update.leaderboard.map { entry -> NavLeaderboardRow in
                 let participant = staticParticipants.first { $0.userId == entry.userId }
                 let distKm = max(0, (totalDistanceMeters - entry.progress) / 1000)
                 return NavLeaderboardRow(
@@ -388,35 +591,85 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
                     isMe: entry.userId == myUserId
                 )
             }
+
+            // The server leaderboard only carries riders who've posted a location tick, so
+            // joined-but-offline riders (never broadcast, or dropped) would vanish. Keep every
+            // joined participant present as a trailing row; the view renders it disabled via
+            // `onlineUserIds`, matching how a rider who drops mid-navigation stays visible.
+            let ranked = Set(rows.map(\.id))
+            var nextRank = (rows.map(\.rank).max() ?? 0) + 1
+            for p in staticParticipants where p.status != "LEFT" && !ranked.contains(p.userId) {
+                rows.append(NavLeaderboardRow(
+                    id: p.userId, rank: nextRank, name: p.name,
+                    avatarUrl: p.avatarUrl,
+                    distanceToGoalKm: totalDistanceMeters / 1000,
+                    isMe: p.userId == myUserId
+                ))
+                nextRank += 1
+            }
+
+            leaderboardRows = rows
         }
 
-        riders = update.participants.compactMap { live in
-            guard let lat = live.lat, let lng = live.lng else { return nil }
-            let participant = staticParticipants.first { $0.userId == live.userId }
-            let lbEntry = update.leaderboard.first { $0.userId == live.userId }
-            let distKm = max(0, (totalDistanceMeters - live.progress) / 1000)
+        // Riders with a live position this tick — and cache each position so a rider who later
+        // goes offline can stay pinned at their final spot instead of disappearing.
+        var live: [LiveRider] = update.participants.compactMap { p in
+            guard let lat = p.lat, let lng = p.lng else { return nil }
+            let coord = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+            lastKnownRiderPositions[p.userId] = coord
+            let participant = staticParticipants.first { $0.userId == p.userId }
+            let lbEntry = update.leaderboard.first { $0.userId == p.userId }
+            let distKm = max(0, (totalDistanceMeters - p.progress) / 1000)
             return LiveRider(
-                id: live.userId,
+                id: p.userId,
                 name: participant?.name ?? lbEntry?.name ?? "Rider",
                 avatarUrl: participant?.avatarUrl,
                 rank: lbEntry?.rank ?? 99,
                 distanceToGoalKm: distKm,
-                speedKmh: (live.speed ?? 0) * 3.6,
-                coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
-                isMe: live.userId == myUserId
+                speedKmh: (p.speed ?? 0) * 3.6,
+                coordinate: coord,
+                isMe: p.userId == myUserId
             )
         }
 
+        // Retain any joined rider who has no position this tick at their last-known spot. The pin
+        // renders dimmed via `onlineUserIds` (same rule as the leaderboard row), so an offline rider
+        // remains visible where they dropped instead of vanishing from the map.
+        let present = Set(live.map(\.id))
+        for p in staticParticipants where p.status != "LEFT" && p.userId != myUserId && !present.contains(p.userId) {
+            guard let coord = lastKnownRiderPositions[p.userId] else { continue }
+            let lbEntry = leaderboardRows.first { $0.id == p.userId }
+            live.append(LiveRider(
+                id: p.userId,
+                name: p.name,
+                avatarUrl: p.avatarUrl,
+                rank: lbEntry?.rank ?? 99,
+                distanceToGoalKm: lbEntry?.distanceToGoalKm ?? (totalDistanceMeters / 1000),
+                speedKmh: 0,
+                coordinate: coord,
+                isMe: false
+            ))
+        }
+        riders = live
+
         if let myEntry = update.leaderboard.first(where: { $0.userId == myUserId }) {
             myRank = myEntry.rank
-            myDistanceToGoalKm = max(0, (totalDistanceMeters - myEntry.progress) / 1000)
+            // Until the first local GPS fix arrives, fall back to the server's route progress.
+            // Once GPS is driving, `myDistanceToGoalKm` is owned by the local route-trim path
+            // (see `locationService(_:didUpdate:…)`), which is robust to off-route projection.
+            if userLocation == nil {
+                myDistanceToGoalKm = max(0, (totalDistanceMeters - myEntry.progress) / 1000)
+            }
         }
 
         if update.status == "COMPLETED" { showSummary = true }
 
-        // Late-join: pick up any open regroup from state snapshot
+        // Late-join: pick up any open regroup / emergency from the authoritative state snapshot.
         if activeRegroup == nil, let incoming = update.openRegroup {
             handleRegroupStarted(incoming)
+        }
+        if activeEmergency == nil, let incoming = update.openEmergency {
+            handleEmergencyStarted(incoming)
         }
     }
 
@@ -427,17 +680,23 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         var allCoords: [CLLocationCoordinate2D] = []
         var totalTime: TimeInterval = 0
         var steps: [NavStep] = []
+        // One entry per leg (start→stop₀, stop₀→stop₁, …): running travel time on arrival at each stop.
+        // Appended every iteration — even when a leg fails to route — so the index stays aligned with
+        // `remainingStops`.
+        var cumulativeStopTimes: [TimeInterval] = []
 
         for i in 0..<sorted.count - 1 {
             let origin = CLLocationCoordinate2D(latitude: sorted[i].lat,   longitude: sorted[i].lng)
             let dest   = CLLocationCoordinate2D(latitude: sorted[i+1].lat, longitude: sorted[i+1].lng)
-            guard let result = try? await GoogleDirectionsService.route(from: origin, to: dest) else { continue }
-            allCoords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
-            totalTime += result.durationSeconds
-            for step in result.steps {
-                guard !step.instruction.isEmpty else { continue }
-                steps.append(NavStep(instruction: step.instruction, endCoordinate: step.endCoordinate, distanceMeters: step.distanceMeters))
+            if let result = try? await GoogleDirectionsService.route(from: origin, to: dest) {
+                allCoords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
+                totalTime += result.durationSeconds
+                for step in result.steps {
+                    guard !step.instruction.isEmpty else { continue }
+                    steps.append(NavStep(instruction: step.instruction, endCoordinate: step.endCoordinate, distanceMeters: step.distanceMeters))
+                }
             }
+            cumulativeStopTimes.append(totalTime)
         }
 
         navSteps = steps
@@ -452,6 +711,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         routeCoordinates         = geometry
         activeRouteCoordinates   = geometry   // full route until first GPS update trims it
         routeExpectedTravelTime  = totalTime
+        stopCumulativeDurations  = cumulativeStopTimes
+        totalStopCount           = cumulativeStopTimes.count
         currentRouteSegmentIndex = 0
         consecutiveOffCount      = 0
         consecutiveOnCount       = 0
@@ -637,12 +898,27 @@ struct RideNavigationView: View {
     @State private var cameraCommand: MapCameraCommand? = nil
     @State private var selectedRiderId: String? = nil
     @State private var showRegroup = false
-    @State private var regroupReason: CoordinationOverlayView.RegroupReason? = nil
     @State private var isBroadcasting = false
     @State private var showEndError = false
     @State private var isFreeLooking: Bool = false
     @State private var lastInteractionDate: Date = .distantPast
     @State private var isNavigationActive: Bool = false
+    // Last position/heading the follow camera actually moved to. Used to skip
+    // re-issuing a camera command when the rider has barely moved or turned.
+    @State private var lastCameraCoord: CLLocationCoordinate2D? = nil
+    @State private var lastCameraHeading: Double = 0
+    // Low-passed speed driving the camera zoom. Raw `CLLocation.speed` swings several km/h
+    // between fixes; fed straight into a continuous zoom curve that makes the map breathe.
+    // The SPEED readout still shows the raw value.
+    @State private var cameraSpeedKmh: Double = 0
+    // Measured height of whichever bottom bar is showing — the live-navigation control bar
+    // or the pre-navigation preview bar. Measured rather than derived from their paddings:
+    // the preview bar alone stacks a divider, a two-line row and a 56pt button across five
+    // padding values, and any constant reproducing that would drift the moment one changes.
+    // The map reserves exactly this much so it ends at the bar's top edge either way.
+    @State private var bottomBarHeight: CGFloat = 0
+    // Screen geometry for off-screen riders, produced by the map coordinator.
+    @State private var edgeIndicators: [EdgeIndicator] = []
 
     private var isLandscape: Bool { vSizeClass == .compact }
 
@@ -652,11 +928,10 @@ struct RideNavigationView: View {
         coreView
             .sheet(isPresented: $showRegroup, onDismiss: { isBroadcasting = false }) {
                 RegroupBottomSheet(
-                    selectedReason: $regroupReason,
-                    onBroadcast: { coordinate in
+                    onBroadcast: { reason, coordinate, aheadMeters in
                         guard !isBroadcasting else { return }
                         isBroadcasting = true
-                        vm.broadcastRegroup(reason: regroupReason, at: coordinate)
+                        vm.broadcastRegroup(reason: reason, at: coordinate, aheadMeters: aheadMeters)
                         showRegroup = false
                     },
                     isBroadcasting: isBroadcasting
@@ -680,8 +955,14 @@ struct RideNavigationView: View {
     private var coreView: some View {
         ZStack {
             mapLayer
-            hudLayer
-            rightStatPills
+            if isNavigationActive {
+                OffscreenIndicatorsOverlay(clusters: edgeClusters, onTapRider: focusRider)
+            }
+            // GeometryReader only to read the HUD's real safe-area inset — it fills the
+            // ZStack and the HUD's VStack fills it back, so layout is unchanged.
+            GeometryReader { proxy in
+                hudLayer(bottomInset: proxy.safeAreaInsets.bottom)
+            }
         }
         .navigationBarHidden(true)
         .preferredColorScheme(.dark)
@@ -730,10 +1011,17 @@ struct RideNavigationView: View {
             pins.append(MapPin(id: "me", coordinate: coord, style: .userLocation(heading: vm.userHeading), anchorBottom: false))
         }
         for rider in vm.riders.filter({ !$0.isMe }) {
+            let distText: String? = vm.userLocation.map { me in
+                let meters = CLLocation(latitude: me.latitude, longitude: me.longitude)
+                    .distance(from: CLLocation(latitude: rider.coordinate.latitude, longitude: rider.coordinate.longitude))
+                return Self.formatDistance(meters)
+            }
             pins.append(MapPin(id: rider.id, coordinate: rider.coordinate,
                                style: .rider(name: rider.name, avatarUrl: rider.avatarUrl,
                                              isMe: false, rank: rider.rank,
-                                             isSelected: selectedRiderId == rider.id)))
+                                             isSelected: selectedRiderId == rider.id,
+                                             isOffline: !vm.onlineUserIds.contains(rider.id)),
+                               distanceText: distText))
         }
         for wp in vm.middleWaypoints {
             pins.append(MapPin(id: "wp_\(wp.order)", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .waypoint(name: wp.name)))
@@ -758,9 +1046,37 @@ struct RideNavigationView: View {
             pins:          navMapPins,
             cameraCommand: cameraCommand,
             isInteractive: true,
-            onInteraction: onMapInteraction
+            onInteraction: onMapInteraction,
+            onEdgeIndicators: { edgeIndicators = $0 }
         )
-        .ignoresSafeArea()
+        // Bleeds under the notch and side insets, but NOT the bottom — the bottom edge is
+        // set by the measured bar height, so ignoring the bottom safe area would expand the
+        // map back over the bar.
+        .ignoresSafeArea(edges: [.top, .horizontal])
+        .padding(.bottom, bottomBarHeight)
+    }
+
+    /// Off-screen riders joined with their display metadata, then clustered by
+    /// screen-edge proximity for the indicator overlay.
+    private var edgeClusters: [EdgeCluster] {
+        let byId = Dictionary(uniqueKeysWithValues: vm.riders.map { ($0.id, $0) })
+        let models: [EdgeChipModel] = edgeIndicators.compactMap { ind in
+            guard let rider = byId[ind.id] else { return nil }
+            return EdgeChipModel(
+                id: ind.id, name: rider.name, avatarUrl: rider.avatarUrl,
+                isOffline: !vm.onlineUserIds.contains(ind.id),
+                edgePoint: ind.edgePoint, arrowAngle: ind.arrowAngle,
+                distanceMeters: ind.distanceMeters
+            )
+        }
+        return clusterIndicators(models)
+    }
+
+    /// Compact distance label for rider markers. Quantized (10 m under 1 km, 0.1 km
+    /// above) so the marker only re-bakes when the shown value actually changes.
+    private static func formatDistance(_ meters: Double) -> String {
+        if meters < 1000 { return "\(Int((meters / 10).rounded()) * 10) m" }
+        return String(format: "%.1f km", meters / 1000)
     }
 
     private var navStopCoords: [CLLocationCoordinate2D] {
@@ -774,15 +1090,29 @@ struct RideNavigationView: View {
         if !isFreeLooking { isFreeLooking = true }
     }
 
+    /// How early (in meters) to begin pulling the camera back before a turn.
+    /// Scales with speed so fast riders see the maneuver framed sooner.
+    private var maneuverApproachMeters: Double {
+        max(140, cameraSpeedKmh / 3.6 * 7)   // ~7s of travel, floor 140 m
+    }
+    /// Zoom levels to pull back when approaching a maneuver. Half a level at the Google-matched
+    /// base zoom; a full level reads as the map lurching.
+    private let maneuverZoomOut: Float = 0.5
+
     private var navZoom: Float {
-        switch vm.mySpeedKmh {
-        case ..<20:  return 17.5
-        case ..<60:  return 16.5
-        default:     return 16.0
+        // Speed → zoom lives in MapCameraCommand so the map layer holds one definition of how
+        // close the guidance camera sits. Tilt and viewport centering are NOT part of it.
+        let base = MapCameraCommand.navZoom(forSpeedKmh: cameraSpeedKmh)
+        // Approaching a turn → pull back to reveal the upcoming road; once past
+        // the maneuver `hasUpcomingTurn`/distance reset and we return to `base`.
+        // The camera's animate(to:) smooths the zoom transition both ways.
+        if vm.hasUpcomingTurn, vm.distanceToNextTurnMeters <= maneuverApproachMeters {
+            return base - maneuverZoomOut
         }
+        return base
     }
 
-    private let navTilt: Double = 45
+    private let navTilt: Double = 52
 
     private func resumeNavigation() {
         isFreeLooking = false
@@ -820,15 +1150,44 @@ struct RideNavigationView: View {
     private func handleLocationTickChanged(wasZero: Bool) {
         guard let coord = vm.userLocation else { return }
         guard isNavigationActive else { return }
+        // Track speed on every tick — including the ones that don't move the camera — so the
+        // zoom is already correct whenever a camera command does go out.
+        cameraSpeedKmh = wasZero ? vm.mySpeedKmh : cameraSpeedKmh + 0.25 * (vm.mySpeedKmh - cameraSpeedKmh)
         let isMoving    = vm.mySpeedKmh > 2.0
         let idleSeconds = Date().timeIntervalSince(lastInteractionDate)
         let shouldFollow = wasZero || (isMoving && idleSeconds >= 3.0)
         if isFreeLooking && shouldFollow { isFreeLooking = false }
         guard shouldFollow else { return }
+
+        // Only move the camera when the rider has moved or turned enough to
+        // justify it — avoids re-animating on every GPS tick from jittery
+        // stationary fixes. The first fix (wasZero) always snaps into place.
+        if !wasZero, let last = lastCameraCoord {
+            let moved = CLLocation(latitude: last.latitude, longitude: last.longitude)
+                .distance(from: CLLocation(latitude: coord.latitude, longitude: coord.longitude))
+            let rawDelta   = abs(vm.userHeading - lastCameraHeading).truncatingRemainder(dividingBy: 360)
+            let headingChange = min(rawDelta, 360 - rawDelta)
+            if moved < 5 && headingChange < 3 { return }
+        }
+        lastCameraCoord   = coord
+        lastCameraHeading = vm.userHeading
+
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
                               zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: !wasZero)
+        )
+    }
+
+    /// Tapping an edge indicator flies the camera to that rider and breaks
+    /// follow; the RESUME capsule (shown while `isFreeLooking`) re-engages nav.
+    private func focusRider(_ id: String) {
+        guard let rider = vm.riders.first(where: { $0.id == id }) else { return }
+        isFreeLooking = true
+        lastInteractionDate = Date()
+        selectedRiderId = id
+        cameraCommand = MapCameraCommand.focus(
+            lat: rider.coordinate.latitude, lng: rider.coordinate.longitude, zoom: 16
         )
     }
 
@@ -845,7 +1204,7 @@ struct RideNavigationView: View {
 
     // MARK: - HUD
 
-    private var hudLayer: some View {
+    private func hudLayer(bottomInset: CGFloat) -> some View {
         VStack(spacing: 0) {
             topBar
 
@@ -904,7 +1263,9 @@ struct RideNavigationView: View {
                     EmergencyAlertBanner(
                         reporterName: vm.emergencyReporterName,
                         message: emergency.message,
-                        onDismiss: { withAnimation { vm.activeEmergency = nil } }
+                        // Only the raiser or the leader can clear it; for everyone else the banner
+                        // has no dismiss control and persists (with the pin) until they do.
+                        onDismiss: vm.canDismissEmergency ? { vm.dismissEmergency() } : nil
                     )
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
@@ -950,12 +1311,23 @@ struct RideNavigationView: View {
                 .animation(.spring(), value: vm.activeRegroup != nil)
             }
 
-            if isNavigationActive {
-                bottomControls
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
-                navigationPreviewBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            Group {
+                if isNavigationActive {
+                    bottomControls(bottomInset: bottomInset)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    navigationPreviewBar
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            // Feeds the live height to `bottomBarHeight` so the map's reserve follows the
+            // real bar — including the swap between the two bars. `onGeometryChange` is the
+            // supported way to do this; writing state from a GeometryReader's body would
+            // mutate it mid-layout. Rounded up so sub-point jitter can't churn the map frame.
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height.rounded(.up)
+            } action: { height in
+                bottomBarHeight = height
             }
         }
         .animation(.easeInOut(duration: 0.4), value: isNavigationActive)
@@ -1031,13 +1403,11 @@ struct RideNavigationView: View {
                 }
 
                 if isNavigationActive {
-                    turnInstructionCard
+                    turnInstructionCard(expand: !isLandscape)
                         .transition(.move(edge: .top).combined(with: .opacity))
                     if isLandscape {
                         landscapeLeaderboardStrip
                             .transition(.opacity)
-                    } else {
-                        Spacer(minLength: 0)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 2) {
@@ -1069,7 +1439,7 @@ struct RideNavigationView: View {
                     .transition(.opacity)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)   // matches the banners below and the bottom bar
             .animation(.easeInOut(duration: 0.35), value: isNavigationActive)
 
             if isNavigationActive && !isLandscape {
@@ -1081,7 +1451,7 @@ struct RideNavigationView: View {
         .animation(.easeInOut(duration: 0.35), value: isNavigationActive)
     }
 
-    private var turnInstructionCard: some View {
+    private func turnInstructionCard(expand: Bool) -> some View {
         HStack(spacing: 8) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
@@ -1116,6 +1486,7 @@ struct RideNavigationView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .frame(maxWidth: expand ? .infinity : nil, alignment: .leading)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primaryFixed.opacity(0.3), lineWidth: 1))
@@ -1211,38 +1582,110 @@ struct RideNavigationView: View {
 
     // MARK: - Bottom Controls
 
-    private var bottomControls: some View {
-        VStack(spacing: 0) {
-            if isLandscape {
-                HStack(spacing: 8) {
-                    Spacer()
-                    regroupButton
-                    endRideButton
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 8)
-            } else {
-                HStack(spacing: 8) {
-                    Spacer()
-                    regroupButton
-                    endRideButton
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 44)
-            }
+    /// Adaptive by construction rather than by tuned constants: `ViewThatFits`
+    /// measures each variant against the width SwiftUI actually proposes — any
+    /// device, orientation, split-screen or Dynamic Type setting — and picks the
+    /// first that fits. Roomiest first, so a wide screen keeps full spacing and a
+    /// narrow one degrades by shedding spacing, then unit labels, in that order.
+    /// `barStat`'s `minimumScaleFactor` remains only as the last-resort net for
+    /// widths narrower than even the tightest variant.
+    /// `bottomInset` is the real bottom safe-area inset, read from inside the HUD. The
+    /// map's `.ignoresSafeArea()` consumes the safe area for its ZStack siblings, so the
+    /// HUD spans to the screen edge and this inset is the FULL clearance the content needs
+    /// to stay off the home indicator — not an addition to some inset already applied.
+    /// Reading it (rather than hardcoding 34) is what makes it right on home-button
+    /// devices, where it's 0 and only `barMinBottomPad` applies.
+    private func bottomControls(bottomInset: CGFloat) -> some View {
+        ViewThatFits(in: .horizontal) {
+            controlRow(spacing: 16, showUnits: true)
+            controlRow(spacing: 10, showUnits: true)
+            controlRow(spacing: 8,  showUnits: false)
         }
+        .padding(.horizontal, 20)
+        .padding(.top, barTopPad)
+        // Content sits above the home indicator; the material behind it still runs to the
+        // screen edge, so no map shows through below the bar. `max` keeps a sane gap on
+        // home-button devices where the inset is 0.
+        .padding(.bottom, max(barMinBottomPad, bottomInset))
         .background(
-            LinearGradient(
-                colors: [.clear, Color.surfaceDim.opacity(0.65), Color.surfaceDim.opacity(0.97)],
-                startPoint: .top, endPoint: .bottom
-            )
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                Color.surfaceDim.opacity(0.55)
+            }
+            // Covers the bottom edge even if a future layout hands the HUD an inset frame.
             .ignoresSafeArea(edges: .bottom)
         )
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.outlineVariant.opacity(0.25))
+                .frame(height: 1)
+        }
     }
 
-    private var buttonSize: CGFloat { isLandscape ? 44 : 56 }
+    private var barTopPad: CGFloat       { isLandscape ? 8 : 10 }
+    private var barMinBottomPad: CGFloat { isLandscape ? 8 : 10 }
+
+    /// One candidate layout for the bottom bar. `Spacer(minLength:)` keeps the
+    /// ideal width measurable so `ViewThatFits` can compare candidates.
+    private func controlRow(spacing: CGFloat, showUnits: Bool) -> some View {
+        HStack(spacing: spacing) {
+            barStat(
+                label: "SPEED",
+                value: vm.mySpeedKmh > 0 ? String(format: "%.0f", vm.mySpeedKmh) : "--",
+                unit: showUnits ? "KM/H" : nil
+            )
+            barDivider
+            barStat(label: "ETA", value: vm.etaString, unit: nil)
+            barDivider
+            barStat(
+                label: "DIST",
+                value: vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--",
+                unit: showUnits ? "KM" : nil
+            )
+            Spacer(minLength: 6)
+            regroupButton
+            endRideButton
+        }
+    }
+
+    /// 48pt portrait — comfortably above the 44pt minimum touch target, and it stops
+    /// the buttons from setting a row height 21pt taller than the stats beside them.
+    private var buttonSize: CGFloat { isLandscape ? 44 : 48 }
+
+    // A single stat written directly on the bar — no card/pill. `lineLimit(1)` keeps multi-digit
+    // values (e.g. 3-digit speed) on one line; `minimumScaleFactor` lets them give up a little
+    // size when the row is full rather than forcing the HStack wider than the screen. Do NOT use
+    // `fixedSize` here: three stats plus both buttons need ~438pt at worst-case values, so on a
+    // 393pt screen a fixed-width row bleeds past both edges and clips the outermost glyphs.
+    private func barStat(label: String, value: String, unit: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(Color.onSurfaceVariant)
+                .tracking(1)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(value)
+                    .font(.system(size: isLandscape ? 16 : 18, weight: .black, design: .monospaced))
+                    .foregroundColor(Color.onSurface)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if let unit {
+                    Text(unit)
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color.onSurfaceVariant)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+        }
+    }
+
+    private var barDivider: some View {
+        Rectangle()
+            .fill(Color.outlineVariant.opacity(0.25))
+            .frame(width: 1, height: isLandscape ? 26 : 30)
+    }
 
     private var regroupButton: some View {
         Button(action: { showRegroup = true }) {
@@ -1318,39 +1761,6 @@ struct RideNavigationView: View {
         .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
     }
 
-    // MARK: - Right Stat Pills
-
-    private var rightStatPills: some View {
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-                if isNavigationActive {
-                    VStack(spacing: isLandscape ? 6 : 9) {
-                        NavStatPill(
-                            label: "SPEED",
-                            value: vm.mySpeedKmh > 0 ? String(format: "%.0f", vm.mySpeedKmh) : "--",
-                            unit: "KM/H",
-                            compact: isLandscape
-                        )
-                        NavStatPill(label: "ETA", value: vm.etaString, unit: nil, compact: isLandscape)
-                        NavStatPill(
-                            label: "DIST",
-                            value: vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--",
-                            unit: "KM",
-                            compact: isLandscape
-                        )
-                    }
-                    .padding(.trailing, 4)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
-                }
-            }
-            Spacer()
-        }
-        .padding(.top, isLandscape ? 56 : 180)
-        .padding(.bottom, isLandscape ? 72 : 220)
-        .animation(.easeInOut(duration: 0.4), value: isNavigationActive)
-    }
 }
 
 // MARK: - Live Rider Pin
@@ -1565,7 +1975,6 @@ struct WaypointPin: View {
                     .fill(Color.surfaceContainerHighest)
                     .frame(width: 32, height: 32)
                     .overlay(Circle().stroke(Color.tertiaryFixed, lineWidth: 2))
-                    .shadow(color: Color.tertiaryFixed.opacity(0.4), radius: 6)
                 Image(systemName: "mappin")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(Color.tertiaryFixed)
@@ -1595,7 +2004,6 @@ struct DestinationPin: View {
         VStack(spacing: 2) {
             ZStack {
                 Circle().fill(Color.primaryFixed).frame(width: 44, height: 44)
-                    .shadow(color: Color.primaryFixed.opacity(0.7), radius: 12)
                 Image(systemName: "flag.checkered")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(Color.onPrimaryFixed)
@@ -1633,37 +2041,6 @@ struct StartPin: View {
     }
 }
 
-// MARK: - Nav Stat Pill
-
-struct NavStatPill: View {
-    let label: String
-    let value: String
-    let unit: String?
-    var accentColor: Color? = nil
-    var compact: Bool = false
-
-    private var size: CGFloat { compact ? 56 : 72 }
-
-    var body: some View {
-        VStack(alignment: .center, spacing: 1) {
-            Text(label)
-                .font(.system(size: compact ? 7 : 8, weight: .bold, design: .monospaced))
-                .foregroundColor(Color.onSurfaceVariant).tracking(1)
-            Text(value)
-                .font(.system(size: compact ? 13 : 17, weight: .black, design: .monospaced))
-                .foregroundColor(accentColor ?? Color.onSurface)
-            if let unit {
-                Text(unit).font(.system(size: compact ? 7 : 8, weight: .medium, design: .monospaced)).foregroundColor(Color.onSurfaceVariant)
-            } else {
-                Text(" ").font(.system(size: compact ? 7 : 8, weight: .medium, design: .monospaced))
-            }
-        }
-        .frame(width: size, height: size)
-        .background(Color.surfaceContainerHigh.opacity(0.88))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.outlineVariant.opacity(0.2), lineWidth: 1))
-    }
-}
 
 // MARK: - Regroup Pin
 
@@ -1704,7 +2081,6 @@ struct RegroupPin: View {
                     .fill(Color.surfaceDim)
                     .frame(width: 40, height: 40)
                     .overlay(Circle().stroke(accentColor, lineWidth: 2.5))
-                    .shadow(color: accentColor.opacity(0.5), radius: 8)
                 Image(systemName: icon)
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(accentColor)
@@ -1731,7 +2107,6 @@ struct EmergencyPin: View {
                 Circle()
                     .fill(Color.errorColor)
                     .frame(width: 40, height: 40)
-                    .shadow(color: Color.errorColor.opacity(0.7), radius: 10)
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
@@ -1836,7 +2211,9 @@ struct RegroupResolvedBanner: View {
 struct EmergencyAlertBanner: View {
     let reporterName: String
     let message: String
-    let onDismiss: () -> Void
+    /// nil for riders who aren't allowed to clear the emergency (only the raiser or leader can);
+    /// the dismiss control is hidden for them and the banner stays until an authorized rider clears it.
+    let onDismiss: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -1857,13 +2234,15 @@ struct EmergencyAlertBanner: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Color.onSurfaceVariant)
-                    .frame(width: 28, height: 28)
-                    .background(Color.surfaceContainerHigh.opacity(0.6))
-                    .clipShape(Circle())
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Color.onSurfaceVariant)
+                        .frame(width: 28, height: 28)
+                        .background(Color.surfaceContainerHigh.opacity(0.6))
+                        .clipShape(Circle())
+                }
             }
         }
         .padding(.horizontal, 14)

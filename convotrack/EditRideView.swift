@@ -1,12 +1,18 @@
 import SwiftUI
 import CoreLocation
+import ClerkKit
 
 struct EditRideView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var membershipStore: MembershipStore
+    @Environment(Clerk.self) private var clerk
     @Environment(\.dismiss) private var dismiss
 
     let ride: Ride
+
+    /// Called after the ride is successfully deleted, so the presenting lobby can tear
+    /// down its session and pop back instead of refreshing a now-nonexistent ride.
+    var onDeleted: () -> Void = {}
 
     @State private var rideTitle: String
     @State private var maxRiders: Int
@@ -31,10 +37,23 @@ struct EditRideView: View {
     @State private var showError = false
     @State private var showMembership = false
 
+    @State private var isDeleting = false
+    @State private var showDeleteConfirm = false
+    @State private var deleteErrorMessage: String?
+    @State private var showDeleteError = false
+
+    /// Only the ride's creator (leader) may delete it. Read reactively from Clerk so a
+    /// still-loading identity resolves the moment it lands.
+    private var isLeader: Bool {
+        guard let uid = clerk.user?.id, !uid.isEmpty else { return false }
+        return uid == ride.leaderId
+    }
+
     @State private var scrollTarget: String? = nil
 
-    init(ride: Ride) {
+    init(ride: Ride, onDeleted: @escaping () -> Void = {}) {
         self.ride = ride
+        self.onDeleted = onDeleted
         _rideTitle = State(initialValue: ride.title)
         _maxRiders = State(initialValue: ride.maxAllowedParticipants)
 
@@ -151,6 +170,8 @@ struct EditRideView: View {
                             .font(.labelCaps)
                             .foregroundColor(Color.onSurfaceVariant.opacity(0.4))
                             .tracking(8)
+
+                        deleteRideButton
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
@@ -184,6 +205,17 @@ struct EditRideView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "An unknown error occurred.")
+        }
+        .alert("Delete this ride?", isPresented: $showDeleteConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete Ride", role: .destructive) { Task { await deleteRide() } }
+        } message: {
+            Text("This permanently deletes the ride for everyone. This can't be undone.")
+        }
+        .alert("Failed to Delete Ride", isPresented: $showDeleteError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteErrorMessage ?? "An unknown error occurred.")
         }
         .sheet(isPresented: $showMembership) {
             MembershipView().environmentObject(membershipStore)
@@ -419,7 +451,7 @@ struct EditRideView: View {
                 Button { showMembership = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "crown.fill").font(.iconXS)
-                        Text("Pro unlocks up to 25 riders").font(.labelCaps).tracking(0.5)
+                        Text("Pro unlocks bigger packs").font(.labelCaps).tracking(0.5)
                         Spacer()
                         Text("UPGRADE →").font(.labelCaps).tracking(1)
                     }
@@ -521,6 +553,49 @@ struct EditRideView: View {
             if diff < bestDiff { bestDiff = diff; best = i }
         }
         return best
+    }
+
+    // MARK: - Delete
+
+    // Full-width destructive action pinned to the end of the sheet. Shown only to the ride's
+    // creator (leader); disabled while a save or delete is already in flight.
+    @ViewBuilder
+    private var deleteRideButton: some View {
+        if isLeader {
+            Button(action: { showDeleteConfirm = true }) {
+                HStack(spacing: 12) {
+                    if isDeleting {
+                        ProgressView().tint(Color.errorColor)
+                    } else {
+                        Image(systemName: "trash").font(.system(size: 18, weight: .semibold))
+                        Text("DELETE RIDE").font(.headlineMd).tracking(4)
+                    }
+                }
+                .foregroundColor(Color.errorColor)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .background(Color.errorColor.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.4), lineWidth: 1))
+            }
+            .disabled(isDeleting || isSaving)
+            .opacity(isSaving ? 0.5 : 1)
+        }
+    }
+
+    @MainActor
+    private func deleteRide() async {
+        guard isLeader else { return }
+        isDeleting = true
+        defer { isDeleting = false }
+        do {
+            try await APIClient.shared.deleteRide(ride.id)
+            onDeleted()
+            dismiss()
+        } catch {
+            deleteErrorMessage = error.localizedDescription
+            showDeleteError = true
+        }
     }
 
     // MARK: - Save
