@@ -50,6 +50,9 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var isEnding = false
     @Published var endError: String? = nil
     @Published var currentInstruction: String = ""
+    /// Routes API maneuver for the current step (`TURN_LEFT`, `ROUNDABOUT_RIGHT`, …). Drives the
+    /// banner arrow, so the arrow can't disagree with the instruction text.
+    @Published var currentManeuver: String = ""
     @Published var distanceToNextTurnMeters: Double = 0
     @Published var isOffRoute: Bool = false
     @Published var activeRegroup: RegroupEvent? = nil
@@ -62,7 +65,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
     /// True while a real turn instruction is still ahead (not yet at the final
     /// step / destination). Drives the maneuver-aware camera pull-back.
-    var hasUpcomingTurn: Bool { currentStepIndex < navSteps.count && !currentInstruction.isEmpty }
+    var hasUpcomingTurn: Bool { currentStepIndex < navSteps.count - 1 && !currentInstruction.isEmpty }
 
     /// Only the rider who raised the emergency or the ride leader may clear it (server enforces the
     /// same rule); everyone else sees the persistent pin + siren until one of them dismisses it.
@@ -118,8 +121,13 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
     private struct NavStep {
         let instruction: String
+        let maneuver: String?
         let endCoordinate: CLLocationCoordinate2D
         let distanceMeters: Double
+        /// Distance from the route's start to this step's end, measured ALONG the drawn polyline.
+        /// This is what makes step tracking self-correcting: it is compared against the rider's own
+        /// along-route progress, so driving past a junction advances the step by itself.
+        var endDistanceAlongRoute: Double
     }
 
     private var rideId = ""
@@ -130,6 +138,9 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var routeExpectedTravelTime: TimeInterval = 0
     private var navSteps: [NavStep] = []
     private var currentStepIndex: Int = 0
+    /// Prefix distances along `navRoute` — `[i]` is metres from the start to vertex `i`. Rebuilt
+    /// with the route (including on reroute); lets progress and step positions share one frame.
+    private var navRouteCumulative: [Double] = []
     private var lastBroadcastDate: Date = .distantPast
     private var lastCameraTickDate: Date = .distantPast
     private var remainingStops: [CLLocationCoordinate2D] = []
@@ -147,7 +158,14 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var lastRerouteOrigin: CLLocation? = nil
     private var needsInitialRouteCheck = false   // bypasses off-route debounce on first GPS fix
     private let offRouteThresholdMeters: Double = 40
-    private var currentRouteSegmentIndex: Int = 0
+    /// The polyline the rider is actually following: the planned route at first, and the reroute
+    /// once one lands. Progress, off-route detection, polyline trimming and step positions are all
+    /// measured against THIS. `routeCoordinates` keeps its separate meaning — the dim planned
+    /// layer, which a reroute deliberately never touches — so navigation must not measure itself
+    /// against a plan the rider has already abandoned.
+    private var navRoute: [CLLocationCoordinate2D] = []
+    /// Forward-only progress index into `navRoute`.
+    private var navSegmentIndex: Int = 0
     private var consecutiveOffCount: Int = 0
     private var consecutiveOnCount: Int = 0
     private let offRouteConfirmCount = 3   // consecutive off-route readings before flagging
@@ -328,14 +346,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// In both cases we project the rider onto the chosen route and walk forward, so the offset is
     /// measured from "here". Falls back to a heading offset when there's no usable route.
     private func coordinateAhead(meters: Double) -> CLLocationCoordinate2D? {
-        let route: [CLLocationCoordinate2D]
-        if isOffRoute && activeRouteCoordinates.count >= 2 {
-            route = activeRouteCoordinates
-        } else if routeCoordinates.count >= 2 {
-            route = routeCoordinates
-        } else {
-            route = activeRouteCoordinates
-        }
+        // `navRoute` is the followed route (planned, or the reroute) and — unlike
+        // `activeRouteCoordinates` — is never trimmed, so walking forward along it can't run out
+        // and clamp onto the destination as progress nears the end.
+        let route = navRoute.count >= 2 ? navRoute : activeRouteCoordinates
         let userLoc = LocationService.shared.lastLocation?.coordinate ?? userLocation
 
         guard route.count >= 2 else {
@@ -528,10 +542,13 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         mySpeedKmh = max(0, location.speed * 3.6)
         userLocation = location.coordinate
         if location.course >= 0 { userHeading = location.course }
-        updateCurrentStep(location: location)
+        // Order matters: checkOffRoute advances `navSegmentIndex`, which is what
+        // updateCurrentStep measures progress from. Reversed, every step decision used the
+        // previous fix's progress.
         checkOffRoute(location: location)
+        updateCurrentStep(location: location)
 
-        if needsInitialRouteCheck && !routeCoordinates.isEmpty {
+        if needsInitialRouteCheck && !navRoute.isEmpty {
             needsInitialRouteCheck = false
             if minimumDistanceToUpcomingRoute(from: location) > offRouteThresholdMeters,
                !isRerouteInFlight {
@@ -691,44 +708,166 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             if let result = try? await GoogleDirectionsService.route(from: origin, to: dest) {
                 allCoords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
                 totalTime += result.durationSeconds
+                // Every step is kept, including any without instruction text: they still occupy
+                // real distance, and dropping them used to break the chain of along-route
+                // positions. Display falls forward to the next step that has text.
                 for step in result.steps {
-                    guard !step.instruction.isEmpty else { continue }
-                    steps.append(NavStep(instruction: step.instruction, endCoordinate: step.endCoordinate, distanceMeters: step.distanceMeters))
+                    steps.append(NavStep(
+                        instruction: step.instruction,
+                        maneuver: step.maneuver,
+                        endCoordinate: step.endCoordinate,
+                        distanceMeters: step.distanceMeters,
+                        endDistanceAlongRoute: 0   // stamped below, once the geometry is known
+                    ))
                 }
             }
             cumulativeStopTimes.append(totalTime)
         }
 
-        navSteps = steps
-        currentStepIndex = 0
-        if let first = navSteps.first {
-            currentInstruction       = first.instruction
-            distanceToNextTurnMeters = first.distanceMeters
-        }
         // Draw and track the leader-selected route geometry when available; the steps
         // above (turn instructions) come from the live recompute either way.
         let geometry = GoogleDirectionsService.decodedRoute(polyline) ?? allCoords
+
+        // Step ends are projected onto the geometry we actually follow rather than assumed to lie
+        // on it: they come from the legs just recomputed, while `geometry` may be the leader's
+        // stored polyline, and the two need not share vertices.
+        adoptNavRoute(geometry, steps: steps)
+
+        // `adoptNavRoute` above already set navRoute / its prefix distances / navSegmentIndex.
         routeCoordinates         = geometry
         activeRouteCoordinates   = geometry   // full route until first GPS update trims it
         routeExpectedTravelTime  = totalTime
         stopCumulativeDurations  = cumulativeStopTimes
         totalStopCount           = cumulativeStopTimes.count
-        currentRouteSegmentIndex = 0
         consecutiveOffCount      = 0
         consecutiveOnCount       = 0
         needsInitialRouteCheck   = true
         routeVersion += 1
     }
 
+    /// Which maneuver comes next, derived from how far along the route the rider actually is —
+    /// the model Google Maps uses.
+    ///
+    /// This replaced a proximity trigger that advanced only when a GPS fix landed within 30 m
+    /// (straight-line) of the step's end coordinate. Miss that window once — GPS scatter, a fix
+    /// interval that straddles the junction at speed, a step end snapped to the far side of a
+    /// divided road — and the distance only grows as the rider drives away, so the step could
+    /// never advance again: the very first instruction ("Head west on …") stuck for the whole
+    /// ride, which is exactly the reported symptom. It also advanced at most one step per fix, so
+    /// a cluster of short steps (roundabout exits, quick doubles) left it permanently behind.
+    ///
+    /// Comparing progress against each step's along-route end is a pure function of position, so
+    /// it self-corrects: passing a turn advances by itself, and several steps can be crossed in
+    /// one fix.
     private func updateCurrentStep(location: CLLocation) {
-        guard currentStepIndex < navSteps.count else { return }
+        guard !navSteps.isEmpty else { return }
+        let progress = progressAlongRoute(location)
+
+        // First step that still ends ahead of us. The 5 m slack avoids sitting exactly on a
+        // boundary and flickering between two steps while stationary.
+        let computed = navSteps.firstIndex { $0.endDistanceAlongRoute > progress + 5 }
+            ?? navSteps.count - 1
+        // Forward-only, mirroring the route progress index it is derived from.
+        currentStepIndex = max(currentStepIndex, computed)
+
         let step = navSteps[currentStepIndex]
-        let endLoc = CLLocation(latitude: step.endCoordinate.latitude, longitude: step.endCoordinate.longitude)
-        distanceToNextTurnMeters = location.distance(from: endLoc)
-        if distanceToNextTurnMeters < 30, currentStepIndex + 1 < navSteps.count {
-            currentStepIndex += 1
-            currentInstruction = navSteps[currentStepIndex].instruction
+        // Along-route rather than straight-line: "300 m" should mean 300 m of driving, which is
+        // what Google shows and what actually matters around a curve.
+        distanceToNextTurnMeters = max(0, step.endDistanceAlongRoute - progress)
+        currentInstruction = displayedInstruction(from: currentStepIndex)
+        currentManeuver    = displayedManeuver(from: currentStepIndex)
+    }
+
+    /// Rider's distance along the drawn route. Built on `navSegmentIndex`, which
+    /// `advanceRouteProgress` only ever moves forward inside a window — so progress cannot jump
+    /// backwards (or leap ahead) where a route passes close to itself.
+    private func progressAlongRoute(_ location: CLLocation) -> Double {
+        guard navRoute.count >= 2,
+              navRouteCumulative.count == navRoute.count else { return 0 }
+        let i = min(navSegmentIndex, navRoute.count - 2)
+        let a = navRoute[i]
+        let projected = Self.projectOntoSegment(location.coordinate, a: a, b: navRoute[i + 1])
+        let alongSegment = CLLocation(latitude: a.latitude, longitude: a.longitude)
+            .distance(from: CLLocation(latitude: projected.latitude, longitude: projected.longitude))
+        return navRouteCumulative[i] + alongSegment
+    }
+
+    /// Steps without instruction text still count toward distance, so for display we fall forward
+    /// to the next step that has text.
+    private func displayedInstruction(from index: Int) -> String {
+        guard index < navSteps.count else { return "" }
+        for step in navSteps[index...] where !step.instruction.isEmpty { return step.instruction }
+        return ""
+    }
+
+    private func displayedManeuver(from index: Int) -> String {
+        guard index < navSteps.count else { return "" }
+        for step in navSteps[index...] where !step.instruction.isEmpty { return step.maneuver ?? "" }
+        return ""
+    }
+
+    /// Prefix distances: `result[i]` is metres from the route start to vertex `i`.
+    private static func cumulativeDistances(_ route: [CLLocationCoordinate2D]) -> [Double] {
+        guard !route.isEmpty else { return [] }
+        var result = [Double](repeating: 0, count: route.count)
+        for i in 1..<route.count {
+            let a = CLLocation(latitude: route[i - 1].latitude, longitude: route[i - 1].longitude)
+            let b = CLLocation(latitude: route[i].latitude,     longitude: route[i].longitude)
+            result[i] = result[i - 1] + a.distance(from: b)
         }
+        return result
+    }
+
+    /// Stamps each step with where its end falls along `route`, by projecting the end coordinate
+    /// onto the polyline. Clamped to be non-decreasing: a projection that landed behind its
+    /// predecessor (a route that doubles back near itself) would make that step unreachable and
+    /// strand the banner, which is the failure mode this whole path exists to avoid.
+    private static func stampAlongRouteDistances(
+        _ steps: [NavStep],
+        route: [CLLocationCoordinate2D],
+        cumulative: [Double]
+    ) -> [NavStep] {
+        guard route.count >= 2, cumulative.count == route.count else { return steps }
+        let total = cumulative[cumulative.count - 1]
+        var stamped: [NavStep] = []
+        var previous: Double = 0
+        for var step in steps {
+            let (segIdx, projected) = nearestPointOnRoute(route, to: step.endCoordinate)
+            let a = CLLocation(latitude: route[segIdx].latitude, longitude: route[segIdx].longitude)
+            let along = cumulative[segIdx] + a.distance(
+                from: CLLocation(latitude: projected.latitude, longitude: projected.longitude)
+            )
+            step.endDistanceAlongRoute = min(max(along, previous), total)
+            previous = step.endDistanceAlongRoute
+            stamped.append(step)
+        }
+        // The last step ends at the destination by definition; snapping it there stops a slightly
+        // short projection from leaving the final instruction unreachable.
+        if !stamped.isEmpty {
+            stamped[stamped.count - 1].endDistanceAlongRoute = total
+        }
+        return stamped
+    }
+
+    /// Closest point to `point` on the segment a→b. Shared by progress tracking and
+    /// `trimActiveRoute`, which previously inlined the same flat-earth projection.
+    private static func projectOntoSegment(
+        _ point: CLLocationCoordinate2D,
+        a: CLLocationCoordinate2D,
+        b: CLLocationCoordinate2D
+    ) -> CLLocationCoordinate2D {
+        let cosLat = cos(a.latitude * .pi / 180)
+        let ax = a.longitude * cosLat, ay = a.latitude
+        let bx = b.longitude * cosLat, by = b.latitude
+        let px = point.longitude * cosLat, py = point.latitude
+        let dx = bx - ax, dy = by - ay
+        let lenSq = dx * dx + dy * dy
+        guard lenSq >= 1e-18 else { return a }
+        let t = max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
+        return CLLocationCoordinate2D(
+            latitude:  a.latitude  + t * (b.latitude  - a.latitude),
+            longitude: a.longitude + t * (b.longitude - a.longitude)
+        )
     }
 
     private func checkOffRoute(location: CLLocation) {
@@ -776,34 +915,66 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         isRerouteInFlight = true
         let stops = [origin] + remainingStops
         var coords: [CLLocationCoordinate2D] = []
+        // The reroute's own turn instructions. Previously discarded, which left the banner reciting
+        // maneuvers from a route the rider had already left — "turn left" at a junction that is no
+        // longer on the path.
+        var steps: [NavStep] = []
         for i in 0..<stops.count - 1 {
             guard let result = try? await GoogleDirectionsService.route(
                 from: stops[i], to: stops[i + 1], trafficAware: false
             ) else { continue }
             coords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
+            for step in result.steps {
+                steps.append(NavStep(
+                    instruction: step.instruction,
+                    maneuver: step.maneuver,
+                    endCoordinate: step.endCoordinate,
+                    distanceMeters: step.distanceMeters,
+                    endDistanceAlongRoute: 0
+                ))
+            }
         }
         isRerouteInFlight = false
         guard !coords.isEmpty else { return }
+
         activeRouteCoordinates = coords
+        // Navigation switches wholesale onto the reroute: progress, off-route checks, trimming and
+        // steps all now refer to it. Without this the rider stays "off" the abandoned plan forever
+        // and re-reroutes every 200 m, which would also reset the steps every 200 m.
+        adoptNavRoute(coords, steps: steps)
     }
 
-    /// Advance `currentRouteSegmentIndex` to the closest upcoming segment, never backwards.
+    /// Adopts `route` as the polyline being followed: rebuilds its prefix distances, restamps the
+    /// steps onto it, and rewinds progress to its start. Used for the initial route and for every
+    /// reroute, so both paths can't drift apart.
+    private func adoptNavRoute(_ route: [CLLocationCoordinate2D], steps: [NavStep]) {
+        navRoute            = route
+        navRouteCumulative  = Self.cumulativeDistances(route)
+        navSegmentIndex     = 0
+        navSteps            = Self.stampAlongRouteDistances(steps, route: route, cumulative: navRouteCumulative)
+        currentStepIndex    = 0
+        currentInstruction       = displayedInstruction(from: 0)
+        currentManeuver          = displayedManeuver(from: 0)
+        distanceToNextTurnMeters = navSteps.first?.endDistanceAlongRoute ?? 0
+    }
+
+    /// Advance `navSegmentIndex` to the closest upcoming segment, never backwards.
     private func advanceRouteProgress(to location: CLLocation) {
-        guard routeCoordinates.count >= 2 else { return }
-        let lookEnd = min(routeCoordinates.count - 2, currentRouteSegmentIndex + 200)
-        guard lookEnd >= currentRouteSegmentIndex else { return }
+        guard navRoute.count >= 2 else { return }
+        let lookEnd = min(navRoute.count - 2, navSegmentIndex + 200)
+        guard lookEnd >= navSegmentIndex else { return }
 
         var minDist = Double.infinity
-        var bestIdx = currentRouteSegmentIndex
-        for i in currentRouteSegmentIndex...lookEnd {
-            let d = distanceToLineSegment(from: location, a: routeCoordinates[i], b: routeCoordinates[i + 1])
+        var bestIdx = navSegmentIndex
+        for i in navSegmentIndex...lookEnd {
+            let d = distanceToLineSegment(from: location, a: navRoute[i], b: navRoute[i + 1])
             if d < minDist { minDist = d; bestIdx = i }
             if minDist < 5 { break }
         }
         // Only advance if user is actually near the route — prevents a far-away GPS fix
         // from jumping the index to the end of a short route, which caused the straight-line bug.
-        if bestIdx > currentRouteSegmentIndex && minDist <= 80 {
-            currentRouteSegmentIndex = bestIdx
+        if bestIdx > navSegmentIndex && minDist <= 80 {
+            navSegmentIndex = bestIdx
         }
     }
 
@@ -811,47 +982,31 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// so the bright polyline starts exactly at the user's position.
     /// Only called when on-route; off-route uses calculateFullReroute instead.
     private func trimActiveRoute(to location: CLLocation) {
-        guard routeCoordinates.count >= 2 else { return }
-        let i    = currentRouteSegmentIndex
-        let next = min(i + 1, routeCoordinates.count - 1)
-        let a    = routeCoordinates[i]
-        let b    = routeCoordinates[next]
+        guard navRoute.count >= 2 else { return }
+        let i    = navSegmentIndex
+        let next = min(i + 1, navRoute.count - 1)
+        let a    = navRoute[i]
+        let b    = navRoute[next]
 
-        // Project onto segment using the same flat-earth frame as distanceToLineSegment.
-        let cosLat = cos(a.latitude * .pi / 180)
-        let ax = a.longitude * cosLat, ay = a.latitude
-        let bx = b.longitude * cosLat, by = b.latitude
-        let px = location.coordinate.longitude * cosLat, py = location.coordinate.latitude
-        let dx = bx - ax, dy = by - ay
-        let lenSq = dx * dx + dy * dy
-        let projected: CLLocationCoordinate2D
-        if lenSq < 1e-18 {
-            projected = a
-        } else {
-            let t = max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
-            projected = CLLocationCoordinate2D(
-                latitude:  a.latitude  + t * (b.latitude  - a.latitude),
-                longitude: a.longitude + t * (b.longitude - a.longitude)
-            )
-        }
+        let projected = Self.projectOntoSegment(location.coordinate, a: a, b: b)
 
         var trimmed: [CLLocationCoordinate2D] = [projected]
-        if next < routeCoordinates.count {
-            trimmed.append(contentsOf: routeCoordinates[next...])
+        if next < navRoute.count {
+            trimmed.append(contentsOf: navRoute[next...])
         }
         activeRouteCoordinates = trimmed
     }
 
     /// Minimum perpendicular distance to any segment in a window around the current progress index.
     private func minimumDistanceToUpcomingRoute(from location: CLLocation) -> Double {
-        guard routeCoordinates.count >= 2 else { return 0 }
-        let start = max(0, currentRouteSegmentIndex - 5)
-        let end = min(routeCoordinates.count - 2, currentRouteSegmentIndex + 100)
+        guard navRoute.count >= 2 else { return 0 }
+        let start = max(0, navSegmentIndex - 5)
+        let end = min(navRoute.count - 2, navSegmentIndex + 100)
         guard end >= start else { return 0 }
 
         var minDist = Double.infinity
         for i in start...end {
-            let d = distanceToLineSegment(from: location, a: routeCoordinates[i], b: routeCoordinates[i + 1])
+            let d = distanceToLineSegment(from: location, a: navRoute[i], b: navRoute[i + 1])
             if d < minDist { minDist = d }
             if minDist < 5 { return minDist }
         }
@@ -1459,7 +1614,7 @@ struct RideNavigationView: View {
                     .frame(width: 36, height: 36)
                 Image(systemName: vm.currentInstruction.isEmpty
                       ? "arrow.up"
-                      : maneuverIcon(for: vm.currentInstruction))
+                      : maneuverIcon(for: vm.currentManeuver, instruction: vm.currentInstruction))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(Color.onPrimaryFixed)
             }
@@ -1492,14 +1647,39 @@ struct RideNavigationView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primaryFixed.opacity(0.3), lineWidth: 1))
     }
 
-    private func maneuverIcon(for instruction: String) -> String {
+    /// Arrow for the current maneuver, from the Routes API's `maneuver` enum. Locale-independent
+    /// and unambiguous, unlike scanning the instruction text — which matched road names
+    /// ("Turn right onto Left Cross Rd" hit "left" first, drawing the wrong arrow) and flattened
+    /// slight/sharp/ramp variants into one. The text scan survives only as a fallback for a step
+    /// that arrives without a maneuver.
+    private func maneuverIcon(for maneuver: String, instruction: String) -> String {
+        switch maneuver {
+        case "TURN_LEFT", "TURN_SHARP_LEFT":   return "arrow.turn.up.left"
+        case "TURN_RIGHT", "TURN_SHARP_RIGHT": return "arrow.turn.up.right"
+        case "TURN_SLIGHT_LEFT", "RAMP_LEFT":  return "arrow.up.left"
+        case "TURN_SLIGHT_RIGHT", "RAMP_RIGHT": return "arrow.up.right"
+        case "UTURN_LEFT":                     return "arrow.uturn.left"
+        case "UTURN_RIGHT":                    return "arrow.uturn.right"
+        case "MERGE":                          return "arrow.merge"
+        case "FORK_LEFT", "FORK_RIGHT":        return "arrow.triangle.branch"
+        case "ROUNDABOUT_LEFT", "ROUNDABOUT_RIGHT":
+            return "arrow.triangle.turn.up.right.circle"
+        case "FERRY", "FERRY_TRAIN":           return "ferry"
+        case "DEPART", "STRAIGHT", "NAME_CHANGE": return "arrow.up"
+        default:
+            return legacyManeuverIcon(for: instruction)
+        }
+    }
+
+    /// Text-derived arrow. Only reached when a step carries no `maneuver`.
+    private func legacyManeuverIcon(for instruction: String) -> String {
         let l = instruction.lowercased()
         if l.contains("arrive") || l.contains("destination") { return "flag.checkered" }
         if l.contains("u-turn") || l.contains("uturn") { return "arrow.uturn.left" }
+        if l.contains("roundabout") || l.contains("rotary") { return "arrow.triangle.turn.up.right.circle" }
+        if l.contains("merge") { return "arrow.merge" }
         if l.contains("left") { return "arrow.turn.up.left" }
         if l.contains("right") { return "arrow.turn.up.right" }
-        if l.contains("merge") { return "arrow.merge" }
-        if l.contains("roundabout") || l.contains("rotary") { return "arrow.triangle.turn.up.right.circle" }
         return "arrow.up"
     }
 

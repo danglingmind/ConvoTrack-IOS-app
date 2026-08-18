@@ -12,6 +12,12 @@ struct DirectionsResult {
 
 struct DirectionsStep {
     let instruction: String
+    /// Routes API `navigationInstruction.maneuver` — `TURN_LEFT`, `ROUNDABOUT_RIGHT`, `DEPART`, …
+    /// The authoritative, locale-independent signal for which arrow to draw. Deriving it from the
+    /// instruction text instead misreads road names ("Turn right onto Left Cross Rd" matches
+    /// "left" first) and collapses distinct maneuvers ("Keep left" vs "Turn left"), and would
+    /// break outright if `languageCode` ever moved off English.
+    let maneuver: String?
     let endCoordinate: CLLocationCoordinate2D
     let distanceMeters: Double
 }
@@ -82,6 +88,7 @@ enum GoogleDirectionsService {
             guard let end = step.endLocation else { return nil }
             return DirectionsStep(
                 instruction:    step.navigationInstruction?.instructions ?? "",
+                maneuver:       step.navigationInstruction?.maneuver,
                 endCoordinate:  CLLocationCoordinate2D(latitude: end.latLng.latitude,
                                                        longitude: end.latLng.longitude),
                 distanceMeters: Double(step.distanceMeters ?? 0)
@@ -272,6 +279,9 @@ private struct RoutesResponse: Decodable {
     }
 
     struct NavigationInstruction: Decodable {
-        let instructions: String
+        // Both optional: a step can arrive with the object present but a field missing, and a
+        // non-optional here would fail the decode for the ENTIRE route rather than that one step.
+        let instructions: String?
+        let maneuver: String?
     }
 }
