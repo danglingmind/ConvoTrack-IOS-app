@@ -74,6 +74,9 @@ extension Font {
     static let headlineMd = Font.system(size: 24, weight: .semibold)
     static let bodyLg = Font.system(size: 18, weight: .medium)
     static let bodyMd = Font.system(size: 16, weight: .regular)
+    /// 14pt body. For text that must wrap rather than truncate — a step down from
+    /// `bodyMd` fits noticeably more of a long place name per line.
+    static let bodySm = Font.system(size: 14, weight: .regular)
     static let labelCaps = Font.system(size: 12, weight: .bold, design: .monospaced)
     static let dataMono = Font.system(size: 14, weight: .medium, design: .monospaced)
     static let toggleLabel = Font.system(size: 13, weight: .semibold)

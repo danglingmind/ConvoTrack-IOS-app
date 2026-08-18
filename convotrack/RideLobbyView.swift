@@ -158,6 +158,10 @@ struct RideLobbyView: View {
     // fit re-runs once the real values land.
     @State private var topChromeBottom: CGFloat = 100
     @State private var statPillsHeight: CGFloat = 76
+    // Hero state for the destination photo. An explicit phase rather than an optional image:
+    // "still resolving" and "there is no photo" must look different, otherwise switching rides
+    // shows the map for a moment before the photo lands.
+    @State private var heroPhase: DestinationHeroPhase = .resolving
 
     // MARK: - Derived
 
@@ -331,6 +335,9 @@ struct RideLobbyView: View {
         }
         .modifier(lobbyAlerts)
         .task { await loadRideAndConnect() }
+        // Keyed on the destination so it runs once the ride lands (the lobby renders before
+        // the fetch returns) and again if the leader edits the destination.
+        .task(id: destinationPhotoKey) { await loadDestinationPhoto() }
         .preferredColorScheme(.dark)
     }
 
@@ -356,14 +363,62 @@ struct RideLobbyView: View {
 
     private var mapSection: some View {
         ZStack(alignment: .bottom) {
-            GoogleMapView(
-                routeCoords:   routeCoordinates,
-                stopCoords:    lobbyStopCoords,
-                pins:          lobbyMapPins,
-                cameraCommand: cameraCommand,
-                isInteractive: false
-            )
-            .frame(maxWidth: .infinity, minHeight: mapPreviewHeight)
+            // Three outcomes, three appearances: blank while we don't yet know, the photo when
+            // Google has one, the route map when it doesn't. Collapsing "resolving" into the map
+            // case is what caused the ride-switch glitch — the map appeared for a beat and was
+            // then replaced by the photo.
+            switch heroPhase {
+            case .resolving:
+                // Deliberately empty: neither the photo nor the map. Showing the map here is
+                // what made a ride switch flash map → photo. A plain surface reads as "loading"
+                // without committing to either outcome.
+                Color.surfaceContainerLow
+                    .frame(maxWidth: .infinity)
+                    .frame(height: mapPreviewHeight)
+
+            case .photo(let photo):
+                // A fixed-size container owns the layout and the photo is decoration INSIDE it,
+                // via `.overlay`. Sizing the Image itself leaks its aspect ratio outward: a 16:9
+                // photo filling 420pt of height reports a 747pt-wide view, which widened this
+                // whole page to 747pt and shifted every element — title, pills, roster — 177pt
+                // left of the screen. `.clipped()` cannot save it; clipping trims pixels after
+                // layout is already decided. An overlay never resizes its parent, so the photo
+                // and the chrome are now on genuinely independent layout planes.
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .frame(height: mapPreviewHeight)
+                    .overlay {
+                        // Arbitrary photo into a near-square slot: show the WHOLE photo
+                        // (`scaledToFit`, nothing cropped) over a blurred, zoomed copy of itself
+                        // that fills the leftover space. A plain `scaledToFill` crop would show
+                        // only 53% of a 16:9 photo's width, and `scaledToFit` alone would leave
+                        // ~200pt of dead bands. This handles any aspect — landscape or portrait —
+                        // without the slot's height having to change.
+                        ZStack {
+                            Image(uiImage: photo.image)
+                                .resizable()
+                                .scaledToFill()
+                                .blur(radius: 24, opaque: true)
+                                .overlay(Color.black.opacity(0.25))
+                            Image(uiImage: photo.image)
+                                .resizable()
+                                .scaledToFit()
+                        }
+                    }
+                    .clipped()
+                    .transition(.opacity)
+
+            case .unavailable:
+                GoogleMapView(
+                    routeCoords:   routeCoordinates,
+                    stopCoords:    lobbyStopCoords,
+                    pins:          lobbyMapPins,
+                    cameraCommand: cameraCommand,
+                    isInteractive: false
+                )
+                .frame(maxWidth: .infinity, minHeight: mapPreviewHeight)
+                .transition(.opacity)
+            }
 
             LinearGradient(
                 colors: [Color.black.opacity(0.45), .clear],
@@ -403,13 +458,71 @@ struct RideLobbyView: View {
             } action: { height in
                 statPillsHeight = height
             }
+
+            photoAttribution
         }
         .frame(height: mapPreviewHeight)
+        .animation(.easeInOut(duration: 0.35), value: heroPhase)
     }
 
     /// Height of the map preview. Shared by the frame, the fade gradient and the camera-fit
     /// clamp so they can't drift apart.
     private var mapPreviewHeight: CGFloat { 420 }
+
+    private var destinationCoordinate: CLLocationCoordinate2D? {
+        guard let ride = appState.currentRide else { return nil }
+        return CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng)
+    }
+
+    /// Identity of the destination we want a photo for; empty until this lobby's own ride has
+    /// loaded. The `id` check is what stops a ride switch from showing the previous ride's photo:
+    /// `currentRideId` changes immediately, but `currentRide` still holds the OLD ride until its
+    /// fetch returns, and that stale destination would otherwise hit the cache and render.
+    private var destinationPhotoKey: String {
+        guard let ride = appState.currentRide,
+              ride.id == appState.currentRideId,
+              !ride.destinationName.isEmpty
+        else { return "" }
+        return "\(ride.id)|\(ride.destinationName)|\(ride.destinationLat),\(ride.destinationLng)"
+    }
+
+    private func loadDestinationPhoto() async {
+        let key = destinationPhotoKey
+        // No ride yet (or it isn't ours yet): stay blank rather than showing the map, which
+        // would only be replaced a moment later.
+        guard !key.isEmpty, let coordinate = destinationCoordinate else {
+            heroPhase = .resolving
+            return
+        }
+
+        // Anything held for a different destination is stale the instant the key changes.
+        heroPhase = .resolving
+
+        let fetched = await GooglePlacePhotoService.shared.photo(
+            destinationName: destinationName,
+            coordinate: coordinate
+        )
+        // A newer `.task(id:)` may have superseded this one (ride switched, destination edited).
+        guard !Task.isCancelled, key == destinationPhotoKey else { return }
+        heroPhase = fetched.map { .photo($0) } ?? .unavailable
+    }
+
+    /// Photographer credit for the destination photo. Required by Google's Places policy
+    /// whenever a Place Photo is displayed, so it renders with the image rather than being
+    /// optional decoration. Sits just above the stat pills, using their measured height.
+    @ViewBuilder
+    private var photoAttribution: some View {
+        if case .photo(let photo) = heroPhase, let attribution = photo.attribution {
+            Text("Photo: \(attribution) · Google")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(.white.opacity(0.75))
+                .shadow(color: .black.opacity(0.7), radius: 3)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.horizontal, 20)
+                .padding(.bottom, statPillsHeight + 2)
+        }
+    }
 
     private var lobbyMapPins: [MapPin] {
         let waypoints = appState.currentRide?.waypoints ?? []

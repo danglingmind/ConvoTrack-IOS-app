@@ -768,6 +768,7 @@ struct ActiveRideCard: View {
 
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var cameraCommand: MapCameraCommand? = nil
+    @State private var heroPhase: DestinationHeroPhase = .resolving
 
     private var participantCount: Int { ride?.participants.count ?? 0 }
     private var rideStatus: String {
@@ -777,17 +778,45 @@ struct ActiveRideCard: View {
 
     var body: some View {
         ZStack {
-            if let ride, !ride.waypoints.isEmpty {
-                let destPin = MapPin(
-                    id: "dest",
-                    coordinate: CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng),
-                    style: .simpleDot(color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1), size: 10),
-                    anchorBottom: false
-                )
-                GoogleMapView(routeCoords: routeCoordinates, pins: [destPin], cameraCommand: cameraCommand, isInteractive: false)
-                    .task(id: ride.id) { await computeRoute(ride) }
-            } else {
+            switch heroPhase {
+            case .resolving:
+                // The card's existing gradient stands in while we don't yet know whether there's
+                // a photo — showing the map here would only be replaced a moment later.
                 LinearGradient(colors: [Color.surfaceContainerHigh, Color.surfaceDim], startPoint: .topLeading, endPoint: .bottomTrailing)
+
+            case .photo(let photo):
+                // Fixed-size container owns the layout; the photo is decoration inside it. Sizing
+                // the Image directly would let its aspect ratio set the card's WIDTH — a
+                // panorama at 200pt tall reports ~600pt — which widens the whole home feed.
+                // `.clipShape` on the card can't prevent that; clipping happens after layout.
+                //
+                // `scaledToFill` (not fit + blur as in the lobby) because this slot is a 353×200
+                // landscape banner, aspect 1.77 — near-identical to the 16:9 photos Places
+                // serves, so almost nothing is cropped, and it sits under a heavy dark gradient
+                // as texture rather than as the subject.
+                Color.clear
+                    .overlay(
+                        Image(uiImage: photo.image)
+                            .resizable()
+                            .scaledToFill()
+                    )
+                    .clipped()
+
+            case .unavailable:
+                if let ride, !ride.waypoints.isEmpty {
+                    let destPin = MapPin(
+                        id: "dest",
+                        coordinate: CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng),
+                        style: .simpleDot(color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1), size: 10),
+                        anchorBottom: false
+                    )
+                    // Route only computed in this branch, so a card showing a photo skips the
+                    // Directions work entirely.
+                    GoogleMapView(routeCoords: routeCoordinates, pins: [destPin], cameraCommand: cameraCommand, isInteractive: false)
+                        .task(id: ride.id) { await computeRoute(ride) }
+                } else {
+                    LinearGradient(colors: [Color.surfaceContainerHigh, Color.surfaceDim], startPoint: .topLeading, endPoint: .bottomTrailing)
+                }
             }
 
             LinearGradient(
@@ -809,16 +838,11 @@ struct ActiveRideCard: View {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(ride?.title ?? "Loading…").font(.headlineMd).foregroundColor(.white)
-                        HStack(spacing: 8) {
-                            HStack(spacing: -6) {
-                                ForEach(0..<max(1, min(participantCount, 3)), id: \.self) { _ in
-                                    Circle().fill(Color.surfaceVariant).frame(width: 22, height: 22)
-                                        .overlay(Circle().stroke(Color.black.opacity(0.4), lineWidth: 1.5))
-                                }
-                            }
-                            Text("\(participantCount) Rider\(participantCount == 1 ? "" : "s") · \(rideStatus)")
-                                .font(.dataMono).foregroundColor(.white.opacity(0.7))
-                        }
+                        // Rider count only. The circles this replaced were empty grey
+                        // placeholders — never wired to participant avatarUrls — so they added
+                        // visual weight while carrying no information the count doesn't.
+                        Text("\(participantCount) Rider\(participantCount == 1 ? "" : "s") · \(rideStatus)")
+                            .font(.dataMono).foregroundColor(.white.opacity(0.7))
                     }
                     Spacer()
                     Text("RESUME")
@@ -834,6 +858,33 @@ struct ActiveRideCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primaryFixed.opacity(0.3), lineWidth: 1))
         .padding(.horizontal, 20)
+        .task(id: destinationPhotoKey) { await loadDestinationPhoto() }
+        .animation(.easeInOut(duration: 0.35), value: heroPhase)
+    }
+
+    /// Identity of the destination whose photo this card wants. Empty until the ride is loaded,
+    /// and includes the ride id so a switched ride can't keep showing the previous photo.
+    private var destinationPhotoKey: String {
+        guard let ride, !ride.destinationName.isEmpty else { return "" }
+        return "\(ride.id)|\(ride.destinationName)|\(ride.destinationLat),\(ride.destinationLng)"
+    }
+
+    /// Goes through the same `GooglePlacePhotoService` singleton as the lobby, so whichever
+    /// screen asks first pays for the two API calls and the other is served from the shared
+    /// memory/disk cache — the service keys on destination name + coordinate, not on the caller.
+    private func loadDestinationPhoto() async {
+        let key = destinationPhotoKey
+        guard !key.isEmpty, let ride else {
+            heroPhase = .resolving
+            return
+        }
+        heroPhase = .resolving
+        let fetched = await GooglePlacePhotoService.shared.photo(
+            destinationName: ride.destinationName,
+            coordinate: CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng)
+        )
+        guard !Task.isCancelled, key == destinationPhotoKey else { return }
+        heroPhase = fetched.map { .photo($0) } ?? .unavailable
     }
 
     @MainActor

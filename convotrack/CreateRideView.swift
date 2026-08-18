@@ -115,24 +115,32 @@ struct StopSearchField: View {
                         Image(systemName: "mappin.circle.fill")
                             .foregroundColor(Color.primaryFixed)
                             .font(.system(size: 16))
+                        // Names wrap instead of truncating — a place name is the whole point of
+                        // the row, and "Sri Krishna Temple Road Junc…" is not a choice you can
+                        // make. One size down (14pt) fits more per line so wrapping is rarer.
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.name)
-                                .font(.bodyMd)
+                                .font(.bodySm)
                                 .foregroundColor(Color.onSurface)
-                                .lineLimit(1)
+                                .fixedSize(horizontal: false, vertical: true)
                             if let addr = item.formattedAddress, !addr.isEmpty {
                                 Text(addr)
-                                    .font(.captionMd)
+                                    .font(.captionSm)
                                     .foregroundColor(Color.onSurfaceVariant)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         Spacer()
                         if let userLoc = LocationService.shared.lastLocation {
                             let dist = userLoc.distance(from: item.location)
                             Text(dist < 1000 ? "\(Int(dist)) m" : String(format: "%.1f km", dist / 1000))
                                 .font(.dataMono)
                                 .foregroundColor(Color.onSurfaceVariant)
+                                // Holds its width now that the name column is greedy.
+                                .fixedSize()
                         }
                     }
                     .padding(.horizontal, 16)
