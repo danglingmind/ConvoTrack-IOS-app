@@ -319,7 +319,9 @@ struct HomeView: View {
     }
 
     private func loadRecent() async {
-        recentRides = (try? await APIClient.shared.getMyRides()) ?? []
+        recentRides = (try? await APIClient.shared.getMyRides(
+            statuses: APIClient.RideStatusFilter.inProgress
+        )) ?? []
         recentLoading = false
     }
 }

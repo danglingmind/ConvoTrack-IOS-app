@@ -8,6 +8,8 @@ struct RideHistoryView: View {
     @State private var showSummary = false
     @State private var showLobby = false
 
+    /// The server is asked for COMPLETED only; this stays as a guard so a future caller or a
+    /// looser server response can't put an in-progress ride into the history list.
     private var completedRides: [HistoryRide] { rides.filter { $0.status == "COMPLETED" } }
 
     private var totalDistanceKm: Double {
@@ -48,7 +50,7 @@ struct RideHistoryView: View {
                                     )
                                     FloatingStatPill(
                                         label: "TOTAL RIDES",
-                                        value: "\(rides.count)",
+                                        value: "\(completedRides.count)",
                                         unit: nil
                                     )
                                     FloatingStatPill(
@@ -60,11 +62,11 @@ struct RideHistoryView: View {
                                 .padding(.horizontal, 20)
                             }
 
-                            if rides.isEmpty {
+                            if completedRides.isEmpty {
                                 emptyState
                             } else {
                                 VStack(spacing: 16) {
-                                    ForEach(rides) { ride in
+                                    ForEach(completedRides) { ride in
                                         Button(action: { handleTap(ride) }) {
                                             RideHistoryCard(ride: ride)
                                         }
@@ -127,7 +129,9 @@ struct RideHistoryView: View {
     }
 
     private func loadHistory() async {
-        rides = (try? await APIClient.shared.getMyRides()) ?? []
+        rides = (try? await APIClient.shared.getMyRides(
+            statuses: APIClient.RideStatusFilter.completed
+        )) ?? []
         isLoading = false
     }
 }

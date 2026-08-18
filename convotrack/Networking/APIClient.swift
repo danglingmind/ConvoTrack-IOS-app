@@ -153,8 +153,23 @@ final class APIClient {
         return try await fetch("/rides/\(rideId)/summary")
     }
 
-    func getMyRides() async throws -> [HistoryRide] {
-        let response: MyRidesResponse = try await fetch("/rides/me")
+    /// Ride statuses the server should return. Filtering server-side matters because the
+    /// endpoint caps at 50 rows — unfiltered, a rider with many finished rides could push their
+    /// in-progress ones out of the response entirely.
+    enum RideStatusFilter {
+        /// Finished rides, for the history list.
+        static let completed = ["COMPLETED"]
+        /// Rides still joinable or under way, for the home screen's resume list.
+        static let inProgress = ["LOBBY", "ACTIVE", "PAUSED"]
+    }
+
+    /// - Parameter statuses: ride statuses to include; empty means every status.
+    func getMyRides(statuses: [String] = []) async throws -> [HistoryRide] {
+        var path = "/rides/me"
+        if !statuses.isEmpty {
+            path += "?status=" + statuses.joined(separator: ",")
+        }
+        let response: MyRidesResponse = try await fetch(path)
         return response.rides
     }
 
