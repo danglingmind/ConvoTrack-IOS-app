@@ -243,7 +243,7 @@ extension ProfileView {
             appState.currentRide = nil
             dismiss()
         } catch {
-            deleteError = error.localizedDescription
+            deleteError = error.riderMessage
             showDeleteError = true
             isDeletingAccount = false
         }
@@ -518,10 +518,10 @@ struct EditProfileSheet: View {
             try await APIClient.shared.updateProfile(req)
             onSaved(req)
             dismiss()
-        } catch APIClientError.serverError(let msg) where msg == "USERNAME_TAKEN" {
-            errorMessage = "That username is already taken. Please choose another."
         } catch {
-            errorMessage = error.localizedDescription
+            // USERNAME_TAKEN used to be special-cased here; it now has wording in the central map
+            // like every other code, so this one branch covers all of them.
+            errorMessage = error.riderMessage
         }
         isSaving = false
     }

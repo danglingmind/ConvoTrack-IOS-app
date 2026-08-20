@@ -79,6 +79,14 @@ extension Font {
     static let bodySm = Font.system(size: 14, weight: .regular)
     static let labelCaps = Font.system(size: 12, weight: .bold, design: .monospaced)
     static let dataMono = Font.system(size: 14, weight: .medium, design: .monospaced)
+    /// Live-telemetry stat trio for the navigation bottom bar. Sized to the tallest they can
+    /// be without the stat block exceeding the bar's 48pt control row — so the numbers read
+    /// at a glance on a moving bike without the bar getting any taller.
+    static let statLabel        = Font.system(size: 10, weight: .bold, design: .monospaced)
+    static let statValue        = Font.system(size: 22, weight: .black, design: .monospaced)
+    /// Landscape variant: the control row is 44pt there, so the value steps down to match.
+    static let statValueCompact = Font.system(size: 19, weight: .black, design: .monospaced)
+    static let statUnit         = Font.system(size: 11, weight: .medium, design: .monospaced)
     static let toggleLabel = Font.system(size: 13, weight: .semibold)
     static let captionMd = Font.system(size: 12, weight: .regular)
     static let captionSm = Font.system(size: 10, weight: .regular)

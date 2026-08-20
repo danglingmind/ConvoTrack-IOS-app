@@ -402,7 +402,7 @@ struct MembershipView: View {
                 withAnimation(.spring(response: 0.4)) { showSuccess = true }
             }
         } catch {
-            purchaseError = "Purchase failed. Please try again."
+            purchaseError = UserFacingError.purchaseFailed
         }
         isPurchasing = false
     }

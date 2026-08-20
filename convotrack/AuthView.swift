@@ -199,7 +199,7 @@ struct AuthView: View {
                 try await clerk.auth.signInWithOAuth(provider: .google)
                 navigateToMain = true
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = error.riderMessage
                 showError = true
             }
             signingInProvider = nil
@@ -213,7 +213,7 @@ struct AuthView: View {
                 try await clerk.auth.signInWithApple()
                 navigateToMain = true
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = error.riderMessage
                 showError = true
             }
             signingInProvider = nil

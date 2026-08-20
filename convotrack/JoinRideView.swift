@@ -304,17 +304,18 @@ struct JoinRideView: View {
         } catch let error as APIClientError {
             switch error {
             case .serverError(let msg) where msg.contains("INVITE_CODE_NOT_FOUND") || msg.contains("404") || msg.contains("NOT_FOUND"):
-                errorMessage = "No ride found with this code. Double-check and try again."
+                errorMessage = UserFacingError.message(forCode: "INVITE_CODE_NOT_FOUND")
+                    ?? UserFacingError.generic
                 showError = true
             case .serverError(let msg) where msg.contains("RIDE_ENDED"):
-                errorMessage = "This ride has already ended."
+                errorMessage = UserFacingError.message(forCode: "RIDE_ENDED") ?? UserFacingError.generic
                 showError = true
             default:
-                errorMessage = error.localizedDescription
+                errorMessage = error.riderMessage
                 showError = true
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.riderMessage
             showError = true
         }
         isLookingUp = false
@@ -339,29 +340,24 @@ struct JoinRideView: View {
         } catch let error as APIClientError {
             switch error {
             case .serverError(let msg):
-                if msg.contains("RIDE_FULL") {
-                    errorMessage = "This ride is full."
-                } else if msg.contains("ALREADY") || msg.contains("already") || msg.contains("BAD_REQUEST") {
+                if msg.contains("ALREADY") || msg.contains("already") || msg.contains("BAD_REQUEST") {
                     // Already a participant — treat as success and navigate to lobby
                     appState.currentRideId = preview.rideId
                     appState.inviteCode = normalizedCode
                     appState.currentRide = nil
                     dismiss()
                     return
-                } else if msg.contains("QUOTA_EXCEEDED") {
-                    errorMessage = "You're already in another active ride. End it before joining a new one."
-                } else if msg.contains("RIDE_ENDED") {
-                    errorMessage = "This ride has already ended."
-                } else {
-                    errorMessage = "Couldn't join: \(msg)"
                 }
+                // Everything else takes its wording from the central map, so a code this switch
+                // hasn't heard of can no longer reach the rider as "Couldn't join: QUOTA_EXCEEDED".
+                errorMessage = error.riderMessage
                 showError = true
             default:
-                errorMessage = error.localizedDescription
+                errorMessage = error.riderMessage
                 showError = true
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.riderMessage
             showError = true
         }
         isJoining = false

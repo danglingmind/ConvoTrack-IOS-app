@@ -82,7 +82,7 @@ final class MembershipStore: ObservableObject {
             try await AppStore.sync()
             await refreshEntitlements()
         } catch {
-            purchaseError = "Restore failed. Try again."
+            purchaseError = UserFacingError.restoreFailed
         }
     }
 

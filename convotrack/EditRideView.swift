@@ -114,10 +114,12 @@ struct EditRideView: View {
     }
 
     var body: some View {
+        // The background is a `.background` on the ZStack, not a full-bleed child inside it. As a
+        // child, its `.ignoresSafeArea()` consumed the safe area for its sibling ScrollView — and
+        // the keyboard is reported through the safe area, so SwiftUI's keyboard avoidance had
+        // nothing to shrink and the focused field could sit under the keyboard. This form has five
+        // text fields (title plus every stop), so it was the worst affected screen.
         ZStack(alignment: .bottom) {
-            Color.surfaceDim.ignoresSafeArea()
-                .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
-
             ScrollView {
                 ScrollViewReader { proxy in
                     VStack(spacing: 24) {
@@ -187,6 +189,15 @@ struct EditRideView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
+        .background(
+            Color.surfaceDim
+                .ignoresSafeArea()
+                .onTapGesture {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+                    )
+                }
+        )
         .navigationBarBackButtonHidden(true)
         .navigationTitle("EDIT RIDE")
         .navigationBarTitleDisplayMode(.inline)
@@ -194,7 +205,8 @@ struct EditRideView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(action: { dismiss() }) {
-                    Image(systemName: "xmark").foregroundColor(Color.primaryFixed)
+                    // Back arrow, not a close X: this is a pushed page now, same as CREATE RIDE.
+                    Image(systemName: "arrow.left").foregroundColor(Color.primaryFixed)
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -593,7 +605,7 @@ struct EditRideView: View {
             onDeleted()
             dismiss()
         } catch {
-            deleteErrorMessage = error.localizedDescription
+            deleteErrorMessage = error.riderMessage
             showDeleteError = true
         }
     }
@@ -638,7 +650,7 @@ struct EditRideView: View {
             try await APIClient.shared.updateRide(ride.id, request)
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.riderMessage
             showError = true
         }
     }

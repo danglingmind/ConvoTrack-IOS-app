@@ -106,8 +106,7 @@ final class LobbyViewModel: ObservableObject {
             // performs the actual roster removal + clears removingUserId.
         } catch {
             removingUserId = nil
-            removeError = (error as? APIClientError)?.localizedDescription
-                ?? error.localizedDescription
+            removeError = error.riderMessage
         }
     }
 
@@ -121,10 +120,10 @@ final class LobbyViewModel: ObservableObject {
             case .serverError(let msg) where msg.contains("RIDE_NOT_IN_LOBBY"):
                 break  // ride is already ACTIVE — treat as success and navigate
             default:
-                startError = error.localizedDescription
+                startError = error.riderMessage
             }
         } catch {
-            startError = error.localizedDescription
+            startError = error.riderMessage
         }
         isStarting = false
     }
@@ -304,22 +303,30 @@ struct RideLobbyView: View {
         )
         .sheet(isPresented: $showRiderDetail) { RiderDetailDrawer() }
         .sheet(isPresented: $showQRModal) { QRCodeModal(inviteCode: inviteCode) }
-        .sheet(isPresented: $showEditSheet, onDismiss: {
+        // Pushed, not presented as a sheet. Edit Ride is a long form that already carries page
+        // chrome (inline title, back button, dark toolbar) — chrome that is inert inside a sheet,
+        // since a sheet has no navigation container, which is why it appeared with no title, no
+        // close button and no top margin. Its sibling CreateRideView is a pushed page for the same
+        // reason, so the two now match.
+        .navigationDestination(isPresented: $showEditSheet) {
+            if let ride = appState.currentRide {
+                EditRideView(ride: ride, onDeleted: { wasDeleted = true })
+                    .environmentObject(appState)
+                    .environmentObject(membershipStore)
+            }
+        }
+        // A push has no `onDismiss`, so the pop is observed here instead.
+        .onChange(of: showEditSheet) { wasShowing, isShowing in
+            guard wasShowing, !isShowing else { return }
             if wasDeleted {
-                // The leader deleted the ride from the edit sheet — tear down the session
-                // and exit the lobby instead of refreshing a ride that no longer exists.
+                // The leader deleted the ride from the edit page — tear down the session and exit
+                // the lobby instead of refreshing a ride that no longer exists.
                 rideSession.stop()
                 appState.currentRideId = nil   // also clears currentRide
                 appState.inviteCode = nil
                 dismiss()
             } else {
                 Task { await refreshAfterEdit() }
-            }
-        }) {
-            if let ride = appState.currentRide {
-                EditRideView(ride: ride, onDeleted: { wasDeleted = true })
-                    .environmentObject(appState)
-                    .environmentObject(membershipStore)
             }
         }
         .sheet(item: $participantToManage) { participant in

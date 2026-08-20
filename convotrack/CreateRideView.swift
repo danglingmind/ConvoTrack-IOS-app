@@ -51,16 +51,21 @@ struct StopSearchField: View {
         }
     }
 
+    /// The chosen place. Shared by Create Ride and Edit Ride, so both show the full name: a
+    /// selected destination reading "Kempegowda International Airport Beng…" leaves the rider
+    /// unable to confirm they picked the right one, which is the whole job of this row. Wraps
+    /// rather than truncates, and the row grows with it instead of clipping at a fixed 48pt.
     private var confirmedRow: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 16))
                 .foregroundColor(Color.primaryFixed)
             Text(place?.name ?? "")
-                .font(.bodyMd)
+                .font(.bodySm)
                 .foregroundColor(Color.onSurface)
-                .lineLimit(1)
-            Spacer()
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
             Button(action: { text = ""; place = nil; results = [] }) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
@@ -68,7 +73,7 @@ struct StopSearchField: View {
             }
         }
         .padding(.horizontal, 16)
-        .frame(height: 48)
+        .frame(minHeight: 48)
         .background(Color.surfaceContainerHigh)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primaryFixed.opacity(0.5), lineWidth: 1))
@@ -713,7 +718,7 @@ struct CreateRideView: View {
             appState.inviteCode = response.inviteCode
             appState.currentRide = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.riderMessage
             showError = true
         }
     }

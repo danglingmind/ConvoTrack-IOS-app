@@ -49,6 +49,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var showSummary = false
     @Published var isEnding = false
     @Published var endError: String? = nil
+    /// Live remaining travel time to the next stop. Refreshed from the traffic-aware Routes API
+    /// and counted down in between, so it moves every second and reacts to traffic — unlike the
+    /// planned-duration estimate it supersedes, which could only change when distance changed and
+    /// always assumed the pace the route was planned at.
+    @Published var etaSecondsRemaining: TimeInterval? = nil
     @Published var currentInstruction: String = ""
     /// Routes API maneuver for the current step (`TURN_LEFT`, `ROUNDABOUT_RIGHT`, …). Drives the
     /// banner arrow, so the arrow can't disagree with the instruction text.
@@ -95,6 +100,9 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// ride the next stop is the destination; on a multi-stop ride it's the upcoming waypoint.
     /// Formatted in hours once ≥ 60 min, minutes below that.
     var etaString: String {
+        // Live traffic-aware value when we have one; the planned-duration estimate below is only
+        // the bootstrap for the seconds before the first refresh lands.
+        if let live = etaSecondsRemaining { return Self.formatDuration(live) }
         guard routeExpectedTravelTime > 0, totalDistanceMeters > 0, myDistanceToGoalKm >= 0 else { return "--" }
         let remainingFraction = min(1, max(0, (myDistanceToGoalKm * 1000) / totalDistanceMeters))
         let elapsedSecs = routeExpectedTravelTime * (1 - remainingFraction)
@@ -141,6 +149,15 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// Prefix distances along `navRoute` — `[i]` is metres from the start to vertex `i`. Rebuilt
     /// with the route (including on reroute); lets progress and step positions share one frame.
     private var navRouteCumulative: [Double] = []
+    /// Last traffic-aware figure and when it was taken; `etaSecondsRemaining` is derived by
+    /// subtracting elapsed time from these between refreshes.
+    private var etaBaseSeconds: TimeInterval? = nil
+    private var etaBaseDate: Date = .distantPast
+    private var lastEtaRefresh: Date = .distantPast
+    private var isEtaRefreshInFlight = false
+    /// One Routes API call per rider per minute while navigating. Frequent enough that a jam is
+    /// reflected quickly, rare enough not to be a per-second billing drain.
+    private static let etaRefreshInterval: TimeInterval = 60
     private var lastBroadcastDate: Date = .distantPast
     private var lastCameraTickDate: Date = .distantPast
     private var remainingStops: [CLLocationCoordinate2D] = []
@@ -298,7 +315,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             try await APIClient.shared.endRide(rideId)
             showSummary = true
         } catch {
-            endError = error.localizedDescription
+            endError = error.riderMessage
         }
         isEnding = false
     }
@@ -547,6 +564,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // previous fix's progress.
         checkOffRoute(location: location)
         updateCurrentStep(location: location)
+        refreshEtaIfNeeded(from: location)
 
         if needsInitialRouteCheck && !navRoute.isEmpty {
             needsInitialRouteCheck = false
@@ -870,6 +888,42 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         )
     }
 
+    /// Keeps `etaSecondsRemaining` moving on every fix, and re-asks the Routes API for a
+    /// traffic-aware figure once per `etaRefreshInterval`.
+    ///
+    /// The countdown between refreshes is what makes it feel live: subtracting elapsed wall time
+    /// from the last known figure is self-correcting — if the rider is stopped, the number keeps
+    /// falling until the next refresh puts it back up, which is the honest reflection of losing
+    /// time in traffic. The old estimate scaled the PLANNED duration by remaining distance, so
+    /// standing still changed nothing at all.
+    private func refreshEtaIfNeeded(from location: CLLocation) {
+        if let base = etaBaseSeconds {
+            etaSecondsRemaining = max(0, base - Date().timeIntervalSince(etaBaseDate))
+        }
+
+        guard !isEtaRefreshInFlight,
+              Date().timeIntervalSince(lastEtaRefresh) >= Self.etaRefreshInterval,
+              // Same target as the planned estimate: the next stop on a multi-stop ride,
+              // otherwise the destination.
+              let target = remainingStops.first ?? destinationCoordinate
+        else { return }
+
+        lastEtaRefresh = Date()
+        isEtaRefreshInFlight = true
+        let origin = location.coordinate
+        Task { [weak self] in
+            let result = try? await GoogleDirectionsService.route(
+                from: origin, to: target, trafficAware: true
+            )
+            guard let self else { return }
+            self.isEtaRefreshInFlight = false
+            guard let seconds = result?.durationSeconds, seconds > 0 else { return }
+            self.etaBaseSeconds      = seconds
+            self.etaBaseDate         = Date()
+            self.etaSecondsRemaining = seconds
+        }
+    }
+
     private func checkOffRoute(location: CLLocation) {
         while let next = remainingStops.first {
             let dist = location.distance(from: CLLocation(latitude: next.latitude, longitude: next.longitude))
@@ -948,6 +1002,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// steps onto it, and rewinds progress to its start. Used for the initial route and for every
     /// reroute, so both paths can't drift apart.
     private func adoptNavRoute(_ route: [CLLocationCoordinate2D], steps: [NavStep]) {
+        // The old ETA described a route we're no longer on; drop it and let the next fix refresh.
+        etaBaseSeconds      = nil
+        etaSecondsRemaining = nil
+        lastEtaRefresh      = .distantPast
         navRoute            = route
         navRouteCumulative  = Self.cumulativeDistances(route)
         navSegmentIndex     = 0
@@ -1083,15 +1141,16 @@ struct RideNavigationView: View {
         coreView
             .sheet(isPresented: $showRegroup, onDismiss: { isBroadcasting = false }) {
                 RegroupBottomSheet(
-                    onBroadcast: { reason, coordinate, aheadMeters in
+                    onBroadcast: { reason, aheadMeters in
                         guard !isBroadcasting else { return }
                         isBroadcasting = true
-                        vm.broadcastRegroup(reason: reason, at: coordinate, aheadMeters: aheadMeters)
+                        // No coordinate override: the meet point is always derived from the
+                        // rider's own position plus the chosen distance ahead on the route.
+                        vm.broadcastRegroup(reason: reason, aheadMeters: aheadMeters)
                         showRegroup = false
                     },
                     isBroadcasting: isBroadcasting
                 )
-                .presentationDetents([.large])
             }
             .onChange(of: vm.activeRegroup) { _, regroup in handleRegroupChanged(regroup) }
             .navigationDestination(isPresented: $vm.showSummary) {
@@ -1786,7 +1845,7 @@ struct RideNavigationView: View {
         // Content sits above the home indicator; the material behind it still runs to the
         // screen edge, so no map shows through below the bar. `max` keeps a sane gap on
         // home-button devices where the inset is 0.
-        .padding(.bottom, max(barMinBottomPad, bottomInset))
+        .padding(.bottom, max(barMinBottomPad, bottomInset - barBottomTrim))
         .background(
             ZStack {
                 Rectangle().fill(.ultraThinMaterial)
@@ -1804,6 +1863,10 @@ struct RideNavigationView: View {
 
     private var barTopPad: CGFloat       { isLandscape ? 8 : 10 }
     private var barMinBottomPad: CGFloat { isLandscape ? 8 : 10 }
+    /// How much of the home-indicator inset to claim back. The full inset keeps controls clear of
+    /// the indicator, but the last third of it reads as dead space under the bar. Giving 10pt back
+    /// still leaves the buttons ~24pt above the screen edge, clear of the home-gesture strip.
+    private var barBottomTrim: CGFloat   { isLandscape ? 0 : 10 }
 
     /// One candidate layout for the bottom bar. `Spacer(minLength:)` keeps the
     /// ideal width measurable so `ViewThatFits` can compare candidates.
@@ -1840,19 +1903,19 @@ struct RideNavigationView: View {
     private func barStat(label: String, value: String, unit: String?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(.statLabel)
                 .foregroundColor(Color.onSurfaceVariant)
                 .tracking(1)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
-                    .font(.system(size: isLandscape ? 16 : 18, weight: .black, design: .monospaced))
+                    .font(isLandscape ? .statValueCompact : .statValue)
                     .foregroundColor(Color.onSurface)
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 if let unit {
                     Text(unit)
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .font(.statUnit)
                         .foregroundColor(Color.onSurfaceVariant)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)

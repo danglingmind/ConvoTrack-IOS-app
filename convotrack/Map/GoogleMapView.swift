@@ -213,6 +213,17 @@ extension GoogleMapView {
         var onSelectRoute: ((Int) -> Void)?
         var onEdgeIndicators: (([EdgeIndicator]) -> Void)?
         private var lastEmittedIndicators: [EdgeIndicator] = []
+        /// Edge-indicator recomputes are throttled because they sit in a self-sustaining loop:
+        /// `didChange` fires once per frame of every camera animation → compute → emit → SwiftUI
+        /// re-renders the navigation screen (rebuilding pins, re-baking marker images) →
+        /// `updateUIView` → schedules another compute. `lastEmittedIndicators` is a weak brake,
+        /// since `edgePoint` moves with any camera nudge, so the equality check almost never
+        /// holds. Left unbounded the loop runs as fast as the main queue allows, and anything
+        /// else demanding the main thread at the same time (a keyboard presenting over the map,
+        /// for instance) is competing with it.
+        private static let minIndicatorInterval: TimeInterval = 0.1   // 10 Hz, matching the camera tick cap
+        private var lastIndicatorComputeDate: Date = .distantPast
+        private var hasPendingIndicatorPass = false
 
         var routeLine:         GMSPolyline? = nil
         var originalRouteLine: GMSPolyline? = nil
@@ -903,7 +914,28 @@ extension GoogleMapView {
         /// bearing. Uses `GMSMapView.projection` so it stays correct under the
         /// nav camera's tilt/heading/padding. Emits nothing when there is no user
         /// pin or the map has no size yet.
+        /// Throttled entry point. Coalescing rather than dropping: when a call arrives inside the
+        /// window, one trailing pass is scheduled so the chips still settle on the final geometry
+        /// instead of freezing at whatever the last un-throttled frame happened to be.
         func computeEdgeIndicators(_ mapView: GMSMapView) {
+            guard onEdgeIndicators != nil else { return }
+            let waited = Date().timeIntervalSince(lastIndicatorComputeDate)
+            guard waited >= Self.minIndicatorInterval else {
+                guard !hasPendingIndicatorPass else { return }
+                hasPendingIndicatorPass = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + (Self.minIndicatorInterval - waited)) { [weak self, weak mapView] in
+                    guard let self else { return }
+                    self.hasPendingIndicatorPass = false
+                    guard let mapView else { return }
+                    self.computeEdgeIndicators(mapView)
+                }
+                return
+            }
+            lastIndicatorComputeDate = Date()
+            computeEdgeIndicatorsNow(mapView)
+        }
+
+        private func computeEdgeIndicatorsNow(_ mapView: GMSMapView) {
             guard onEdgeIndicators != nil else { return }
             let bounds = mapView.bounds
             guard bounds.width > 0, bounds.height > 0,
