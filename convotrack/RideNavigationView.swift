@@ -431,6 +431,22 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         return route.last
     }
 
+    /// Distance still to travel along `route` from wherever the rider currently is on it.
+    ///
+    /// Measuring the polyline's TOTAL length only works while `trimActiveRoute` is re-cutting it to
+    /// start at the rider — and that is deliberately skipped while off-route, so the bright line
+    /// keeps showing the reroute being followed. The side effect was that DIST froze off-route
+    /// while ETA kept counting down. Projecting the rider onto the line and summing what is left
+    /// keeps the two consistent in both states, and costs one projection per fix.
+    private static func remainingRouteLength(_ route: [CLLocationCoordinate2D], from location: CLLocation) -> Double {
+        guard route.count >= 2 else { return 0 }
+        let (segIdx, projected) = nearestPointOnRoute(route, to: location.coordinate)
+        var remaining = [projected]
+        let next = segIdx + 1
+        if next < route.count { remaining.append(contentsOf: route[next...]) }
+        return routeLengthMeters(remaining)
+    }
+
     /// Total great-circle length of a polyline, in meters. Used to derive the local rider's
     /// remaining distance-to-goal from `activeRouteCoordinates` (which is trimmed to start at the
     /// rider's position each GPS tick) — a client-side truth that stays valid when the server's
@@ -586,7 +602,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // default location. `activeRouteCoordinates` starts at the rider's projected position and
         // is frozen while off-route, so its length is a stable remaining-distance signal.
         if activeRouteCoordinates.count >= 2 {
-            myDistanceToGoalKm = Self.routeLengthMeters(activeRouteCoordinates) / 1000
+            myDistanceToGoalKm = Self.remainingRouteLength(activeRouteCoordinates, from: location) / 1000
         }
 
         let now = Date()
@@ -1113,6 +1129,7 @@ struct RideNavigationView: View {
     @State private var showRegroup = false
     @State private var isBroadcasting = false
     @State private var showEndError = false
+    @State private var showEndConfirm = false
     @State private var isFreeLooking: Bool = false
     @State private var lastInteractionDate: Date = .distantPast
     @State private var isNavigationActive: Bool = false
@@ -1155,6 +1172,16 @@ struct RideNavigationView: View {
             .onChange(of: vm.activeRegroup) { _, regroup in handleRegroupChanged(regroup) }
             .navigationDestination(isPresented: $vm.showSummary) {
                 RideSummaryView(rideId: rideId, rideTitle: appState.currentRide?.title, isPostRide: true)
+            }
+            .confirmationDialog(
+                "End this ride for everyone?",
+                isPresented: $showEndConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("End Ride", role: .destructive) { Task { await vm.endRide() } }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Every rider stops sharing their location and the ride summary is generated. This can't be undone.")
             }
             .alert("Couldn't End Ride", isPresented: $showEndError) {
                 Button("OK", role: .cancel) {}
@@ -1326,7 +1353,9 @@ struct RideNavigationView: View {
         return base
     }
 
-    private let navTilt: Double = 52
+    /// Flat, top-down, heading-up — no 3D pitch. Lives in MapCameraCommand so the map layer and
+    /// this screen can't disagree about what the guidance camera looks like.
+    private var navTilt: Double { MapCameraCommand.navTilt }
 
     private func resumeNavigation() {
         isFreeLooking = false
@@ -1335,7 +1364,7 @@ struct RideNavigationView: View {
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
-                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: true)
+                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: true, framing: .roadAhead)
         )
     }
 
@@ -1345,7 +1374,7 @@ struct RideNavigationView: View {
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
-                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: true)
+                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: true, framing: .roadAhead)
         )
     }
 
@@ -1389,7 +1418,7 @@ struct RideNavigationView: View {
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
-                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: !wasZero)
+                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: !wasZero, framing: .roadAhead)
         )
     }
 
@@ -1945,8 +1974,12 @@ struct RideNavigationView: View {
     private var endRideButton: some View {
         Button(action: {
             if vm.amILeader {
-                Task { await vm.endRide() }
+                // Ending is irreversible and ends it for every rider in the convoy, so the leader
+                // confirms first. A mis-tap here used to end the ride outright — and this button
+                // sits next to regroup, on a phone being tapped at a set of lights.
+                showEndConfirm = true
             } else {
+                // Not the leader: this only backs out of the navigation screen, nothing to confirm.
                 dismiss()
             }
         }) {

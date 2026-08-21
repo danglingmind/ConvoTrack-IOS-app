@@ -62,6 +62,32 @@ struct RideParticipant: Codable, Identifiable {
     let joinedAt: String
 
     var id: String { userId }
+
+    /// Only `userId` is genuinely required; everything else falls back.
+    ///
+    /// This type decodes both REST responses (always complete) and socket payloads (not always).
+    /// With synthesised decoding, one missing field made the whole value fail to decode — and the
+    /// socket handler's `try?` turned that into a silently dropped event, so a rider who joined
+    /// simply never appeared in anyone's roster. A field we can default is not worth losing a
+    /// rider over; the next roster snapshot corrects any guess made here.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try c.decode(String.self, forKey: .userId)
+        name = (try? c.decode(String.self, forKey: .name)) ?? "Rider"
+        avatarUrl = try? c.decode(String.self, forKey: .avatarUrl)
+        status = (try? c.decode(String.self, forKey: .status)) ?? "JOINED"
+        isLeader = (try? c.decode(Bool.self, forKey: .isLeader)) ?? false
+        joinedAt = (try? c.decode(String.self, forKey: .joinedAt)) ?? ISO8601DateFormatter().string(from: Date())
+    }
+
+    init(userId: String, name: String, avatarUrl: String?, status: String, isLeader: Bool, joinedAt: String) {
+        self.userId = userId
+        self.name = name
+        self.avatarUrl = avatarUrl
+        self.status = status
+        self.isLeader = isLeader
+        self.joinedAt = joinedAt
+    }
 }
 
 // MARK: - Create Ride

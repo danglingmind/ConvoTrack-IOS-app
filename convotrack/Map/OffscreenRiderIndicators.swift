@@ -93,8 +93,7 @@ struct OffscreenIndicatorsOverlay: View {
                         fannedCluster(cluster, center: center)
                     } else if cluster.members.count > 1 {
                         ClusterChip(count: cluster.members.count,
-                                    distanceMeters: cluster.minDistance,
-                                    arrowAngle: cluster.arrowAngle)
+                                    distanceMeters: cluster.minDistance)
                             .position(cluster.anchor)
                             .onTapGesture { expandedClusterId = cluster.id }
                     } else if let only = cluster.members.first {
@@ -136,22 +135,14 @@ private func formatEdgeDistance(_ meters: Double) -> String {
     return String(format: "%.1fkm", meters / 1000)
 }
 
-/// Small triangular pointer aimed along `arrowAngle` (atan2 with y down).
-/// `Triangle` rests apex-down (+y), so rotate by `angle − π/2`.
-private struct EdgeArrow: View {
-    let angle: CGFloat
-    var body: some View {
-        Triangle()
-            .fill(Color.primaryFixed)
-            .frame(width: 12, height: 9)
-            .rotationEffect(.radians(Double(angle) - .pi / 2))
-    }
-}
-
-/// Single rider chip: avatar + distance, with an outward pointer.
+/// Single off-screen rider: avatar ringed in the theme green, distance underneath.
+///
+/// Deliberately card-less. These sit over a moving map, and a filled panel behind each one hid
+/// more road than the rider it was pointing at. The ring carries the identity, the shadow keeps
+/// both legible over light and dark map tiles, and nothing else competes with the route.
 struct EdgeChip: View {
     let model: EdgeChipModel
-    private var size: CGFloat { 30 }
+    private var size: CGFloat { 34 }
 
     var body: some View {
         VStack(spacing: 3) {
@@ -160,12 +151,10 @@ struct EdgeChip: View {
                 .font(.dataMono)
                 .foregroundColor(Color.onSurface)
                 .lineLimit(1)
+                // Shadow instead of a plate: legible over any map tile, hides nothing.
+                .shadow(color: .black.opacity(0.85), radius: 3)
+                .shadow(color: .black.opacity(0.6), radius: 1)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 5)
-        .background(Color.surfaceContainerHigh.opacity(0.92))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
         .opacity(model.isOffline ? 0.55 : 1)
     }
 
@@ -185,34 +174,35 @@ struct EdgeChip: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
+        .overlay(Circle().stroke(Color.tertiaryFixed, lineWidth: 2))
+        .shadow(color: .black.opacity(0.55), radius: 4, y: 1)
     }
 }
 
-/// Collapsed cluster chip: rider count + minimum distance, with an outward pointer.
+/// Collapsed cluster: rider count in a ringed circle, minimum distance underneath. Same
+/// card-less treatment as `EdgeChip`, so a cluster reads as "several of those" rather than as a
+/// different kind of object.
 struct ClusterChip: View {
     let count: Int
     let distanceMeters: Double
-    let arrowAngle: CGFloat
+    private var size: CGFloat { 34 }
 
     var body: some View {
-        HStack(spacing: 6) {
-            EdgeArrow(angle: arrowAngle)
+        VStack(spacing: 3) {
             Text("\(count)")
-                .font(.system(size: 13, weight: .black, design: .monospaced))
-                .foregroundColor(Color.onPrimaryFixed)
-                .frame(width: 22, height: 22)
-                .background(Color.primaryFixed)
+                .font(.system(size: 15, weight: .black, design: .monospaced))
+                .foregroundColor(Color.onSurface)
+                .frame(width: size, height: size)
+                .background(Color.surfaceVariant)
                 .clipShape(Circle())
+                .overlay(Circle().stroke(Color.tertiaryFixed, lineWidth: 2))
+                .shadow(color: .black.opacity(0.55), radius: 4, y: 1)
             Text(formatEdgeDistance(distanceMeters))
                 .font(.dataMono)
                 .foregroundColor(Color.onSurface)
                 .lineLimit(1)
+                .shadow(color: .black.opacity(0.85), radius: 3)
+                .shadow(color: .black.opacity(0.6), radius: 1)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(Color.surfaceContainerHigh.opacity(0.92))
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.primaryFixed.opacity(0.5), lineWidth: 1))
     }
 }

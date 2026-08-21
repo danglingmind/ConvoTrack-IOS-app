@@ -51,9 +51,22 @@ struct MapPin: Identifiable {
 
 struct MapCameraCommand {
     let id: UUID
+    /// Where the target sits in the viewport.
+    ///
+    /// This used to be inferred from `tilt > 0`, which silently coupled two unrelated things: flatten
+    /// the camera to 2D and the marker would jump back to dead centre, losing the road ahead. It is
+    /// now stated by the caller, so guidance keeps its low marker at any tilt.
+    enum Framing {
+        /// Guidance — target sits low, most of the viewport showing the road ahead.
+        case roadAhead
+        /// Looking at a place — target centred.
+        case centered
+    }
+
     enum Action {
         case fitCoords([CLLocationCoordinate2D], padding: UIEdgeInsets, animated: Bool)
-        case navigate(lat: Double, lng: Double, zoom: Float, bearing: Double, tilt: Double, animated: Bool)
+        case navigate(lat: Double, lng: Double, zoom: Float, bearing: Double, tilt: Double,
+                      animated: Bool, framing: Framing)
     }
     let action: Action
 
@@ -66,7 +79,7 @@ struct MapCameraCommand {
     }
 
     static func follow(lat: Double, lng: Double, speed: Double, bearing: Double, animated: Bool = true) -> MapCameraCommand {
-        MapCameraCommand(id: UUID(), action: .navigate(lat: lat, lng: lng, zoom: navZoom(forSpeedKmh: speed), bearing: bearing, tilt: 0, animated: animated))
+        MapCameraCommand(id: UUID(), action: .navigate(lat: lat, lng: lng, zoom: navZoom(forSpeedKmh: speed), bearing: bearing, tilt: navTilt, animated: animated, framing: .roadAhead))
     }
 
     /// Speed → zoom curve for the guidance camera, matched against Google Maps' navigation
@@ -103,8 +116,18 @@ struct MapCameraCommand {
     }
 
     static func focus(lat: Double, lng: Double, zoom: Float = 15, animated: Bool = true) -> MapCameraCommand {
-        MapCameraCommand(id: UUID(), action: .navigate(lat: lat, lng: lng, zoom: zoom, bearing: 0, tilt: 0, animated: animated))
+        MapCameraCommand(id: UUID(), action: .navigate(lat: lat, lng: lng, zoom: zoom, bearing: 0, tilt: 0, animated: animated, framing: .centered))
     }
+
+    /// Camera pitch for guidance — back to the original 52°.
+    ///
+    /// The pitch was never the problem: what read as "3D" was the SDK's extruded building layer
+    /// (`isBuildingsEnabled`, on by default), which is now off. Tilt over a flat map is what Google
+    /// Maps itself uses — perspective on the road ahead, no blocks stacked over the route.
+    ///
+    /// Restoring it is safe now that `Framing` is explicit: the marker's lower-third placement no
+    /// longer rides on `tilt > 0`, so pitch and framing can change independently.
+    static let navTilt: Double = 52
 }
 
 // MARK: - View
@@ -144,6 +167,11 @@ struct GoogleMapView: UIViewRepresentable {
         applyDarkStyle(to: mapView)
         mapView.isMyLocationEnabled = false
         mapView.isTrafficEnabled    = true
+        // Defaults to true, which is what drew the extruded blue blocks over the route. Google's
+        // own navigation view renders a flat map — buildings as footprints at most — so the road
+        // geometry stays the loudest thing on screen. Off here, flat everywhere.
+        mapView.isBuildingsEnabled  = false
+        mapView.isIndoorEnabled     = false
         mapView.settings.compassButton  = false
         mapView.settings.myLocationButton = false
         mapView.settings.rotateGestures  = true
@@ -222,6 +250,17 @@ extension GoogleMapView {
         /// else demanding the main thread at the same time (a keyboard presenting over the map,
         /// for instance) is competing with it.
         private static let minIndicatorInterval: TimeInterval = 0.1   // 10 Hz, matching the camera tick cap
+
+        /// Only a coordinate that means "no fix" is dropped — not one that is merely far away.
+        ///
+        /// A distance ceiling was tried here and was the wrong signal: it suppressed a rider on a
+        /// simulated location (a phone in Bangalore vs the iOS Simulator's Apple Park default is
+        /// 14,058 km), which silently removed every indicator on a two-device test rig. Distance
+        /// cannot distinguish "wrong" from "far" — but (0,0) is never a real rider, it is the
+        /// zero value of a coordinate that was never set.
+        private static func isUnsetCoordinate(_ c: CLLocationCoordinate2D) -> Bool {
+            !CLLocationCoordinate2DIsValid(c) || (abs(c.latitude) < 0.0001 && abs(c.longitude) < 0.0001)
+        }
         private var lastIndicatorComputeDate: Date = .distantPast
         private var hasPendingIndicatorPass = false
 
@@ -569,12 +608,11 @@ extension GoogleMapView {
                 let update = GMSCameraUpdate.fit(bounds, with: padding)
                 if animated { mapView.animate(with: update) } else { mapView.moveCamera(update) }
 
-            case .navigate(let lat, let lng, let zoom, let bearing, let tilt, let animated):
-                // In 3D nav mode (tilt > 0), push the viewport center downward so the user
-                // marker sits in the lower third and more of the route ahead is visible.
-                if tilt > 0 && mapView.bounds.height > 0 {
-                    // Steeper pitch compresses the foreground, so push the center further
-                    // down (0.35) to keep the user marker low and maximize road-ahead view.
+            case .navigate(let lat, let lng, let zoom, let bearing, let tilt, let animated, let framing):
+                // Top padding shifts the camera target down, so the marker sits low and the
+                // viewport is mostly road ahead. Driven by `framing`, not by tilt — a flat 2D
+                // guidance camera needs this just as much as a pitched one.
+                if case .roadAhead = framing, mapView.bounds.height > 0 {
                     mapView.padding = UIEdgeInsets(top: mapView.bounds.height * 0.35, left: 0, bottom: 0, right: 0)
                 } else {
                     mapView.padding = .zero
@@ -942,6 +980,9 @@ extension GoogleMapView {
                   let mePin = pinModels["me"] else { emitIndicators([]); return }
 
             let userCoord = mePin.coordinate
+            // A bad "me" fix would make every rider's distance wrong at once, so bail rather than
+            // publish a screenful of nonsense.
+            guard !Self.isUnsetCoordinate(userCoord) else { emitIndicators([]); return }
             let proj = mapView.projection
             let bearing = mapView.camera.bearing
 
@@ -973,12 +1014,15 @@ extension GoogleMapView {
                 let dx = CGFloat(sin(theta))
                 let dy = CGFloat(-cos(theta))
 
+                guard !Self.isUnsetCoordinate(coord) else { continue }
+                let distance = GMSGeometryDistance(userCoord, coord)
+
                 guard let edge = Self.rayRectExit(origin: origin, dx: dx, dy: dy, rect: rect) else { continue }
                 out.append(EdgeIndicator(
                     id: id,
                     edgePoint: edge,
                     arrowAngle: atan2(dy, dx),
-                    distanceMeters: GMSGeometryDistance(userCoord, coord)
+                    distanceMeters: distance
                 ))
             }
             emitIndicators(out)
