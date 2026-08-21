@@ -253,6 +253,12 @@ struct RegroupBottomSheet: View {
         var label: String  { switch self { case .current: "Current"; case .ahead100: "100 m"; case .ahead500: "500 m" } }
     }
 
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    /// Landscape has ~402pt of height and the sheet's portrait content measures ~486pt, so without
+    /// adapting it the sheet clamps to full height and pushes the reason tiles — the entire point
+    /// of the sheet — below the fold.
+    private var isLandscape: Bool { vSizeClass == .compact }
+
     @State private var selectedReason: CoordinationOverlayView.RegroupReason? = nil
     @State private var selectedDistance: RegroupDistance = .current
     /// Measured height of the sheet's content, used as its detent so the sheet is exactly as tall
@@ -300,8 +306,8 @@ struct RegroupBottomSheet: View {
                         .foregroundColor(Color.onSurfaceVariant)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 20)
-                        .padding(.top, 12)
-                        .padding(.bottom, 24)
+                        .padding(.top, isLandscape ? 6 : 12)
+                        .padding(.bottom, isLandscape ? 14 : 24)
 
                     // Distance selector — offsets the meet point this far ahead on the route.
                     VStack(alignment: .leading, spacing: 12) {
@@ -326,10 +332,10 @@ struct RegroupBottomSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, isLandscape ? 14 : 24)
 
                     // Reason Grid
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: isLandscape ? 4 : 2), spacing: 12) {
                         ForEach(CoordinationOverlayView.RegroupReason.allCases, id: \.self) { reason in
                             Button(action: { handleReasonTap(reason) }) {
                                 VStack(spacing: 10) {
@@ -342,7 +348,7 @@ struct RegroupBottomSheet: View {
                                         .tracking(1)
                                 }
                                 .frame(maxWidth: .infinity)
-                                .padding(20)
+                                .padding(isLandscape ? 14 : 20)
                                 .background(
                                     reason.isEmergency
                                     ? Color.errorContainer.opacity(0.1)
@@ -362,7 +368,7 @@ struct RegroupBottomSheet: View {
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, isLandscape ? 14 : 24)
 
                     Button(action: { dismiss() }) {
                         Text("Cancel Request")
@@ -370,8 +376,8 @@ struct RegroupBottomSheet: View {
                             .foregroundColor(Color.onSurfaceVariant)
                             .tracking(8)
                     }
-                    .padding(.top, 16)
-                    .padding(.bottom, 40)
+                    .padding(.top, isLandscape ? 10 : 16)
+                    .padding(.bottom, isLandscape ? 18 : 40)
                 }
                 .onGeometryChange(for: CGFloat.self) { proxy in
                     proxy.size.height.rounded(.up)
