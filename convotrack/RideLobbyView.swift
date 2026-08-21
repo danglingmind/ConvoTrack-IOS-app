@@ -31,6 +31,38 @@ final class LobbyViewModel: ObservableObject {
     var onRideDeleted: (() -> Void)?
 
     // Leader can start when alone OR when all non-leaders have readied up
+    /// Ride-wide readiness, for display only.
+    ///
+    /// Riders only: the leader has no MARK AS READY control (they get the Start button instead), so
+    /// counting them would leave the tally permanently one short and looking stuck. This is the
+    /// same population `canStart` already checks — but unlike `canStart` it is computed the same
+    /// way on every device, which is the whole point: `canStart` returns false on its first line
+    /// for non-leaders, so driving the STATUS pill from it made that pill read "Waiting" forever on
+    /// every rider's phone, even after they had marked themselves ready.
+    ///
+    /// Nothing here gates anything. The Start button's rule and the server's start checks are
+    /// untouched.
+    var readyRiderTally: (ready: Int, total: Int) {
+        let riders = participants.filter { !$0.isLeader }
+        let ready = riders.filter { rider in
+            // Own row uses the optimistic local state, matching how the roster renders it, so the
+            // tally moves the instant you tap rather than waiting for the server echo.
+            rider.userId == myUserId ? myStatus == "READY" : rider.status == "READY"
+        }.count
+        return (ready, riders.count)
+    }
+
+    var readyStatusText: String {
+        let tally = readyRiderTally
+        guard tally.total > 0 else { return "Solo" }
+        return tally.ready == tally.total ? "All ready" : "\(tally.ready)/\(tally.total) ready"
+    }
+
+    var allRidersReady: Bool {
+        let tally = readyRiderTally
+        return tally.total == 0 || tally.ready == tally.total
+    }
+
     var canStart: Bool {
         guard amILeader else { return false }
         let others = participants.filter { !$0.isLeader }
@@ -446,9 +478,9 @@ struct RideLobbyView: View {
                     FloatingStatPill(label: "RIDERS", value: "\(vm.participants.count)", unit: nil)
                     FloatingStatPill(
                         label: "STATUS",
-                        value: vm.canStart ? "Ready" : "Waiting",
+                        value: vm.readyStatusText,
                         unit: nil,
-                        dotColor: vm.canStart ? Color.primaryFixed : Color.secondaryFixed
+                        dotColor: vm.allRidersReady ? Color.primaryFixed : Color.secondaryFixed
                     )
                     if !inviteCode.isEmpty {
                         FloatingStatPill(label: "CODE", value: inviteCode, unit: nil)

@@ -1152,6 +1152,8 @@ struct RideNavigationView: View {
     // chips must stay below. Measured rather than hardcoded so it follows the leaderboard growing
     // with the convoy, and the landscape layout, on its own.
     @State private var topChromeBottom: CGFloat = 0
+    /// Width the landscape side panel occupies; the map reserves it so nothing bleeds behind.
+    @State private var measuredPanelWidth: CGFloat = 0
     // Screen geometry for off-screen riders, produced by the map coordinator.
     @State private var edgeIndicators: [EdgeIndicator] = []
 
@@ -1206,10 +1208,36 @@ struct RideNavigationView: View {
             }
             // GeometryReader only to read the HUD's real safe-area inset — it fills the
             // ZStack and the HUD's VStack fills it back, so layout is unchanged.
+            // Landscape: the reader must span the FULL screen width, not the safe-area width.
+            // Measured on device, it was ending ~62pt short of the right edge — so the panel's
+            // frame stopped there too, and its 9pt gutter was measured from the wrong place,
+            // leaving a 71pt strip. Ignoring the horizontal insets here makes `proxy.size.width`
+            // the real width, so the panel is a true third and sits flush against the edge.
+            // Portrait is unaffected: an empty edge set is a no-op.
             GeometryReader { proxy in
-                hudLayer(bottomInset: proxy.safeAreaInsets.bottom)
+                if isLandscape {
+                    landscapeHud(proxy)
+                        .onGeometryChange(for: CGFloat.self) { _ in
+                            landscapePanelWidth(proxy.size.width)
+                        } action: { width in
+                            measuredPanelWidth = width
+                        }
+                } else {
+                    hudLayer(bottomInset: proxy.safeAreaInsets.bottom)
+                }
+            }
+            .ignoresSafeArea(edges: isLandscape ? .horizontal : [])
+            if isLandscape {
+                landscapeBackButton
+                if isNavigationActive && isFreeLooking { landscapeResumeButton }
             }
         }
+        // One coordinate space for the whole screen in landscape. Without this the map's
+        // `.padding(.trailing, panelWidth)` reserved the panel's width starting from the SAFE-AREA
+        // edge, i.e. ~59pt inboard, so the map stopped short and left a black stripe between it and
+        // the sidebar. Ignoring the horizontal insets here makes map, panel and overlays all
+        // measure from the same physical edges. No-op in portrait.
+        .ignoresSafeArea(edges: isLandscape ? .horizontal : [])
         .navigationBarHidden(true)
         .preferredColorScheme(.dark)
         .onAppear {
@@ -1294,13 +1322,21 @@ struct RideNavigationView: View {
             isInteractive: true,
             onInteraction: onMapInteraction,
             onEdgeIndicators: { edgeIndicators = $0 },
-            topOverlayHeight: isNavigationActive ? topChromeBottom : 0
+            // Landscape moves the chrome off the map entirely, so there is nothing to clamp under.
+            topOverlayHeight: isNavigationActive && !isLandscape ? topChromeBottom : 0
         )
-        // Bleeds under the notch and side insets, but NOT the bottom — the bottom edge is
-        // set by the measured bar height, so ignoring the bottom safe area would expand the
-        // map back over the bar.
-        .ignoresSafeArea(edges: [.top, .horizontal])
-        .padding(.bottom, bottomBarHeight)
+        // Portrait bleeds under the notch and sides but NOT the bottom: there the bottom edge is
+        // set by the measured bar height, and ignoring the bottom safe area would expand the map
+        // back over that bar.
+        //
+        // Landscape has no bottom bar, so withholding the bottom edge just left the home-indicator
+        // inset showing as a black stripe under the map. It bleeds all the way there — the side
+        // panel paints its own background over the same region, so nothing is left uncovered.
+        .ignoresSafeArea(edges: isLandscape ? .all : [.top, .horizontal])
+        // Exactly one reservation applies: landscape puts the HUD in a right-hand panel, portrait
+        // in a bottom bar. Reserving the other one too would shrink the map for no reason.
+        .padding(.bottom, isLandscape ? 0 : bottomBarHeight)
+        .padding(.trailing, isLandscape ? measuredPanelWidth : 0)
     }
 
     /// Off-screen riders joined with their display metadata, then clustered by
@@ -1587,6 +1623,198 @@ struct RideNavigationView: View {
         .animation(.easeInOut(duration: 0.4), value: isNavigationActive)
     }
 
+    // MARK: - Landscape side panel
+    //
+    // Landscape has ~390pt of height and ~850pt of width, so a full-width bottom bar spends the
+    // scarce dimension and wastes the plentiful one. The screen is split in thirds instead: the map
+    // keeps the left two, every HUD element moves into the right one. Portrait is untouched — it
+    // still renders `hudLayer` exactly as before.
+
+    /// Width of the side panel. The map is padded by this so it never draws behind the panel.
+    private func landscapePanelWidth(_ total: CGFloat) -> CGFloat { (total / 3).rounded() }
+
+    private func landscapeHud(_ proxy: GeometryProxy) -> some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)                       // the map owns the left two thirds
+            landscapePanel(safeArea: proxy.safeAreaInsets)
+                .frame(width: landscapePanelWidth(proxy.size.width))
+        }
+    }
+
+    /// RESUME floating over the MAP at bottom-centre — the same place it sits in portrait, and
+    /// where a rider looks for it after panning. Centring is over the map only, so the trailing
+    /// padding is the panel's width.
+    private var landscapeResumeButton: some View {
+        Button(action: resumeNavigation) {
+            HStack(spacing: 6) {
+                Image(systemName: "location.fill").font(.system(size: 11, weight: .bold))
+                Text("RESUME").font(.system(size: 10, weight: .black, design: .monospaced)).tracking(1.2)
+            }
+            .foregroundColor(Color.onPrimaryFixed)
+            .padding(.horizontal, 16).padding(.vertical, 9)
+            .background(Color.primaryFixed)
+            .clipShape(Capsule())
+            .shadow(color: Color.primaryFixed.opacity(0.55), radius: 10)
+        }
+        .padding(.trailing, measuredPanelWidth)
+        .padding(.bottom, 18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .ignoresSafeArea(edges: [.top, .horizontal])
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    /// Back button floating over the map, landscape only.
+    ///
+    /// Deliberately NOT inside the HUD's `GeometryReader`: that reader sits beside a map which
+    /// ignores the safe area, so what it reports as its leading edge is not the screen's — padding
+    /// measured from it pushed the button ~60pt inboard. This shares the map's own coordinate
+    /// space instead (`ignoresSafeArea(edges: [.top, .horizontal])`, the same edges the map
+    /// ignores), so 16pt means 16pt from the physical screen edge, the standard iOS margin.
+    ///
+    /// Sitting at the top is what makes that safe with a notch on this side: in landscape the
+    /// camera housing is a band in the VERTICAL middle of the edge, so a control pinned to the top
+    /// corner clears it without needing the full inset.
+    private var landscapeBackButton: some View {
+        backButton
+            .padding(.leading, 21)   // standard 16pt margin, nudged 5 to sit right of the corner
+            .padding(.top, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .ignoresSafeArea(edges: [.top, .horizontal])
+    }
+
+    private func landscapePanel(safeArea: EdgeInsets) -> some View {
+        VStack(spacing: 10) {
+            if isNavigationActive {
+                // 1 — turn-by-turn, with the live rider count in the same row.
+                HStack(spacing: 8) {
+                    turnInstructionCard(expand: true)
+                    liveRiderCountPill
+                }
+
+                // 2 — leaderboard, horizontally scrolled.
+                landscapeLeaderboardStrip
+
+                // 3 — banners, directly under the leaderboard.
+                landscapeTransientStack
+
+                Spacer(minLength: 0)
+
+                // 4 + 5 — stats and actions stick to the bottom, so they stay under the rider's
+                // thumb and don't shuffle when a banner appears above them.
+                landscapeStatsRow
+                landscapeButtonsRow
+            } else {
+                navigationPreviewBar
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.leading, 9)
+        // Full width inside the bar: the same 9pt gutter as the leading edge, no notch allowance.
+        //
+        // That is safe for these rows because in landscape the camera housing is a band in the
+        // VERTICAL middle of the edge, and every row sits above it (turn card, leaderboard) or
+        // below it (stats, actions). The one thing that could reach into that band is a tall stack
+        // of banners, which would pass under the housing rather than beside it.
+        .padding(.trailing, 9)
+        .padding(.top, safeArea.top + 10)
+        .padding(.bottom, safeArea.bottom + 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                Color.surfaceDim.opacity(0.55)
+            }
+            .ignoresSafeArea()
+        )
+        .overlay(alignment: .leading) {
+            Rectangle().fill(Color.outlineVariant.opacity(0.25)).frame(width: 1)
+        }
+    }
+
+    /// Regroup and end-ride, equal width across the panel. Portrait keeps its square icon buttons;
+    /// here the panel is the only chrome, so the actions get the full width of it.
+    private var landscapeButtonsRow: some View {
+        HStack(spacing: 10) {
+            Button(action: { showRegroup = true }) {
+                Image(systemName: "person.3.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(Color.onSurface)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: buttonSize)
+                    .background(Color.surfaceContainerHigh.opacity(0.9))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
+            }
+            Button(action: {
+                // Same rule as portrait: the leader confirms, everyone else just leaves the screen.
+                if vm.amILeader { showEndConfirm = true } else { dismiss() }
+            }) {
+                Group {
+                    if vm.isEnding {
+                        ProgressView().tint(Color.errorColor).scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "stop.fill").font(.system(size: 18))
+                    }
+                }
+                .foregroundColor(Color.errorColor)
+                .frame(maxWidth: .infinity)
+                .frame(height: buttonSize)
+                .background(Color.errorContainer.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.35), lineWidth: 1))
+            }
+            .disabled(vm.isEnding)
+        }
+    }
+
+    /// Stats on their own row. Same `barStat`/`barDivider` the portrait bar uses; units are dropped
+    /// because a third of the width can't hold them beside three values.
+    private var landscapeStatsRow: some View {
+        HStack(spacing: 10) {
+            barStat(label: "SPEED", value: vm.mySpeedKmh > 0 ? String(format: "%.0f", vm.mySpeedKmh) : "--", unit: nil)
+            barDivider
+            barStat(label: "ETA", value: vm.etaString, unit: nil)
+            barDivider
+            barStat(label: "DIST", value: vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--", unit: nil)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Banners, alerts and the resume/arrived controls — everything that appears only sometimes.
+    @ViewBuilder
+    private var landscapeTransientStack: some View {
+        VStack(spacing: 8) {
+            if vm.connectionState == .reconnecting {
+                ConnectionBanner(state: vm.connectionState)
+            }
+            if vm.isOffRoute {
+                HStack { offRouteBanner; Spacer(minLength: 0) }
+            }
+            if let emergency = vm.activeEmergency {
+                EmergencyAlertBanner(
+                    reporterName: vm.emergencyReporterName,
+                    message: emergency.message,
+                    // Same rule as portrait: no dismiss control unless you raised it or lead.
+                    onDismiss: vm.canDismissEmergency ? { vm.dismissEmergency() } : nil
+                )
+            }
+            if vm.showSplitAlert {
+                GroupSplitAlert(
+                    onIgnore: { withAnimation(.spring()) { vm.showSplitAlert = false } },
+                    onRegroup: { showRegroup = true }
+                )
+            }
+            if vm.showRegroupToast, let regroup = vm.activeRegroup {
+                RegroupToastBanner(type: regroup.type)
+            }
+            if vm.activeRegroup != nil {
+                if vm.hasMarkedArrived { waitingForOthersPill } else { arrivedButton }
+            }
+        }
+        .animation(.spring(response: 0.3), value: vm.showSplitAlert)
+        .animation(.spring(response: 0.3), value: isFreeLooking)
+    }
+
     private var navigationPreviewBar: some View {
         VStack(spacing: 0) {
             Divider()
@@ -1643,18 +1871,37 @@ struct RideNavigationView: View {
 
     // MARK: - Top Bar
 
+    /// Shared by portrait's top bar and the landscape side panel, so the two can't drift.
+    private var backButton: some View {
+        Button(action: { dismiss() }) {
+            Image(systemName: "arrow.left")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(Color.onSurface)
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
+        }
+    }
+
+    private var liveRiderCountPill: some View {
+        HStack(spacing: 6) {
+            Circle().fill(Color.primaryFixed).frame(width: 6, height: 6)
+                .shadow(color: Color.primaryFixed, radius: 4)
+            Text(vm.liveRiderCount > 0 ? "\(vm.liveRiderCount)" : "--")
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(Color.primaryFixed)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.25), lineWidth: 1))
+    }
+
     private var topBar: some View {
         VStack(spacing: 8) {
             HStack(alignment: .center, spacing: 10) {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "arrow.left")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(Color.onSurface)
-                        .frame(width: 44, height: 44)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
-                }
+                backButton
 
                 if isNavigationActive {
                     turnInstructionCard(expand: !isLandscape)
@@ -1679,18 +1926,8 @@ struct RideNavigationView: View {
                 }
 
                 if isNavigationActive {
-                    HStack(spacing: 6) {
-                        Circle().fill(Color.primaryFixed).frame(width: 6, height: 6)
-                            .shadow(color: Color.primaryFixed, radius: 4)
-                        Text(vm.liveRiderCount > 0 ? "\(vm.liveRiderCount)" : "--")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.primaryFixed)
-                    }
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.25), lineWidth: 1))
-                    .transition(.opacity)
+                    liveRiderCountPill
+                        .transition(.opacity)
                 }
             }
             .padding(.horizontal, 20)   // matches the banners below and the bottom bar
@@ -2155,12 +2392,10 @@ struct LiveLeaderboardCard: View {
     }
 
     var body: some View {
+        // No rank number: the strip is already ordered by position, so printing it again spent
+        // 18pt of a narrow pill on information the sequence carries. `row.rank` still drives the
+        // leader highlight below.
         HStack(spacing: 7) {
-            Text("\(row.rank)")
-                .font(.system(size: 11, weight: .black, design: .monospaced))
-                .foregroundColor(isHighlighted ? Color.primaryFixed : Color.onSurfaceVariant)
-                .frame(width: 18)
-
             Group {
                 if let url = row.avatarUrl.flatMap(URL.init) {
                     AsyncImage(url: url) { img in img.resizable().scaledToFill() }

@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import ClerkKit
 
 /// The single, long-lived owner of the ride's realtime connection.
 ///
@@ -44,6 +45,10 @@ final class RideRealtimeSession: ObservableObject {
     private var myUserId = ""
     private var isRunning = false
     private var heartbeatTimer: Timer?
+    /// Throttle for token-refreshing reconnects; socket.io keeps its own faster retry loop running
+    /// underneath, this only steps in when that loop cannot succeed on its own.
+    private var lastTokenReconnect: Date = .distantPast
+    private static let tokenReconnectInterval: TimeInterval = 15
 
     // MARK: - Lifecycle
 
@@ -136,6 +141,56 @@ final class RideRealtimeSession: ObservableObject {
         if !myUserId.isEmpty { onlineUserIds.insert(myUserId) }
     }
 
+    /// Corrects `connectionState` against the socket's actual status.
+    ///
+    /// Everything else here is edge-driven: `.disconnect` / `.reconnectAttempt` raise the banner,
+    /// `.connect` / `.statusChange(.connected)` clear it. That only holds if every edge arrives, in
+    /// order — and it doesn't. A stale reconnect-attempt event landing just after a successful
+    /// reconnect re-raises the banner with nothing left to clear it, which is why it so often
+    /// stayed up after the network came back while the ride itself kept updating fine.
+    ///
+    /// Re-deriving from `socket.status` on each heartbeat makes that self-healing: the banner can
+    /// now be wrong for at most one 5s tick, whatever order the events arrived in.
+    private func reconcileConnectionState() {
+        guard isRunning else { return }   // stopped sessions own their own .disconnected state
+        let socketConnected = SocketClient.shared.isConnected
+
+        if socketConnected, connectionState != .connected {
+            connectionState = .connected
+            // A missed `.connect` also means a missed re-join, so the room membership is repaired
+            // here too — otherwise the socket is up but receiving nothing for this ride.
+            joinRoom()
+        } else if !socketConnected {
+            if connectionState == .connected { connectionState = .reconnecting }
+            reconnectWithFreshTokenIfNeeded()
+        }
+    }
+
+    /// Reconnects with a freshly minted Clerk token.
+    ///
+    /// Socket.IO's own retry loop cannot recover an expired session on its own: the token travels
+    /// in the CONNECT payload, the library replays that SAME payload on every attempt, and the
+    /// server verifies the JWT on each one. Clerk's session tokens are short-lived, so a drop more
+    /// than a minute after the last fetch — and the token is only fetched when the lobby or
+    /// navigation screen appears — retries forever against `INVALID_TOKEN`. The socket genuinely
+    /// never comes back, which is why the "reconnecting" banner stayed up even once the network
+    /// had returned.
+    ///
+    /// Throttled, because each attempt costs a token mint, and `SocketClient.connect` is
+    /// idempotent, so this replaces the stale manager rather than stacking another one.
+    private func reconnectWithFreshTokenIfNeeded() {
+        guard Date().timeIntervalSince(lastTokenReconnect) >= Self.tokenReconnectInterval else { return }
+        lastTokenReconnect = Date()
+
+        Task { @MainActor [weak self] in
+            guard let self, self.isRunning, !SocketClient.shared.isConnected,
+                  let token = try? await Clerk.shared.auth.getToken() else { return }
+            // Re-check: the socket may have recovered while the token was being fetched.
+            guard self.isRunning, !SocketClient.shared.isConnected else { return }
+            SocketClient.shared.connect(token: token)
+        }
+    }
+
     // MARK: - Presence heartbeat
 
     private func startHeartbeat() {
@@ -151,6 +206,7 @@ final class RideRealtimeSession: ObservableObject {
         heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] timer in
             guard self != nil else { timer.invalidate(); return }
             SocketClient.shared.emitHeartbeat(rideId: rideId)
+            Task { @MainActor [weak self] in self?.reconcileConnectionState() }
         }
     }
 

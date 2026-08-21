@@ -39,6 +39,19 @@ final class SocketClient {
     // MARK: - Lifecycle
 
     func connect(token: String) {
+        // Idempotent, and it has to be: `RideRealtimeSession.start()` is called from both the
+        // lobby's and the navigation screen's `.task`, and it connects whenever the socket isn't
+        // yet `.connected` — which includes the window where it is still `.connecting`.
+        //
+        // Replacing `manager` without disconnecting the old one left a ghost behind. Configured
+        // with `.reconnects(true)` and `.reconnectAttempts(-1)`, an abandoned manager retries
+        // FOREVER, and its handlers still call into this singleton's closures — so it kept firing
+        // `.reconnectAttempt` into `onReconnecting` every few seconds. That is what pinned the
+        // "reconnecting" banner on while the live socket was perfectly healthy, and why clearing
+        // the state on a timer never held: the ghost simply raised it again.
+        if socket?.status == .connected { return }
+        disconnect()
+
         manager = SocketManager(socketURL: AppURLs.backendBaseURL, config: [
             .log(false),
             .compress,
@@ -60,7 +73,12 @@ final class SocketClient {
     }
 
     func disconnect() {
+        // Handlers first: a socket that is going away must not be able to call back into these
+        // closures on its way out (or from a retry already in flight), otherwise it can still
+        // report a disconnect/reconnect for a session that has moved on.
+        socket?.removeAllHandlers()
         socket?.disconnect()
+        manager?.disconnect()
         socket = nil
         manager = nil
     }
