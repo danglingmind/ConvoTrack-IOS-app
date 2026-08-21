@@ -150,6 +150,10 @@ struct GoogleMapView: UIViewRepresentable {
     /// Screen geometry for riders currently off-screen (for edge indicators).
     /// Recomputed as the camera moves and when pins update.
     var onEdgeIndicators: (([EdgeIndicator]) -> Void)? = nil
+    /// Where the app's top chrome ends, in map coordinates (the map's top edge is screen y=0, so
+    /// this is just its bottom edge on screen). Edge indicators clamp below it instead of sliding
+    /// up behind the turn-by-turn banner and leaderboard. 0 leaves the default margin in place.
+    var topOverlayHeight: CGFloat = 0
 
     /// Height of the tallest stop-pin art drawn ABOVE its coordinate. Measured: `DestinationPin`
     /// bakes to 70pt (`LobbyStartPin` 57pt), plus ~10pt headroom for a name that wraps to a
@@ -185,6 +189,7 @@ struct GoogleMapView: UIViewRepresentable {
         c.onInteraction = onInteraction
         c.onSelectRoute = onSelectRoute
         c.onEdgeIndicators = onEdgeIndicators
+        c.topOverlayHeight = topOverlayHeight
         mapView.isUserInteractionEnabled = isInteractive
 
         // Dim, tappable alternatives sit below the bright selected route.
@@ -240,6 +245,7 @@ extension GoogleMapView {
         var onInteraction: (() -> Void)?
         var onSelectRoute: ((Int) -> Void)?
         var onEdgeIndicators: (([EdgeIndicator]) -> Void)?
+        var topOverlayHeight: CGFloat = 0
         private var lastEmittedIndicators: [EdgeIndicator] = []
         /// Edge-indicator recomputes are throttled because they sit in a self-sustaining loop:
         /// `didChange` fires once per frame of every camera animation → compute → emit → SwiftUI
@@ -993,7 +999,18 @@ extension GoogleMapView {
             // above the app's bottom control bar, so a chip clamped inside these bounds
             // cannot land behind it. The bottom margin only has to clear half a chip's
             // height (the clamp point is the chip's center) plus a little breathing room.
-            let inset = UIEdgeInsets(top: 96, left: 60, bottom: 32, right: 60)
+            // Top clamps below the app's own chrome when the caller reports it; 96 is the
+            // standalone default. Sides and bottom are unchanged.
+            //
+            // The clamp positions the chip's CENTRE, and its avatar sits above that — the chip is
+            // 54pt tall (34 avatar + 3 gap + 17 label), so a 12pt pad left the avatar overhanging
+            // by 15pt and still tucked behind the leaderboard. 32pt clears it: half the chip plus
+            // a 5pt margin.
+            let topInset = topOverlayHeight > 0 ? topOverlayHeight + 32 : 96
+            // Sides at 46: the clamp positions the chip's centre, so the inset only has to cover
+            // half its width. The widest realistic label ("112.5km") is 30pt from centre, leaving
+            // 16pt of margin; 60 held the chips a further 14pt in from each edge for no reason.
+            let inset = UIEdgeInsets(top: topInset, left: 46, bottom: 32, right: 46)
             let rect = bounds.inset(by: inset)
             guard rect.width > 0, rect.height > 0 else { emitIndicators([]); return }
 

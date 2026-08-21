@@ -1147,6 +1147,11 @@ struct RideNavigationView: View {
     // padding values, and any constant reproducing that would drift the moment one changes.
     // The map reserves exactly this much so it ends at the bar's top edge either way.
     @State private var bottomBarHeight: CGFloat = 0
+    // Bottom edge of the top chrome (back button row + leaderboard strip) in screen coords. The
+    // map's top edge is screen y=0, so this doubles as the map-space inset that off-screen rider
+    // chips must stay below. Measured rather than hardcoded so it follows the leaderboard growing
+    // with the convoy, and the landscape layout, on its own.
+    @State private var topChromeBottom: CGFloat = 0
     // Screen geometry for off-screen riders, produced by the map coordinator.
     @State private var edgeIndicators: [EdgeIndicator] = []
 
@@ -1288,7 +1293,8 @@ struct RideNavigationView: View {
             cameraCommand: cameraCommand,
             isInteractive: true,
             onInteraction: onMapInteraction,
-            onEdgeIndicators: { edgeIndicators = $0 }
+            onEdgeIndicators: { edgeIndicators = $0 },
+            topOverlayHeight: isNavigationActive ? topChromeBottom : 0
         )
         // Bleeds under the notch and side insets, but NOT the bottom — the bottom edge is
         // set by the measured bar height, so ignoring the bottom safe area would expand the
@@ -1450,6 +1456,11 @@ struct RideNavigationView: View {
     private func hudLayer(bottomInset: CGFloat) -> some View {
         VStack(spacing: 0) {
             topBar
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.frame(in: .global).maxY.rounded(.up)
+                } action: { bottom in
+                    topChromeBottom = bottom
+                }
 
             if vm.connectionState == .reconnecting {
                 ConnectionBanner(state: vm.connectionState)
