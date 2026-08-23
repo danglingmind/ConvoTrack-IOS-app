@@ -15,6 +15,8 @@ final class LobbyViewModel: ObservableObject {
     @Published var startError: String? = nil
     @Published var removingUserId: String? = nil   // in-flight removal target
     @Published var removeError: String? = nil
+    @Published var isLeaving = false
+    @Published var leaveError: String? = nil
 
     var rideId = ""
     var myUserId = ""
@@ -142,6 +144,33 @@ final class LobbyViewModel: ObservableObject {
         }
     }
 
+    /// Leave the ride I'm in. Returns true once the server has confirmed.
+    ///
+    /// Confirmation-first, deliberately: the caller tears down the shared realtime session on
+    /// success, and doing that optimistically would drop the socket before the server's
+    /// `ride:participant_left` broadcast — the very event every other rider's roster, ready
+    /// tally, leaderboard and map pin removal hangs off.
+    ///
+    /// "You aren't in this ride" counts as success. The rider asked to be out; if the server
+    /// already has them out (double tap, a stale lobby, a leader who kicked them a moment
+    /// earlier), the goal is met and trapping them behind an error alert would be absurd.
+    func leaveRide() async -> Bool {
+        guard !isLeaving else { return false }
+        isLeaving = true
+        leaveError = nil
+        defer { isLeaving = false }
+        do {
+            try await APIClient.shared.leaveRide(rideId)
+            return true
+        } catch APIClientError.serverError(let code)
+                    where code == "PARTICIPANT_NOT_FOUND" || APIClient.isNotFound(code) {
+            return true
+        } catch {
+            leaveError = error.riderMessage
+            return false
+        }
+    }
+
     func startRide(rideId: String) async {
         isStarting = true
         startError = nil
@@ -182,6 +211,8 @@ struct RideLobbyView: View {
     @State private var participantToManage: RideParticipant? = nil
     @State private var showRemovedAlert = false
     @State private var showRemoveError = false
+    @State private var showLeaveConfirm = false
+    @State private var showLeaveError = false
     @State private var wasDeleted = false
     @State private var showRideDeletedAlert = false
     // Chrome floating over the map preview, measured so the camera fit can frame the route
@@ -255,11 +286,16 @@ struct RideLobbyView: View {
                         .background(Color.black.opacity(0.4))
                         .clipShape(Circle())
                 }
+                // Single line, truncating. The trailing slot now holds a worded capsule rather
+                // than a 36pt glyph circle, so a long ride title has ~32pt less to play with —
+                // without this it wraps to two lines, which grows the bar, moves
+                // `topChromeBottom` and re-fits the map camera around it.
                 Text(rideTitle)
                     .font(.bodyLg)
                     .foregroundColor(.white)
+                    .lineLimit(1)
                     .shadow(color: .black.opacity(0.6), radius: 4)
-                Spacer()
+                Spacer(minLength: 8)
                 if canEditRide {
                     Button(action: { showEditSheet = true }) {
                         Image(systemName: "pencil")
@@ -269,6 +305,8 @@ struct RideLobbyView: View {
                             .background(Color.black.opacity(0.4))
                             .clipShape(Circle())
                     }
+                } else if canLeaveRide {
+                    leaveRideButton
                 }
             }
             .padding(.horizontal, 16)
@@ -372,6 +410,16 @@ struct RideLobbyView: View {
                 }
             }
         }
+        .confirmationDialog(
+            "Leave this ride?",
+            isPresented: $showLeaveConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Leave Ride", role: .destructive) { Task { await leaveRide() } }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("You'll stop sharing your location and drop off the roster. You can re-join later with the invite code.")
+        }
         .modifier(lobbyAlerts)
         .task { await loadRideAndConnect() }
         // Keyed on the destination so it runs once the ride lands (the lobby renders before
@@ -388,8 +436,10 @@ struct RideLobbyView: View {
             showRemoveError: $showRemoveError,
             showRemovedAlert: $showRemovedAlert,
             showRideDeletedAlert: $showRideDeletedAlert,
+            showLeaveError: $showLeaveError,
             startError: vm.startError,
             removeError: vm.removeError,
+            leaveError: vm.leaveError,
             onExit: {
                 appState.currentRideId = nil   // also clears currentRide
                 appState.inviteCode = nil
@@ -654,6 +704,77 @@ struct RideLobbyView: View {
         }
     }
 
+    /// Whether to offer LEAVE RIDE. Riders only, in both LOBBY and ACTIVE — a rider who has to
+    /// peel off mid-ride is exactly who needs this, and waiting for the leader to kick them is
+    /// not an answer.
+    ///
+    /// The leader has no equivalent: leaving would orphan the ride, leaving nobody able to start,
+    /// end or edit it, so they cancel it from the edit page instead (the server rejects a leader
+    /// leave with `LEADER_CANNOT_LEAVE` regardless of what the UI does).
+    ///
+    /// Leadership is read from both the VM's cached `amILeader` AND the reactive Clerk identity,
+    /// the same belt-and-braces `canEditRide` uses — inverted here, because the cost of guessing
+    /// wrong is reversed: a missing Edit button is a nuisance, a LEAVE button flashed at the
+    /// leader during the load window is an invitation to break their own ride.
+    private var canLeaveRide: Bool {
+        guard let ride = appState.currentRide, ride.status != "COMPLETED" else { return false }
+        if vm.amILeader { return false }
+        if let uid = clerk.user?.id, !uid.isEmpty, uid == ride.leaderId { return false }
+        return true
+    }
+
+    /// Sits in the top bar's trailing slot — the leader's Edit button's exact place, and the two
+    /// are mutually exclusive (`canEditRide` is leader-only, `canLeaveRide` rider-only), so the
+    /// corner holds whichever one applies to you and never both.
+    ///
+    /// A capsule rather than the neighbours' 36pt circles, because it carries a word instead of a
+    /// glyph — but the same 36pt height and the same `black.opacity(0.4)` scrim, so back, title
+    /// and leave read as one row of chrome floating over the hero, and the word stays legible
+    /// over whatever destination photo happens to be behind it.
+    ///
+    /// Tinted rather than filled. A solid `errorContainer` capsule was the only saturated red on
+    /// a lime-and-green screen, so it pulled the eye straight past the destination photo and the
+    /// roster to the one control a rider is least likely to want. It also overstated the stakes:
+    /// leaving is reversible — the join route has an explicit re-join-after-LEFT branch, and the
+    /// confirmation says so — whereas END RIDE and DELETE RIDE are not. Keeping the filled red
+    /// for those two, and giving this one `errorColor` as a foreground only, restores the
+    /// difference between "you can undo this" and "you cannot".
+    ///
+    /// `errorColor` (a warm salmon) still separates cleanly from the cool lime/green palette, so
+    /// the control reads as the way out at a glance without shouting.
+    private var leaveRideButton: some View {
+        Button(action: { showLeaveConfirm = true }) {
+            Group {
+                if vm.isLeaving {
+                    ProgressView().tint(Color.errorColor).controlSize(.small)
+                } else {
+                    Text("LEAVE").font(.labelCaps).tracking(1)
+                }
+            }
+            .foregroundColor(Color.errorColor)
+            .frame(height: 36)
+            .padding(.horizontal, 14)
+            .background(Color.black.opacity(0.4))
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(Color.errorColor.opacity(0.28), lineWidth: 1))
+        }
+        .disabled(vm.isLeaving)
+        // Never let a long ride title squeeze the word out of the capsule; the title truncates.
+        .fixedSize()
+    }
+
+    /// Exits the ride on this device once the server has confirmed the leave. Same teardown the
+    /// "removed by the leader" path uses: stop the shared session, drop the persisted active
+    /// ride, pop back to Home. On failure the alert fires and the rider stays put.
+    @MainActor
+    private func leaveRide() async {
+        guard await vm.leaveRide() else { return }
+        rideSession.stop()
+        appState.currentRideId = nil   // also clears currentRide
+        appState.inviteCode = nil
+        dismiss()
+    }
+
     private var resumeNavigationButton: some View {
         Button(action: { showNavigation = true }) {
             HStack(spacing: 12) {
@@ -896,7 +1017,7 @@ struct RideLobbyView: View {
 
 // MARK: - Lobby Alerts
 
-/// Bundles the lobby's four alerts and their `onChange` triggers. Extracted from
+/// Bundles the lobby's alerts and their `onChange` triggers. Extracted from
 /// `RideLobbyView.body` purely to keep that view's modifier chain within the Swift
 /// type-checker's complexity budget.
 private struct LobbyAlerts: ViewModifier {
@@ -904,8 +1025,10 @@ private struct LobbyAlerts: ViewModifier {
     @Binding var showRemoveError: Bool
     @Binding var showRemovedAlert: Bool
     @Binding var showRideDeletedAlert: Bool
+    @Binding var showLeaveError: Bool
     let startError: String?
     let removeError: String?
+    let leaveError: String?
     let onExit: () -> Void
 
     func body(content: Content) -> some View {
@@ -930,6 +1053,14 @@ private struct LobbyAlerts: ViewModifier {
                 Button("OK", role: .cancel) { onExit() }
             } message: {
                 Text("The ride leader removed you from this ride.")
+            }
+            .alert("Couldn't Leave Ride", isPresented: $showLeaveError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(leaveError ?? "An error occurred.")
+            }
+            .onChange(of: leaveError) { _, err in
+                if err != nil { showLeaveError = true }
             }
             .alert("Ride Cancelled", isPresented: $showRideDeletedAlert) {
                 Button("OK", role: .cancel) { onExit() }

@@ -34,6 +34,8 @@ enum UserFacingError {
             return "You're not in this ride, so there's nothing here to change."
         case "CANNOT_REMOVE_LEADER":
             return "You can't remove the ride leader from their own ride. Bold of you to try."
+        case "LEADER_CANNOT_LEAVE":
+            return "You're leading this one — walking out would strand everyone. Cancel the ride instead."
 
         // MARK: Joining
         case "RIDE_FULL":

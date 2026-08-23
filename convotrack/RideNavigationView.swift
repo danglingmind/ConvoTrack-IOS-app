@@ -253,7 +253,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             .store(in: &cancellables)
         // Live roster keeps rider name/avatar lookup accurate as people join/leave mid-ride.
         session.$participants
-            .sink { [weak self] in self?.staticParticipants = $0 }
+            .sink { [weak self] participants in
+                guard let self else { return }
+                self.staticParticipants = participants
+                self.pruneDepartedRiders(roster: participants)
+            }
             .store(in: &cancellables)
         session.$onlineUserIds
             .sink { [weak self] in self?.onlineUserIds = $0 }
@@ -626,6 +630,31 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     }
 
     // MARK: - Private
+
+    /// Drops riders who have left the ride from the derived state that doesn't otherwise rebuild
+    /// from the roster.
+    ///
+    /// `handleStateUpdate` reconciles both `leaderboardRows` and `riders` against the roster
+    /// already — but only inside `if !update.leaderboard.isEmpty`, and the server's leaderboard is
+    /// empty for the entire window between a ride starting and the first location tick landing.
+    /// A rider leaving inside that window would otherwise stay in everyone else's leaderboard,
+    /// live-rider count, map pin set and off-screen indicators until somebody's GPS moved.
+    ///
+    /// Driven off `ride:participant_left`, which the server emits BEFORE the accompanying
+    /// `ride:state_update` — so by the time a state update is applied, the departed rider is
+    /// already out of the roster this prunes against.
+    private func pruneDepartedRiders(roster: [RideParticipant]) {
+        // An empty roster is a transient socket state (a reconnect mid-flight), not "everyone
+        // left". Never prune on it — that would blank the HUD for a moment on every drop.
+        guard !roster.isEmpty else { return }
+        var present = Set(roster.map(\.userId))
+        present.insert(myUserId)
+        leaderboardRows.removeAll { !present.contains($0.id) }
+        riders.removeAll { !present.contains($0.id) }
+        // Also forget their last position, so the "keep offline riders pinned where they dropped"
+        // path in `handleStateUpdate` can't resurrect a ghost pin for someone who has left.
+        lastKnownRiderPositions = lastKnownRiderPositions.filter { present.contains($0.key) }
+    }
 
     private func handleStateUpdate(_ update: RideStateUpdate) {
         // Only overwrite the pre-populated leaderboard when the server actually has data.

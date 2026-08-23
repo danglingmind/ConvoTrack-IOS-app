@@ -168,6 +168,14 @@ final class APIClient {
         try await fetchVoid("/rides/\(rideId)/participants/\(userId)", method: "DELETE")
     }
 
+    /// A rider removes themselves. Server-side this is the same operation as the leader's
+    /// `removeParticipant` above — same guards, same `ride:participant_left` broadcast — so the
+    /// other riders' rosters, ready tally, leaderboard and map pins update through paths that
+    /// already exist. Rejects the leader (`LEADER_CANNOT_LEAVE`): they delete or end the ride.
+    func leaveRide(_ rideId: String) async throws {
+        try await fetchVoid("/rides/\(rideId)/leave", method: "POST")
+    }
+
     func startRide(_ rideId: String) async throws {
         try await fetchVoid("/rides/\(rideId)/start", method: "POST")
     }
