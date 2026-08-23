@@ -753,13 +753,24 @@ struct ActiveRideSection: View {
         }
         .task {
             guard ride == nil, let id = rideId else { return }
-            guard let loaded = try? await APIClient.shared.getRide(id) else {
-                onRideClear(); return
-            }
-            if loaded.status == "COMPLETED" || loaded.status == "ENDED" {
+            do {
+                let loaded = try await APIClient.shared.getRide(id)
+                if loaded.status == "COMPLETED" || loaded.status == "ENDED" {
+                    onRideClear()
+                } else {
+                    onRideLoaded(loaded)
+                }
+            } catch APIClientError.serverError(let code) where APIClient.isNotFound(code) {
+                // The ride is genuinely gone (deleted server-side): clearing is correct.
                 onRideClear()
-            } else {
-                onRideLoaded(loaded)
+            } catch {
+                // Everything else — offline, a 5xx, an expired token, or this `.task` simply
+                // being cancelled because the card was torn down mid-flight — says nothing about
+                // whether the ride still exists. Clearing on those wiped the PERSISTED active
+                // ride: `currentRideId`'s didSet also nils `currentRide`, so the rider lost the
+                // Active Ride card entirely and the ride reappeared under RECENT RIDES, while any
+                // lobby already on screen went blank. Leave the id alone; the card keeps its
+                // placeholder and the lobby's own retrying fetch is the recovery path.
             }
         }
     }

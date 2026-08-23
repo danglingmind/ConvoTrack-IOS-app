@@ -742,16 +742,22 @@ struct RideLobbyView: View {
     private func loadRideAndConnect() async {
         guard let rideId = appState.currentRideId else { return }
         vm.rideId = rideId
+        // Set unconditionally, not inside the `if let ride` below. `amILeader` — and therefore
+        // whether the leader gets START RIDE or a rider's MARK AS READY button — is derived from
+        // this, so burying it behind a successful fetch meant one failed request silently demoted
+        // the leader on their own ride.
+        vm.myUserId = clerk.user?.id ?? ""
 
-        // Always fetch fresh — ride status may have changed since last visit (e.g. LOBBY → ACTIVE)
-        if let ride = try? await APIClient.shared.getRide(rideId) {
+        // Always fetch fresh — ride status may have changed since last visit (e.g. LOBBY → ACTIVE).
+        // Retried, because this screen fetches exactly once: a single failure left it with no hero
+        // photo, no route, no distance and no leader controls, and nothing on screen to try again.
+        if let ride = await APIClient.shared.getRideRetrying(rideId) {
             appState.currentRide = ride
         }
 
         var seedParticipants: [RideParticipant] = []
         var seedLeaderId = ""
         if let ride = appState.currentRide {
-            vm.myUserId = clerk.user?.id ?? ""
             vm.leaderId = ride.leaderId
             vm.participants = ride.participants
             seedParticipants = ride.participants

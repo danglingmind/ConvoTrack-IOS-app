@@ -1257,13 +1257,24 @@ struct RideNavigationView: View {
         }
         .task { await loadAndSetup() }
         .onChange(of: vm.routeVersion) { _, _ in handleRouteVersionChanged() }
+        // The chrome measures 0 until the first layout pass lands, so a route that resolved
+        // before then was framed with no top inset at all. Re-fit when the real numbers arrive
+        // (and again on rotation, when they change) — but only while the preview owns the
+        // camera; once navigation is live the follow camera does, and must not be yanked.
+        .onChange(of: topChromeBottom) { _, _ in handleRouteVersionChanged() }
+        .onChange(of: bottomBarHeight) { _, _ in handleRouteVersionChanged() }
         .onChange(of: vm.locationTick) { old, _ in handleLocationTickChanged(wasZero: old == 0) }
     }
 
     // MARK: - Load
 
     private func loadAndSetup() async {
-        let fetched = try? await APIClient.shared.getRide(rideId)
+        // Retried: this screen loads exactly once, and `vm.setup` is what starts the route,
+        // the location stream and the follow camera. A single failed fetch with no cached ride
+        // to fall back on fell straight through the guard below and left the screen frozen on a
+        // dead map preview — no route line, no rider pin, no error, and no way to retry short of
+        // backing out of the ride.
+        let fetched = await APIClient.shared.getRideRetrying(rideId)
         let ride = fetched ?? appState.currentRide
         if let fetched { appState.currentRide = fetched }
         guard let ride else { return }
@@ -1423,13 +1434,32 @@ struct RideNavigationView: View {
     private func handleRouteVersionChanged() {
         guard !isNavigationActive else { return }
         if !vm.routeCoordinates.isEmpty {
-            // Extra bottom inset accounts for the navigation preview bar that sits over the map.
-            cameraCommand = MapCameraCommand.fitRouteInsets(
-                vm.routeCoordinates, top: 80, left: 44, bottom: 200, right: 44, animated: true
-            )
+            fitRoutePreview(vm.routeCoordinates)
         } else if let dest = vm.destinationCoordinate {
             cameraCommand = MapCameraCommand.focus(lat: dest.latitude, lng: dest.longitude, zoom: 11)
         }
+    }
+
+    /// Frames the whole route in the pre-navigation preview, inside the band the chrome
+    /// actually leaves visible — the same treatment the lobby's preview gets.
+    ///
+    /// The top inset is the measured chrome plus `stopPinTopExtent`, not a bare 80. Stop pins
+    /// are bottom-anchored, so a destination sitting at the route's northern edge towers its
+    /// full baked height (up to 92pt with a wrapped name) ABOVE the coordinate `GMSCameraUpdate`
+    /// framed — and the back button / "TO …" row covers more of the map on top of that. The old
+    /// constant reserved for neither, so that pin was cut off by the top of the viewport.
+    @MainActor
+    private func fitRoutePreview(_ coords: [CLLocationCoordinate2D]) {
+        guard !coords.isEmpty else { return }
+        cameraCommand = MapCameraCommand.fitRouteInsets(
+            coords,
+            top:    topChromeBottom + GoogleMapView.stopPinTopExtent + 8,
+            left:   44,
+            // Clears the navigation preview bar, which floats over the map.
+            bottom: max(bottomBarHeight, 200) + 8,
+            right:  44,
+            animated: true
+        )
     }
 
     private func handleLocationTickChanged(wasZero: Bool) {

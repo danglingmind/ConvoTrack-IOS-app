@@ -125,6 +125,33 @@ final class APIClient {
         return try await fetch("/rides/\(rideId)")
     }
 
+    /// `getRide` with short backoff retries, returning nil instead of throwing.
+    ///
+    /// For the screens that fetch a ride exactly once on appear (the lobby, the navigation
+    /// screen) and have no path back to a populated state if that one call fails: a blip, a
+    /// token refresh landing mid-request or a cancelled task left them permanently inert —
+    /// no hero photo, no route, no leader controls — with no error and nothing to retry it.
+    /// A genuine 404 is not retried, since no amount of waiting will conjure the ride.
+    func getRideRetrying(_ rideId: String, attempts: Int = 3) async -> Ride? {
+        for attempt in 0..<attempts {
+            do {
+                return try await getRide(rideId)
+            } catch APIClientError.serverError(let code) where Self.isNotFound(code) {
+                return nil
+            } catch {
+                guard !Task.isCancelled, attempt < attempts - 1 else { return nil }
+                try? await Task.sleep(for: .milliseconds(400 << attempt))
+            }
+        }
+        return nil
+    }
+
+    /// True for the two shapes a missing ride arrives in: the backend's `RIDE_NOT_FOUND`
+    /// error body, and the bare status fallback `fetch` synthesises when there is no body.
+    static func isNotFound(_ code: String) -> Bool {
+        code == "RIDE_NOT_FOUND" || code == "HTTP 404"
+    }
+
     func deleteRide(_ rideId: String) async throws {
         try await fetchVoid("/rides/\(rideId)", method: "DELETE")
     }

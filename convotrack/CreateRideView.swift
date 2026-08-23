@@ -714,9 +714,18 @@ struct CreateRideView: View {
 
         do {
             let response = try await APIClient.shared.createRide(body)
-            appState.currentRideId = response.rideId
+            // Seed the full ride BEFORE flipping `currentRideId` — that assignment is what
+            // pushes the lobby, and the lobby, the home Active Ride card and the navigation
+            // screen all read `currentRide` on their first frame. Leaving it nil there is what
+            // left the hero photo blank (`destinationPhotoKey` stays empty, so the hero parks in
+            // `.resolving` forever), demoted the leader to a MARK AS READY button, and sent
+            // `ActiveRideSection` off on a duplicate concurrent fetch of its own.
+            //
+            // A failed fetch assigns nil, which is exactly the old behaviour — no stale ride can
+            // survive here — and the lobby's own retrying fetch then fills it in.
+            appState.currentRide = try? await APIClient.shared.getRide(response.rideId)
             appState.inviteCode = response.inviteCode
-            appState.currentRide = nil
+            appState.currentRideId = response.rideId
         } catch {
             errorMessage = error.riderMessage
             showError = true

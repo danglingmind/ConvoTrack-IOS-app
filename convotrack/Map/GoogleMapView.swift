@@ -155,14 +155,20 @@ struct GoogleMapView: UIViewRepresentable {
     /// up behind the turn-by-turn banner and leaderboard. 0 leaves the default margin in place.
     var topOverlayHeight: CGFloat = 0
 
-    /// Height of the tallest stop-pin art drawn ABOVE its coordinate. Measured: `DestinationPin`
-    /// bakes to 70pt (`LobbyStartPin` 57pt), plus ~10pt headroom for a name that wraps to a
-    /// second line.
+    /// Height of the tallest stop-pin art drawn ABOVE its coordinate. Stop pins are
+    /// bottom-anchored, so this is simply the tallest baked image: `DestinationPin` measures
+    /// 70pt with a single-line name and 80pt once the name wraps to a second line
+    /// (`LobbyStartPin` 57pt), plus ~12pt of headroom.
+    ///
+    /// The 80 this replaces was set when a wrapped name still baked to 70pt — because the
+    /// second line was being clipped off (see `renderSwiftUIFit`). With that fixed the art is
+    /// genuinely 80pt tall, so the old value left exactly zero margin and a destination at the
+    /// top of a fitted route grazed the viewport edge.
     ///
     /// A camera fit must add this to its top inset: `GMSCameraUpdate.fit` frames the
     /// coordinates and knows nothing about the marker towering over them, so a route whose
     /// northernmost point is a stop would otherwise have that pin clipped off-screen.
-    static let stopPinTopExtent: CGFloat = 80
+    static let stopPinTopExtent: CGFloat = 92
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -700,10 +706,28 @@ extension GoogleMapView {
         /// Every pin goes through this. The fixed-canvas variant that used to live here was
         /// removed: `.frame(width:height:)` centres art smaller than the canvas, so the
         /// leftover space below it pushed the marker off its coordinate by half the slack.
+        ///
+        /// Two passes, because one is provably wrong for any name that wraps. `ImageRenderer`
+        /// sizes its canvas by proposing `.unspecified`, and under that proposal a `Text`
+        /// reports its SINGLE-LINE ideal height — while the label's `.frame(maxWidth:)` clamps
+        /// the width regardless, so the text then lays out over two lines inside a canvas
+        /// measured for one. The overflow doesn't spill harmlessly: SwiftUI compresses the
+        /// stack to fit, which sliced the bottom off the name card AND squeezed the pin head
+        /// above it — a 44pt destination circle baked at ~41pt, flattened and cropped along its
+        /// top edge. (Measured: "Kempegowda International Airport Bengaluru" baked to 128×70pt
+        /// with 46pt of head art; the same pin two-passed bakes to 128×80pt with the full 49pt.)
+        ///
+        /// Pass 1 resolves the width, which is already correct — `maxWidth` clamps under any
+        /// proposal. Pass 2 re-proposes that now-definite width so the label's ideal height is
+        /// measured against the wrap that will actually happen. Names short enough to fit on one
+        /// line are untouched: their pass-1 width is their natural width, so pass 2 is a no-op
+        /// and the card still shrinks to fit rather than padding out to `maxWidth`.
         private func renderSwiftUIFit<V: View>(_ view: V) -> UIImage? {
             let renderer = ImageRenderer(content: view.preferredColorScheme(.dark))
             renderer.scale = UIScreen.main.scale
-            return renderer.uiImage
+            guard let natural = renderer.uiImage else { return nil }
+            renderer.proposedSize = ProposedViewSize(width: natural.size.width, height: nil)
+            return renderer.uiImage ?? natural
         }
 
         // MARK: User location chevron
