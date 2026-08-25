@@ -133,7 +133,7 @@ struct RideSummaryView: View {
                             .foregroundColor(.white)
                             .fontWeight(.bold)
                         if let s = summary {
-                            Text("\(formatDistance(s.distanceMeters)) km · \(formatDuration(s.durationSeconds)) \(durationUnit(s.durationSeconds))")
+                            Text("\(formatDistance(s.distanceMeters)) km · \(RideDuration.inline(s.durationSeconds))")
                                 .font(.bodyMd)
                                 .foregroundColor(Color.onSurfaceVariant)
                         }
@@ -151,7 +151,8 @@ struct RideSummaryView: View {
     // MARK: - Metrics
 
     private func metricsGrid(_ s: RideSummary) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+        let duration = RideDuration.stat(s.durationSeconds)
+        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             MetricCard(
                 label: "TOTAL DISTANCE",
                 value: formatDistance(s.distanceMeters),
@@ -160,8 +161,8 @@ struct RideSummaryView: View {
             )
             MetricCard(
                 label: "DURATION",
-                value: formatDuration(s.durationSeconds),
-                unit: durationUnit(s.durationSeconds),
+                value: duration.value,
+                unit: duration.unit,
                 isPrimary: false
             )
             MetricCard(
@@ -182,7 +183,8 @@ struct RideSummaryView: View {
     }
 
     private func fallbackMetricsGrid(_ f: HistoryRide) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+        let duration = RideDuration.stat(f.durationSeconds)
+        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             MetricCard(
                 label: "TOTAL DISTANCE",
                 value: String(format: "%.1f", f.distanceMeters / 1000),
@@ -191,8 +193,8 @@ struct RideSummaryView: View {
             )
             MetricCard(
                 label: "DURATION",
-                value: f.durationSeconds.map { formatDuration($0) } ?? "--",
-                unit: f.durationSeconds.map { durationUnit($0) } ?? "",
+                value: duration.value,
+                unit: duration.unit,
                 isPrimary: false
             )
             MetricCard(
@@ -376,15 +378,13 @@ struct RideSummaryView: View {
 
         if let s = summary {
             distStr = formatDistance(s.distanceMeters)
-            durStr = formatDuration(s.durationSeconds)
-            durUnitStr = durationUnit(s.durationSeconds)
+            (durStr, durUnitStr) = RideDuration.stat(s.durationSeconds)
             speedStr = s.avgSpeedKmh.map { String(format: "%.0f", $0) } ?? "--"
             count = s.participants.count
             dateStr = formatShareDate(s.createdAt)
         } else if let f = fallback {
             distStr = String(format: "%.1f", f.distanceMeters / 1000)
-            durStr = f.durationSeconds.map { formatDuration($0) } ?? "--"
-            durUnitStr = f.durationSeconds.map { durationUnit($0) } ?? ""
+            (durStr, durUnitStr) = RideDuration.stat(f.durationSeconds)
             speedStr = f.avgSpeedKmh.map { String(format: "%.0f", $0) } ?? "--"
             count = 0
             dateStr = formatShareDate(f.endedAt ?? f.createdAt ?? "")
@@ -446,19 +446,6 @@ struct RideSummaryView: View {
 
     private func formatDistance(_ meters: Double) -> String {
         String(format: "%.1f", meters / 1000)
-    }
-
-    private func formatDuration(_ seconds: Int) -> String {
-        if seconds < 3600 {
-            return "\(seconds / 60)"
-        }
-        let h = seconds / 3600
-        let m = (seconds % 3600) / 60
-        return String(format: "%d:%02d", h, m)
-    }
-
-    private func durationUnit(_ seconds: Int) -> String {
-        seconds < 3600 ? "MIN" : "HRS"
     }
 
     /// ISO8601 → "AUG 5, 2026" for the share card meta line. Empty if unparseable.

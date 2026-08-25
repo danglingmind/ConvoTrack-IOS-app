@@ -160,11 +160,7 @@ struct RideHistoryCard: View {
         return String(format: "%.1f KM", ride.distanceMeters / 1000)
     }
 
-    var durationLabel: String {
-        guard let s = ride.durationSeconds else { return "--" }
-        let h = s / 3600; let m = (s % 3600) / 60
-        return String(format: "%d:%02d HRS", h, m)
-    }
+    var durationLabel: String { RideDuration.inline(ride.durationSeconds) }
 
     var speedLabel: String {
         ride.avgSpeedKmh.map { String(format: "%.0f KM/H", $0) } ?? "--"

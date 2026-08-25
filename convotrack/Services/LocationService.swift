@@ -79,6 +79,28 @@ final class LocationService: NSObject {
     private func signalStrength() -> String {
         return "STRONG"
     }
+
+    /// Whether a fix is good enough to steer navigation with.
+    ///
+    /// Everything downstream is debounced but nothing was ever filtered, so any fix
+    /// `CLLocationManager` produced went straight into a 40 m off-route decision and onto the
+    /// map as the rider's position. Three kinds are simply unusable:
+    ///
+    /// - `horizontalAccuracy < 0` is CoreLocation's explicit "this coordinate is invalid".
+    /// - Beyond `maxUsableAccuracy` the fix cannot support a 40 m judgement at all. The bound is
+    ///   deliberately loose so a tunnel or a deep urban canyon still moves the puck rather than
+    ///   freezing it — this is aimed at the genuinely wild fix, not at merely mediocre ones.
+    /// - A fix older than `maxFixAge` is the cached one iOS replays the moment updates start. It
+    ///   can be minutes stale and hundreds of metres away, and handing it to the navigation
+    ///   screen flagged the rider off-route and fired a reroute before they had moved at all.
+    private static func isUsableForNavigation(_ location: CLLocation) -> Bool {
+        guard location.horizontalAccuracy >= 0,
+              location.horizontalAccuracy <= maxUsableAccuracy else { return false }
+        return abs(location.timestamp.timeIntervalSinceNow) <= maxFixAge
+    }
+
+    private static let maxUsableAccuracy: CLLocationAccuracy = 100
+    private static let maxFixAge: TimeInterval = 5
 }
 
 // MARK: - CLLocationManagerDelegate
@@ -86,13 +108,18 @@ final class LocationService: NSObject {
 extension LocationService: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        lastLocation = location
 
+        // One-shot requests take whatever arrives, filtered or not. A coarse fix is perfectly
+        // good enough for "what's starting near me", and dropping it here would strand the
+        // caller's continuation waiting on a callback that never comes.
         if !oneTimeLocationCallbacks.isEmpty {
             let callbacks = oneTimeLocationCallbacks
             oneTimeLocationCallbacks.removeAll()
             Task { @MainActor in callbacks.forEach { $0(location) } }
         }
+
+        guard Self.isUsableForNavigation(location) else { return }
+        lastLocation = location
 
         guard let del = delegate else { return }
         let battery = Double(UIDevice.current.batteryLevel).clamped(to: 0...1)

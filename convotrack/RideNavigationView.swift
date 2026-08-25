@@ -49,6 +49,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var lastCourseFixAt: Date? = nil
     /// Speed below which `CLLocation.course` stops being trustworthy (~5.4 km/h).
     private static let courseValidSpeedMps: Double = 1.5
+    /// How far off the drawn route a fix may sit and still be snapped onto it.
+    private static let snapMaxOffsetMeters: Double = 25
+    /// Look-ahead along the route used to derive the road's bearing for the rider marker.
+    private static let routeBearingLookaheadMeters: Double = 20
     /// True when no usable course fix has arrived recently — you're stopped or crawling, and the
     /// compass is the only heading signal left worth showing.
     private var isCourseStale: Bool {
@@ -1120,6 +1124,77 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             trimmed.append(contentsOf: navRoute[next...])
         }
         activeRouteCoordinates = trimmed
+
+        snapRiderToRoute(projected: projected, location: location)
+    }
+
+    /// Puts the rider marker on the line it is following, pointing along it.
+    ///
+    /// The bright polyline has always started at `projected` while `userLocation` kept the raw
+    /// coordinate, so the two sat apart by exactly the perpendicular GPS error — 5–25 m in
+    /// practice — and the chevron visibly floated beside the route it was supposedly riding. The
+    /// snapped point was already being computed here and thrown away.
+    ///
+    /// Only ever applied on-route: `trimActiveRoute` is not called while `isOffRoute`, so a
+    /// genuine detour still renders the rider where they actually are.
+    private func snapRiderToRoute(projected: CLLocationCoordinate2D, location: CLLocation) {
+        // Guarded by offset as well as by `isOffRoute`. The off-route flag needs three
+        // consecutive readings to trip, so a single wild fix inside an on-route run would
+        // otherwise be yanked onto the line — claiming precision we don't have. Between this
+        // bound and the 40 m off-route threshold the rider simply renders raw.
+        let offset = location.distance(
+            from: CLLocation(latitude: projected.latitude, longitude: projected.longitude)
+        )
+        guard offset <= Self.snapMaxOffsetMeters else { return }
+
+        userLocation = projected
+
+        // Point along the ROAD, not along the course. `location.course` is derived from
+        // successive fixes, so it weaves with the lane and with noise — the arrow sat a few
+        // degrees askew on a line it was sitting exactly on. The camera takes its bearing from
+        // this same value, so the map steadies with it.
+        guard location.speed >= Self.courseValidSpeedMps,
+              let bearing = routeBearingAhead(from: projected) else { return }
+        userHeading = bearing
+        // Counts as a fresh heading for `isCourseStale`, otherwise the compass fallback would
+        // wake up five seconds in and start fighting the road bearing.
+        lastCourseFixAt = Date()
+    }
+
+    /// Bearing of the road ahead: from `projected` to a point roughly
+    /// `routeBearingLookaheadMeters` further along `navRoute`.
+    ///
+    /// Measured over a look-ahead rather than from the single segment under the rider because
+    /// route polylines are dense — a 2–3 m segment's bearing swings hard from vertex to vertex,
+    /// which would make the chevron (and the camera) twitch on every fix.
+    private func routeBearingAhead(from projected: CLLocationCoordinate2D) -> Double? {
+        guard navRoute.count >= 2 else { return nil }
+        var remaining = Self.routeBearingLookaheadMeters
+        var cursor = projected
+        var i = navSegmentIndex + 1
+        while i < navRoute.count {
+            let next = navRoute[i]
+            let step = CLLocation(latitude: cursor.latitude, longitude: cursor.longitude)
+                .distance(from: CLLocation(latitude: next.latitude, longitude: next.longitude))
+            if step >= remaining || i == navRoute.count - 1 {
+                return Self.bearing(from: projected, to: next)
+            }
+            remaining -= step
+            cursor = next
+            i += 1
+        }
+        return nil
+    }
+
+    /// Initial great-circle bearing from `a` to `b`, in degrees clockwise from true north —
+    /// the same convention as `CLLocation.course` and `GMSMarker.rotation`.
+    private static func bearing(from a: CLLocationCoordinate2D, to b: CLLocationCoordinate2D) -> Double {
+        let lat1 = a.latitude  * .pi / 180
+        let lat2 = b.latitude  * .pi / 180
+        let dLon = (b.longitude - a.longitude) * .pi / 180
+        let y = sin(dLon) * cos(lat2)
+        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
+        return (atan2(y, x) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
     }
 
     /// Minimum perpendicular distance to any segment in a window around the current progress index.
