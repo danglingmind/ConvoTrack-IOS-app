@@ -33,7 +33,12 @@ struct MembershipView: View {
                 }
             }
         }
-        .task { await store.loadProducts() }
+        .task {
+            await store.loadProducts()
+            // Catches a country change that happened while the app was suspended,
+            // where Storefront.updates is not guaranteed to have been delivered.
+            await store.refreshIfStorefrontChanged()
+        }
     }
 
     // MARK: - Background
@@ -64,6 +69,7 @@ struct MembershipView: View {
                     .background(Color.surfaceContainerHigh.opacity(0.8))
                     .clipShape(Circle())
             }
+            .accessibilityLabel(Text("Close"))
             .padding(.trailing, 20)
             .padding(.top, 16)
         }
@@ -101,16 +107,18 @@ struct MembershipView: View {
 
     // MARK: - Benefits Grid
 
-    private let benefits: [(icon: String, title: String, detail: String)] = [
+    // LocalizedStringKey (not String) so the build-time extractor harvests these
+    // into the String Catalog — Text(someString) would silently skip them.
+    private let benefits: [(icon: String, title: LocalizedStringKey, detail: LocalizedStringKey)] = [
         ("person.3.fill",  "BIGGER PACKS", "Bring your whole crew along"),
-        ("infinity",       "UNLIMITED",   "No monthly ride cap, ever"),
-        ("chart.bar.fill", "ANALYTICS",   "Live stats & sync scores"),
-        ("clock.fill",     "365 DAYS",    "Full ride history archive"),
+        ("infinity",       "UNLIMITED",    "No monthly ride cap, ever"),
+        ("chart.bar.fill", "ANALYTICS",    "Live stats & sync scores"),
+        ("clock.fill",     "365 DAYS",     "Full ride history archive"),
     ]
 
     private var benefitsGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-            ForEach(benefits, id: \.title) { b in
+            ForEach(benefits, id: \.icon) { b in
                 VStack(alignment: .leading, spacing: 10) {
                     Image(systemName: b.icon)
                         .font(.iconMd)
@@ -149,8 +157,8 @@ struct MembershipView: View {
                     ZStack(alignment: .topTrailing) {
                         planCard(product)
 
-                        if product.id.contains("yearly"), let pct = savingsPct() {
-                            Text("SAVE \(pct)%")
+                        if product.id == store.bestValuePlan?.id, let pct = savingsPct(for: product) {
+                            Text("SAVE \(savingsText(pct))")
                                 .font(.labelCaps)
                                 .foregroundColor(Color.onPrimaryFixed)
                                 .tracking(0.5)
@@ -167,8 +175,9 @@ struct MembershipView: View {
     }
 
     private func planCard(_ product: Product) -> some View {
-        let isYearly   = product.id.contains("yearly")
+        let period     = PlanPeriod(product)
         let isSelected = selectedPlan == product.id
+        let isBestValue = product.id == store.bestValuePlan?.id
 
         return Button {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -189,41 +198,48 @@ struct MembershipView: View {
 
                 // Label + subtitle
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(isYearly ? "YEARLY" : "MONTHLY")
+                    Text(planTitle(for: period))
                         .font(.labelCaps)
                         .foregroundColor(isSelected ? Color.onSurface : Color.onSurfaceVariant)
                         .tracking(1.5)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
 
-                    Text(isYearly ? "Billed every 12 months" : "Billed every month")
-                        .font(.captionMd)
-                        .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
+                    if let period {
+                        Text(period.billingCadenceLabel)
+                            .font(.captionMd)
+                            .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
                 }
 
-                Spacer()
+                // minLength so the spacer yields width instead of hoarding it when
+                // a long non-USD price needs room.
+                Spacer(minLength: 8)
 
                 // Price block — the billed amount is always the dominant element
                 // (Guideline 3.1.2(c)); calculated per-month pricing stays subordinate.
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(isYearly ? "\(product.displayPrice) / yr" : "\(product.displayPrice) / mo")
-                        .font(.headlineMd)
-                        .foregroundColor(
-                            isSelected
-                                ? (isYearly ? Color.primaryFixed : Color.onSurface)
-                                : Color.onSurface
-                        )
+                    priceBlock(product, period: period, isSelected: isSelected, isBestValue: isBestValue)
 
-                    if isYearly {
-                        Text("≈ \(perMonthLabel(product)) / mo")
+                    if let period, period.isLongerThanAMonth, let perMonth = perMonthLabel(product, period) {
+                        Text("≈ \(perMonth) / \(monthShortLabel)")
                             .font(.captionSm)
                             .foregroundColor(Color.onSurfaceVariant.opacity(0.55))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
+                // Load-bearing: without it the HStack lets the two text columns fight
+                // for width and the price loses as often as it wins.
+                .layoutPriority(1)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 18)
             .background(
                 isSelected
-                    ? Color.primaryFixed.opacity(isYearly ? 0.1 : 0.06)
+                    ? Color.primaryFixed.opacity(isBestValue ? 0.1 : 0.06)
                     : Color.surfaceContainerHigh.opacity(0.4)
             )
             .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -236,6 +252,47 @@ struct MembershipView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    /// Price + period suffix. Falls back to a stacked layout before it ever shrinks
+    /// the billed amount below the supporting text — long currencies such as
+    /// "Rp 210.000,00" would otherwise wrap or clip.
+    @ViewBuilder
+    private func priceBlock(_ product: Product, period: PlanPeriod?, isSelected: Bool, isBestValue: Bool) -> some View {
+        let color: Color = isSelected
+            ? (isBestValue ? Color.primaryFixed : Color.onSurface)
+            : Color.onSurface
+        let price = Text(product.displayPrice)
+
+        Group {
+            if let period {
+                ViewThatFits(in: .horizontal) {
+                    Text("\(price) / \(period.shortLabel)")
+                        .font(.headlineMd)
+
+                    VStack(alignment: .trailing, spacing: 0) {
+                        price.font(.headlineMd)
+                        Text("/ \(period.shortLabel)").font(.captionMd)
+                    }
+
+                    // Guaranteed-render fallback. 24pt x 0.6 = 14.4pt, still above the
+                    // 12pt plan name, so the billed amount stays dominant.
+                    Text("\(price) / \(period.shortLabel)")
+                        .font(.headlineMd)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .allowsTightening(true)
+                }
+            } else {
+                // No subscription descriptor: show the price, never guess a period.
+                price
+                    .font(.headlineMd)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .allowsTightening(true)
+            }
+        }
+        .foregroundColor(color)
     }
 
     // MARK: - CTA
@@ -259,8 +316,21 @@ struct MembershipView: View {
                     } else {
                         Image(systemName: "crown.fill").font(.iconSm)
                     }
-                    Text(ctaLabel).font(.bodyLg)
+                    // The button frame is a fixed 56pt, so a wrapped line is clipped
+                    // rather than accommodated. Drop the price before letting that happen —
+                    // it is still shown dominantly on the card and in the disclosure.
+                    ViewThatFits(in: .horizontal) {
+                        ctaLabelWithPrice
+                        ctaLabelShort
+                        ctaLabelWithPrice
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .allowsTightening(true)
+                    }
+                    .font(.bodyLg)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 16)
             }
             .disabled(isPurchasing || store.products.isEmpty)
             .modifier(LimePrimaryButton())
@@ -277,7 +347,7 @@ struct MembershipView: View {
 
             // Auto-renewal disclosure — required by App Store Guideline 3.1.2
             Text("""
-            \(selectedPlanDisclosure) Payment is charged to your Apple ID at \
+            \(selectedPlanDisclosure) Payment is charged to your Apple Account at \
             confirmation of purchase. The subscription automatically renews unless \
             it is canceled at least 24 hours before the end of the current period, \
             and your account is charged for renewal within 24 hours prior to the end \
@@ -300,9 +370,9 @@ struct MembershipView: View {
                         if store.isPremium { withAnimation { showSuccess = true } }
                     }
                 }
-                Text("·")
+                Text(verbatim: "·")
                 Link("Terms", destination: URL(string: AppURLs.termsOfService)!)
-                Text("·")
+                Text(verbatim: "·")
                 Link("Privacy", destination: URL(string: AppURLs.privacyPolicy)!)
             }
             .font(.captionMd)
@@ -328,11 +398,7 @@ struct MembershipView: View {
                 .font(.bodyMd)
                 .foregroundColor(Color.onSurfaceVariant)
             Button("Retry") {
-                Task {
-                    store.productsLoadFailed = false
-                    store.products = []
-                    await store.loadProducts()
-                }
+                Task { await store.loadProducts(force: true) }
             }
             .font(.labelCaps)
             .foregroundColor(Color.primaryFixed)
@@ -393,7 +459,7 @@ struct MembershipView: View {
     // MARK: - Actions
 
     private func doPurchase() async {
-        guard let product = store.products.first(where: { $0.id == selectedPlan }) else { return }
+        guard let product = selectedProduct else { return }
         isPurchasing = true
         purchaseError = nil
         do {
@@ -409,33 +475,98 @@ struct MembershipView: View {
 
     // MARK: - Helpers
 
-    private var ctaLabel: String {
-        guard let product = store.products.first(where: { $0.id == selectedPlan }) else {
-            return "GET CONVOTRACK PRO"
-        }
-        return selectedPlan.contains("yearly")
-            ? "GET PRO  ·  \(product.displayPrice)/yr"
-            : "GET PRO  ·  \(product.displayPrice)/mo"
+    private var selectedProduct: Product? {
+        store.products.first { $0.id == selectedPlan }
     }
 
-    private func perMonthLabel(_ product: Product) -> String {
-        (product.price / 12).formatted(product.priceFormatStyle)
+    private var monthShortLabel: String {
+        String(localized: "mo", comment: "Compact billing period: one month")
+    }
+
+    private func planTitle(for period: PlanPeriod?) -> String {
+        guard let period else {
+            return String(localized: "PLAN", comment: "Plan card title when the billing period is unknown")
+        }
+        switch period.unit {
+        case .day:   return String(localized: "DAILY",   comment: "Plan card title")
+        case .week:  return String(localized: "WEEKLY",  comment: "Plan card title")
+        case .month: return String(localized: "MONTHLY", comment: "Plan card title")
+        case .year:  return String(localized: "YEARLY",  comment: "Plan card title")
+        @unknown default:
+            return String(localized: "PLAN", comment: "Plan card title when the billing period is unknown")
+        }
+    }
+
+    private var ctaLabelWithPrice: Text {
+        guard let product = selectedProduct else {
+            return Text("GET CONVOTRACK PRO")
+        }
+        let price = Text(product.displayPrice)
+        guard let period = PlanPeriod(product) else {
+            return Text("GET PRO  ·  \(price)")
+        }
+        return Text("GET PRO  ·  \(price) / \(period.shortLabel)")
+    }
+
+    private var ctaLabelShort: Text {
+        selectedProduct == nil ? Text("GET CONVOTRACK PRO") : Text("GET PRO")
+    }
+
+    /// Price of a single month at this plan's rate, formatted in the product's own
+    /// currency and locale via `priceFormatStyle`.
+    private func perMonthLabel(_ product: Product, _ period: PlanPeriod) -> String? {
+        guard let monthly = period.monthlyEquivalent(of: product.price) else { return nil }
+        return monthly.formatted(product.priceFormatStyle)
+    }
+
+    /// Percent formatted per locale — some locales place the sign before the number
+    /// or use a different glyph, and a bare "%" in a format string is malformed.
+    private func savingsText(_ pct: Int) -> String {
+        (Decimal(pct) / 100).formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    private func savingsPct(for product: Product) -> Int? {
+        guard let baseline = store.baselinePlan, baseline.id != product.id else { return nil }
+        return store.savingsPercent(of: product, versus: baseline)
     }
 
     // Title + length + price for the selected plan, per Guideline 3.1.2.
     private var selectedPlanDisclosure: String {
-        guard let product = store.products.first(where: { $0.id == selectedPlan }) else {
-            return "ConvoTrack Pro is an auto-renewable subscription."
+        guard let product = selectedProduct else {
+            return String(localized: "ConvoTrack Pro is an auto-renewable subscription.",
+                          comment: "Subscription disclosure when no plan is loaded")
         }
-        let period = selectedPlan.contains("yearly") ? "year" : "month"
-        return "ConvoTrack Pro is a \(product.displayPrice)/\(period) auto-renewable subscription."
+
+        let intro = introOfferSentence(for: product)
+
+        guard let period = PlanPeriod(product) else {
+            return intro + String(localized: "ConvoTrack Pro is a \(product.displayPrice) auto-renewable subscription.",
+                                  comment: "Subscription disclosure; argument is a pre-formatted, locale-correct price string that must not be reformatted")
+        }
+        return intro + String(localized: "ConvoTrack Pro is a \(product.displayPrice)/\(period.longLabel) auto-renewable subscription.",
+                              comment: "Subscription disclosure; first argument is a pre-formatted, locale-correct price string, second is a period noun such as 'year'")
     }
 
-    private func savingsPct() -> Int? {
-        guard let monthly = store.monthlyProduct,
-              let yearly  = store.products.first(where: { $0.id.contains("yearly") }) else { return nil }
-        let pct = store.savingsPercent(monthly: monthly, yearly: yearly)
-        return pct > 0 ? pct : nil
+    /// Empty unless an introductory offer is both configured and this account is
+    /// eligible. No offer exists today — the trial is the in-app free-ride allowance —
+    /// so this is defensive and must fail closed rather than imply a trial.
+    private func introOfferSentence(for product: Product) -> String {
+        guard let offer = store.introductoryOffer(for: product) else { return "" }
+        let length = PlanPeriod(offer.period).longLabel
+        switch offer.paymentMode {
+        case .freeTrial:
+            return String(localized: "Includes a free \(length) trial, then ",
+                          comment: "Introductory offer prefix; argument is a period such as '7 days'") 
+        case .payUpFront:
+            return String(localized: "Includes an introductory \(offer.displayPrice) for \(length), then ",
+                          comment: "Introductory offer prefix; first argument is a pre-formatted price, second a period")
+        case .payAsYouGo:
+            return String(localized: "Includes an introductory \(offer.displayPrice) per period for \(length), then ",
+                          comment: "Introductory offer prefix; first argument is a pre-formatted price, second a period")
+        default:
+            // Fail closed: an unrecognised payment mode must never imply a trial.
+            return ""
+        }
     }
 }
 
