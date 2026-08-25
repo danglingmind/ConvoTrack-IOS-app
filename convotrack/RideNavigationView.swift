@@ -45,6 +45,16 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var locationTick: Int = 0   // increments each update, triggers camera onChange
     @Published var userHeading: Double = 0
     private(set) var userLocation: CLLocationCoordinate2D? = nil
+    /// When a usable `CLLocation.course` last arrived. Gates the compass fallback.
+    private var lastCourseFixAt: Date? = nil
+    /// Speed below which `CLLocation.course` stops being trustworthy (~5.4 km/h).
+    private static let courseValidSpeedMps: Double = 1.5
+    /// True when no usable course fix has arrived recently — you're stopped or crawling, and the
+    /// compass is the only heading signal left worth showing.
+    private var isCourseStale: Bool {
+        guard let at = lastCourseFixAt else { return true }
+        return Date().timeIntervalSince(at) > 5
+    }
     @Published var showSplitAlert = false
     @Published var showSummary = false
     @Published var isEnding = false
@@ -230,6 +240,12 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         LocationService.shared.delegate = self
         LocationService.shared.onHeadingUpdate = { [weak self] heading in
             guard let self else { return }
+            // Course owns the heading whenever it is fresh; the compass is a fallback for when
+            // you're stopped. `CLHeading` reports where the PHONE points, which on a bike is
+            // wherever the mount or the jacket pocket happens to face — and because this same
+            // value also drives the camera bearing, letting the compass win swung the entire map
+            // with the handlebars instead of following the road.
+            guard self.isCourseStale else { return }
             let raw = abs(heading - self.userHeading).truncatingRemainder(dividingBy: 360)
             let delta = min(raw, 360 - raw)
             guard delta >= 5 else { return }
@@ -578,7 +594,13 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     func locationService(_ service: LocationService, didUpdate location: CLLocation, battery: Double, signalStrength: String) {
         mySpeedKmh = max(0, location.speed * 3.6)
         userLocation = location.coordinate
-        if location.course >= 0 { userHeading = location.course }
+        // Course is derived from successive fixes, so below a walking pace it wanders wildly —
+        // precisely when a rider is stopped at a light and would notice the map spinning. Above
+        // the threshold it is the true direction of travel and outranks the compass.
+        if location.course >= 0, location.speed >= Self.courseValidSpeedMps {
+            userHeading = location.course
+            lastCourseFixAt = Date()
+        }
         // Order matters: checkOffRoute advances `navSegmentIndex`, which is what
         // updateCurrentStep measures progress from. Reversed, every step decision used the
         // previous fix's progress.

@@ -25,8 +25,11 @@ struct MapPin: Identifiable {
     var styleHash: Int {
         var h = Hasher()
         switch style {
-        case .userLocation(let deg):
-            h.combine(0); h.combine(Int(deg))
+        // Heading is deliberately NOT part of the hash. The chevron bitmap is now
+        // heading-independent — rotation is applied by the map via `GMSMarker.rotation` — so
+        // including it re-baked a fresh bitmap on every GPS fix for an identical image.
+        case .userLocation:
+            h.combine(0)
         case .destination(let n):
             h.combine(1); h.combine(n)
         case .waypoint(let n):
@@ -586,14 +589,21 @@ extension GoogleMapView {
                 let newKey = pin.styleHash
 
                 if let marker = markers[pin.id] {
-                    // Always update position (riders move)
+                    // Always update position (riders move) and heading (the rider turns)
                     marker.position = pin.coordinate
+                    if let rotation = Self.groundRotation(for: pin.style) {
+                        marker.rotation = rotation
+                    }
                     // Re-render only when the style changed
                     if pinRenderKeys[pin.id] != newKey {
                         pinRenderKeys[pin.id] = newKey
                         let baked = renderMarker(pin)
                         marker.icon         = baked.image
                         marker.groundAnchor = baked.anchor
+                        // Set here rather than every tick: `isFlat` only changes if a pin id
+                        // changes style, which is exactly what a style-hash miss means. Assigning
+                        // it on each location update would churn the marker for no change.
+                        marker.isFlat       = Self.groundRotation(for: pin.style) != nil
                     }
                 } else {
                     let baked = renderMarker(pin)
@@ -602,11 +612,28 @@ extension GoogleMapView {
                     marker.groundAnchor = baked.anchor
                     marker.icon         = baked.image
                     marker.zIndex       = Self.zIndex(for: pin.style)
+                    if let rotation = Self.groundRotation(for: pin.style) {
+                        // Flat = lies on the road plane and turns with the map, and `rotation` is
+                        // then measured clockwise from NORTH rather than from screen-up. That is
+                        // the whole fix: the map owns the conversion into screen space, so the
+                        // chevron stays true whatever the camera bearing is doing. It also
+                        // foreshortens under the navigation tilt, like Google's own puck.
+                        marker.isFlat   = true
+                        marker.rotation = rotation
+                    }
                     marker.map          = mapView
                     markers[pin.id]     = marker
                     pinRenderKeys[pin.id] = newKey
                 }
             }
+        }
+
+        /// Compass heading a marker should lie at on the ground, for the pin styles that carry
+        /// one. Only the user chevron does; every other marker is a billboard that should stay
+        /// upright on screen however the camera is rotated.
+        private static func groundRotation(for style: MapPin.Style) -> CLLocationDirection? {
+            if case .userLocation(let heading) = style { return heading }
+            return nil
         }
 
         // MARK: Camera
@@ -681,8 +708,8 @@ extension GoogleMapView {
         /// position and simply overlap when close.
         func renderMarker(_ pin: MapPin) -> (image: UIImage?, anchor: CGPoint) {
             switch pin.style {
-            case .userLocation(let heading):
-                return (renderUserLocationIcon(heading: heading), CGPoint(x: 0.5, y: 0.5))
+            case .userLocation:
+                return (renderUserLocationIcon(), CGPoint(x: 0.5, y: 0.5))
             case .simpleDot(let c, let s):
                 return (renderDotIcon(color: c, size: s), CGPoint(x: 0.5, y: 0.5))
             // .lobbyStart is handled by renderBody: baking it into a fixed 70×80 canvas
@@ -769,15 +796,25 @@ extension GoogleMapView {
             return path
         }
 
-        /// The chevron in our lime, with Google's white keyline and drop shadow.
-        /// Drawn pre-rotated inside a fixed square canvas (rather than rotating the
-        /// finished image) so the bitmap keeps one size at every heading, the center
-        /// ground anchor stays exactly on the coordinate, and the edges don't soften
-        /// from a second resample.
-        private func renderUserLocationIcon(heading: Double) -> UIImage {
-            // Canvas must clear the chevron's furthest vertex at every rotation, plus
-            // room for the keyline and shadow — derived so resizing the chevron can't
-            // silently clip it.
+        /// The chevron in our lime, with Google's white keyline and drop shadow, drawn pointing
+        /// due north. Heading is NOT baked in.
+        ///
+        /// It used to be, and that was the bug: the icon was rotated by the absolute heading,
+        /// which is only right on a north-up map — but during navigation the camera is set to
+        /// `bearing: userHeading`, so the map is heading-up and the direction of travel already
+        /// points to the top of the screen. A `GMSMarker` is a billboard by default (`isFlat`
+        /// false), so the icon never counter-rotated with the map and the rotation was applied
+        /// once and never undone. The on-screen error equalled the camera bearing: correct
+        /// heading north, 90° off heading east, and exactly backwards heading south.
+        ///
+        /// The marker is now flat with `rotation` set to the heading (see `applyPins`), so the
+        /// map itself converts north-relative rotation into screen space — correct at any camera
+        /// bearing, mid-animation, and while free-looking. This also makes the bitmap constant,
+        /// so it is baked once instead of on every fix.
+        private func renderUserLocationIcon() -> UIImage {
+            // Square canvas centred on the chevron. The marker rotates about its ground anchor
+            // (0.5, 0.5) — the canvas centre — so keeping it square and generous means the art
+            // sits at the centre of rotation at every heading, exactly as before.
             let sz = Self.userChevronSize
             let reach = ((sz.width / 2) * (sz.width / 2) + (sz.height / 2) * (sz.height / 2)).squareRoot()
             let canvas = (reach * 2 + Self.userChevronStroke + 12).rounded(.up)
@@ -793,7 +830,6 @@ extension GoogleMapView {
             return renderer.image { ctx in
                 let cg = ctx.cgContext
                 cg.translateBy(x: canvas / 2, y: canvas / 2)
-                cg.rotate(by: CGFloat(heading * .pi / 180))
 
                 // Fill, lifted off the map by the same soft shadow Google uses.
                 cg.saveGState()
