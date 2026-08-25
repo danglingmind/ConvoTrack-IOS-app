@@ -1306,15 +1306,20 @@ struct RideNavigationView: View {
             .navigationDestination(isPresented: $vm.showSummary) {
                 RideSummaryView(rideId: rideId, rideTitle: appState.currentRide?.title, isPostRide: true)
             }
+            // Two outcomes, not one. Exit is listed first and is not destructive: it is the
+            // common case, and since the navigation screen no longer carries a back button it is
+            // now the ONLY way for a leader to step off this screen without ending everyone's
+            // ride. End Ride keeps the destructive role and stays irreversible.
             .confirmationDialog(
-                "End this ride for everyone?",
+                "Leave navigation or end the ride?",
                 isPresented: $showEndConfirm,
                 titleVisibility: .visible
             ) {
+                Button("Exit Navigation") { dismiss() }
                 Button("End Ride", role: .destructive) { Task { await vm.endRide() } }
                 Button("Cancel", role: .cancel) { }
             } message: {
-                Text("Every rider stops sharing their location and the ride summary is generated. This can't be undone.")
+                Text("Exit closes navigation on your phone — the ride keeps running and you can resume from the lobby. End Ride stops location sharing for every rider and generates the summary; that can't be undone.")
             }
             .alert("Couldn't End Ride", isPresented: $showEndError) {
                 Button("OK", role: .cancel) {}
@@ -1354,7 +1359,10 @@ struct RideNavigationView: View {
             }
             .ignoresSafeArea(edges: isLandscape ? .horizontal : [])
             if isLandscape {
-                landscapeBackButton
+                // Only before navigation starts. Once it is live, leaving happens through the
+                // end-ride confirmation's Exit option — same rule as portrait, so the two
+                // orientations offer the same way out.
+                if !isNavigationActive { landscapeBackButton }
                 if isNavigationActive && isFreeLooking { landscapeResumeButton }
             }
         }
@@ -1841,13 +1849,12 @@ struct RideNavigationView: View {
     private func landscapePanel(safeArea: EdgeInsets) -> some View {
         VStack(spacing: 10) {
             if isNavigationActive {
-                // 1 — turn-by-turn, with the live rider count in the same row.
-                HStack(spacing: 8) {
-                    turnInstructionCard(expand: true)
-                    liveRiderCountPill
-                }
+                // 1 — turn-by-turn, alone on its row. The rider count that used to share it moved
+                // into the leaderboard row below, which is what lets the banner run the full width
+                // of the panel at a size readable from a mount.
+                turnInstructionCard(expand: true)
 
-                // 2 — leaderboard, horizontally scrolled.
+                // 2 — leaderboard, horizontally scrolled, with the rider count pinned trailing.
                 landscapeLeaderboardStrip
 
                 // 3 — banners, directly under the leaderboard.
@@ -2054,19 +2061,23 @@ struct RideNavigationView: View {
         .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.25), lineWidth: 1))
     }
 
+    /// Portrait top chrome. (Landscape never renders this — `coreView` swaps in `landscapeHud`,
+    /// which builds its own column in `landscapePanel`.)
     private var topBar: some View {
         VStack(spacing: 8) {
-            HStack(alignment: .center, spacing: 10) {
-                backButton
-
-                if isNavigationActive {
-                    turnInstructionCard(expand: !isLandscape)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    if isLandscape {
-                        landscapeLeaderboardStrip
-                            .transition(.opacity)
-                    }
-                } else {
+            if isNavigationActive {
+                // The turn banner has the row to itself. The back button and the rider-count pill
+                // that used to flank it are gone: exiting now happens through the end-ride
+                // confirmation, and the count moved into the leaderboard row below.
+                turnInstructionCard(expand: true)
+                    .padding(.horizontal, 20)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            } else {
+                // Route preview. There is no turn banner yet, and this back button is the only way
+                // back to the lobby before navigation starts — the end-ride control that replaces
+                // it only exists once navigation is live — so it stays put here.
+                HStack(alignment: .center, spacing: 10) {
+                    backButton
                     VStack(alignment: .leading, spacing: 2) {
                         Text("TO")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -2077,19 +2088,13 @@ struct RideNavigationView: View {
                             .foregroundColor(Color.onSurface)
                             .lineLimit(1)
                     }
-                    .transition(.opacity)
                     Spacer()
                 }
-
-                if isNavigationActive {
-                    liveRiderCountPill
-                        .transition(.opacity)
-                }
+                .padding(.horizontal, 20)   // matches the banners below and the bottom bar
+                .transition(.opacity)
             }
-            .padding(.horizontal, 20)   // matches the banners below and the bottom bar
-            .animation(.easeInOut(duration: 0.35), value: isNavigationActive)
 
-            if isNavigationActive && !isLandscape {
+            if isNavigationActive {
                 leaderboardStrip
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -2098,20 +2103,39 @@ struct RideNavigationView: View {
         .animation(.easeInOut(duration: 0.35), value: isNavigationActive)
     }
 
+    /// The turn-by-turn banner.
+    ///
+    /// It owns its whole row now in both orientations — the back button and the live-rider pill
+    /// moved out (exit lives in the end-ride confirmation, the count in the leaderboard row) — and
+    /// that reclaimed width is what pays for these sizes. Previously it was squeezed into ~241pt
+    /// of a 353pt row, leaving ~177pt for text, which is why the distance sat at 10pt and the
+    /// street name at 12pt: unreadable at road speed, which is the only speed it is read at.
+    ///
+    /// Landscape runs one step smaller across the board: the side panel is a third of the width
+    /// and the whole HUD has to fit in ~390pt of height, so the same numbers would crowd the
+    /// leaderboard and stats out of the panel.
     private func turnInstructionCard(expand: Bool) -> some View {
-        HStack(spacing: 8) {
+        let tile:     CGFloat = isLandscape ? 46 : 52
+        let glyph:    CGFloat = isLandscape ? 21 : 24
+        let distance: CGFloat = isLandscape ? 22 : 26
+        let street:   CGFloat = isLandscape ? 15 : 17
+
+        return HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 10)
                     .fill(Color.primaryFixed)
-                    .frame(width: 36, height: 36)
+                    .frame(width: tile, height: tile)
                 Image(systemName: vm.currentInstruction.isEmpty
                       ? "arrow.up"
                       : maneuverIcon(for: vm.currentManeuver, instruction: vm.currentInstruction))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: glyph, weight: .bold))
                     .foregroundColor(Color.onPrimaryFixed)
             }
 
-            VStack(alignment: .leading, spacing: 1) {
+            // No Spacer here on purpose: the icon is fixed-width, so the HStack hands ALL the
+            // remaining width to this column, which is what lets the street name wrap instead of
+            // truncating. A Spacer would compete for that same space and shrink it back.
+            VStack(alignment: .leading, spacing: 2) {
                 let dist = vm.distanceToNextTurnMeters
                 let distText: String = {
                     if dist <= 0 { return "" }
@@ -2121,22 +2145,27 @@ struct RideNavigationView: View {
                 }()
                 if !distText.isEmpty {
                     Text(distText)
-                        .font(.system(size: 10, weight: .black, design: .monospaced))
+                        .font(.system(size: distance, weight: .black, design: .monospaced))
                         .foregroundColor(Color.primaryFixed)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
+                // Two lines now rather than one. At 17pt a long road name no longer fits on a
+                // single line, and a truncated name is worth less than a wrapped one.
                 Text(vm.currentInstruction.isEmpty ? "Follow route" : vm.currentInstruction)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: street, weight: .semibold))
                     .foregroundColor(Color.onSurface)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .frame(maxWidth: expand ? .infinity : nil, alignment: .leading)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primaryFixed.opacity(0.3), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primaryFixed.opacity(0.3), lineWidth: 1))
     }
 
     /// Arrow for the current maneuver, from the Routes API's `maneuver` enum. Locale-independent
@@ -2175,64 +2204,79 @@ struct RideNavigationView: View {
         return "arrow.up"
     }
 
+    /// Leaderboard row, with the live-rider count pinned to its trailing edge.
+    ///
+    /// The count sits OUTSIDE the scroll view on purpose: it is a fact about the convoy, not a
+    /// rider card, so it must stay put while the cards scroll under it. It moved down here from
+    /// the top row, which the turn banner now owns outright.
     private var leaderboardStrip: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    if vm.leaderboardRows.isEmpty {
-                        ForEach(0..<3, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.surfaceContainerHigh.opacity(0.5))
-                                .frame(width: 140, height: 56)
-                                .redacted(reason: .placeholder)
-                        }
-                    } else {
-                        ForEach(vm.leaderboardRows) { row in
-                            LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id,
-                                                isOffline: !row.isMe && !vm.onlineUserIds.contains(row.id))
-                                .id(row.id)
+        HStack(spacing: 8) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        if vm.leaderboardRows.isEmpty {
+                            ForEach(0..<3, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.surfaceContainerHigh.opacity(0.5))
+                                    .frame(width: 140, height: 56)
+                                    .redacted(reason: .placeholder)
+                            }
+                        } else {
+                            ForEach(vm.leaderboardRows) { row in
+                                LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id,
+                                                    isOffline: !row.isMe && !vm.onlineUserIds.contains(row.id))
+                                    .id(row.id)
+                            }
                         }
                     }
+                    .padding(.leading, 20)
+                    .padding(.trailing, 4)
+                    .padding(.vertical, 4)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 4)
-            }
-            .onChange(of: selectedRiderId) { _, id in
-                if let id {
-                    withAnimation(.spring(response: 0.4)) { proxy.scrollTo(id, anchor: .center) }
+                .onChange(of: selectedRiderId) { _, id in
+                    if let id {
+                        withAnimation(.spring(response: 0.4)) { proxy.scrollTo(id, anchor: .center) }
+                    }
                 }
             }
+            liveRiderCountPill
+                .padding(.trailing, 20)
         }
     }
 
-    // Compact inline leaderboard for the landscape top bar — same height as the turn card.
+    /// Compact leaderboard for the landscape panel, with the live-rider count pinned trailing —
+    /// same arrangement as portrait, and for the same reason: it moved out of the turn-banner row
+    /// so that banner could have the panel's full width.
     private var landscapeLeaderboardStrip: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    if vm.leaderboardRows.isEmpty {
-                        ForEach(0..<3, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.surfaceContainerHigh.opacity(0.5))
-                                .frame(width: 100, height: 44)
-                                .redacted(reason: .placeholder)
-                        }
-                    } else {
-                        ForEach(vm.leaderboardRows) { row in
-                            LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id,
-                                                isOffline: !row.isMe && !vm.onlineUserIds.contains(row.id))
-                                .id(row.id)
+        HStack(spacing: 6) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        if vm.leaderboardRows.isEmpty {
+                            ForEach(0..<3, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.surfaceContainerHigh.opacity(0.5))
+                                    .frame(width: 100, height: 44)
+                                    .redacted(reason: .placeholder)
+                            }
+                        } else {
+                            ForEach(vm.leaderboardRows) { row in
+                                LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id,
+                                                    isOffline: !row.isMe && !vm.onlineUserIds.contains(row.id))
+                                    .id(row.id)
+                            }
                         }
                     }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
                 }
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-            }
-            .onChange(of: selectedRiderId) { _, id in
-                if let id {
-                    withAnimation(.spring(response: 0.4)) { proxy.scrollTo(id, anchor: .center) }
+                .onChange(of: selectedRiderId) { _, id in
+                    if let id {
+                        withAnimation(.spring(response: 0.4)) { proxy.scrollTo(id, anchor: .center) }
+                    }
                 }
             }
+            liveRiderCountPill
         }
     }
 
@@ -2380,10 +2424,13 @@ struct RideNavigationView: View {
             if vm.amILeader {
                 // Ending is irreversible and ends it for every rider in the convoy, so the leader
                 // confirms first. A mis-tap here used to end the ride outright — and this button
-                // sits next to regroup, on a phone being tapped at a set of lights.
+                // sits next to regroup, on a phone being tapped at a set of lights. The same
+                // confirmation now also carries Exit, since the back button is gone while
+                // navigating.
                 showEndConfirm = true
             } else {
-                // Not the leader: this only backs out of the navigation screen, nothing to confirm.
+                // Not the leader: they cannot end anything, so this is purely the exit and there
+                // is nothing to confirm.
                 dismiss()
             }
         }) {

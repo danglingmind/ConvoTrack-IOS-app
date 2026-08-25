@@ -28,8 +28,15 @@
     "%@ / %@" : {
 
     },
-    "%@ km · %@ %@" : {
-
+    "%@ km · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ km · %2$@"
+          }
+        }
+      }
     },
     "%@ needs help — head to their location" : {
 
@@ -232,9 +239,6 @@
     "End Ride" : {
 
     },
-    "End this ride for everyone?" : {
-
-    },
     "ENTER INVITE CODE" : {
 
     },
@@ -247,7 +251,10 @@
     "ETA" : {
 
     },
-    "Every rider stops sharing their location and the ride summary is generated. This can't be undone." : {
+    "Exit closes navigation on your phone — the ride keeps running and you can resume from the lobby. End Ride stops location sharing for every rider and generates the summary; that can't be undone." : {
+
+    },
+    "Exit Navigation" : {
 
     },
     "Failed to Create Ride" : {
@@ -323,6 +330,9 @@
 
     },
     "LEAVE" : {
+
+    },
+    "Leave navigation or end the ride?" : {
 
     },
     "Leave Ride" : {
