@@ -81,7 +81,64 @@ enum GoogleDirectionsService {
               let leg   = route.legs?.first else {
             throw URLError(.cannotParseResponse)
         }
+        return directionsResult(from: leg)
+    }
 
+    /// The same alternatives `alternativeRoutes` offers the ride leader, but carrying each one's
+    /// turn-by-turn steps and stitched geometry.
+    ///
+    /// Navigation needs this because the leader's pick is persisted as a bare polyline: replaying
+    /// it later tells you the shape of the chosen road but not a single instruction for it, and a
+    /// plain `route()` recompute answers with whatever Google ranks first today — which is a
+    /// different road entirely whenever the leader chose anything but the default. Asking for the
+    /// alternative set with steps attached lets the caller find the one that matches the stored
+    /// shape and take its instructions.
+    ///
+    /// `alternativeRoutes` deliberately does NOT ask for step data: it feeds the route picker,
+    /// which only ever draws whole-route polylines, and the per-step fields multiply that response
+    /// several times over for nothing.
+    static func alternativeRoutesWithSteps(
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D,
+        trafficAware: Bool = true
+    ) async throws -> [DirectionsResult] {
+        let url = URL(string: "https://routes.googleapis.com/directions/v2:computeRoutes")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(GoogleMapsConfig.apiKey, forHTTPHeaderField: "X-Goog-Api-Key")
+        request.setValue(
+            "routes.legs.distanceMeters,routes.legs.duration," +
+            "routes.legs.steps.distanceMeters,routes.legs.steps.endLocation," +
+            "routes.legs.steps.navigationInstruction,routes.legs.steps.polyline",
+            forHTTPHeaderField: "X-Goog-FieldMask"
+        )
+
+        let body: [String: Any] = [
+            "origin": [
+                "location": ["latLng": ["latitude": origin.latitude, "longitude": origin.longitude]]
+            ],
+            "destination": [
+                "location": ["latLng": ["latitude": destination.latitude, "longitude": destination.longitude]]
+            ],
+            "travelMode": "DRIVE",
+            "routingPreference": trafficAware ? "TRAFFIC_AWARE" : "TRAFFIC_UNAWARE",
+            "polylineQuality": "HIGH_QUALITY",
+            "computeAlternativeRoutes": true,
+            "languageCode": "en-US",
+            "units": "METRIC"
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, urlResponse) = try await URLSession.shared.data(for: request)
+        if let http = urlResponse as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        let response = try JSONDecoder().decode(RoutesResponse.self, from: data)
+        return response.routes.compactMap { $0.legs?.first }.map(directionsResult(from:))
+    }
+
+    private static func directionsResult(from leg: RoutesResponse.Leg) -> DirectionsResult {
         // Stitch per-step HIGH_QUALITY polylines for lane-accurate geometry
         let coords = leg.steps.flatMap { decodePolyline($0.polyline.encodedPolyline) }
         let steps: [DirectionsStep] = leg.steps.compactMap { step in

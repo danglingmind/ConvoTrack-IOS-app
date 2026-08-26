@@ -21,7 +21,17 @@ final class LocationService: NSObject {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        manager.distanceFilter = 5          // fire every 5 m; ~0.15 s at 120 km/h
+        // No distance filter. It reads like a harmless rate cap, but `distanceFilter` gates
+        // DELIVERY, not the GPS itself — CoreLocation withholds the callback until the device has
+        // moved that far. At any riding speed 5 m is crossed every fix, so the filter changed
+        // nothing while moving; the moment the rider stopped it silenced the delegate completely,
+        // and everything downstream of a fix simply froze at its last value. The speed readout
+        // stuck at whatever it read rolling up to the light, the ETA countdown stopped counting,
+        // and the distance to the next turn held still — all until the rider pulled away and the
+        // updates resumed. Full 1 Hz delivery is what a navigation app wants, and with
+        // `BestForNavigation` the receiver is already running flat out either way, so this costs
+        // callbacks, not battery.
+        manager.distanceFilter = kCLDistanceFilterNone
         manager.pausesLocationUpdatesAutomatically = false
         UIDevice.current.isBatteryMonitoringEnabled = true
     }

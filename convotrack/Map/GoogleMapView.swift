@@ -144,6 +144,10 @@ struct GoogleMapView: UIViewRepresentable {
     var pins: [MapPin] = []
     var cameraCommand: MapCameraCommand? = nil
     var isInteractive: Bool = true
+    /// True while turn-by-turn guidance is running, i.e. `routeCoords` is being re-cut every GPS
+    /// fix to start under the rider. The head of the active route is then the rider's own marker,
+    /// not a route endpoint, so it gets no end cap of its own — see `applyRouteDecorations`.
+    var isNavigating: Bool = false
     var onInteraction: (() -> Void)? = nil
     /// All alternative routes (index == position). The one at `selectedRouteIndex`
     /// is drawn bright via `routeCoords`; the rest render dim + tappable.
@@ -206,7 +210,7 @@ struct GoogleMapView: UIViewRepresentable {
         c.applyRoute(originalRouteCoords, to: mapView, key: &c.originalRouteVersion, line: &c.originalRouteLine, color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 0.28), width: 3, dashed: false, zIndex: 98)
         c.applyRoute(routeCoords,         to: mapView, key: &c.casingVersion,        line: &c.casingLine,        color: UIColor(red: 0.353, green: 0.424, blue: 0, alpha: 1),    width: Coordinator.casingWidth,    dashed: false, zIndex: 99)
         c.applyRoute(routeCoords,         to: mapView, key: &c.routeVersion,         line: &c.routeLine,         color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1),    width: Coordinator.routeFaceWidth, dashed: false, zIndex: 100)
-        c.applyRouteDecorations(routeCoords: routeCoords, originalCoords: originalRouteCoords, stopCoords: stopCoords, to: mapView)
+        c.applyRouteDecorations(routeCoords: routeCoords, originalCoords: originalRouteCoords, stopCoords: stopCoords, isNavigating: isNavigating, to: mapView)
         c.applyPins(pins, to: mapView)
 
         if let cmd = cameraCommand, cmd.id != c.lastCameraId {
@@ -448,18 +452,27 @@ extension GoogleMapView {
             routeCoords: [CLLocationCoordinate2D],
             originalCoords: [CLLocationCoordinate2D],
             stopCoords: [CLLocationCoordinate2D],
+            isNavigating: Bool,
             to mapView: GMSMapView
         ) {
-            // Version hash over all endpoints so we redraw only on actual changes
+            // Version hash over all endpoints so we redraw only on actual changes.
+            //
+            // The active route's FIRST point is excluded while navigating, for two reasons: it is
+            // no longer drawn (see below), and it moves with every GPS fix — so including it made
+            // this version miss once a second and tear down and rebuild four rendered marker
+            // images plus two 24-point bezier connectors on the main thread, once a second, to
+            // arrive at the same picture.
             let newVersion: Int = {
                 var h = Hasher()
-                for coord in [routeCoords.first, routeCoords.last,
-                               originalCoords.first, originalCoords.last,
-                               stopCoords.first, stopCoords.last].compactMap({ $0 }) {
+                let endpoints = [isNavigating ? nil : routeCoords.first, routeCoords.last,
+                                 originalCoords.first, originalCoords.last,
+                                 stopCoords.first, stopCoords.last]
+                for coord in endpoints.compactMap({ $0 }) {
                     h.combine(coord.latitude.bitPattern)
                     h.combine(coord.longitude.bitPattern)
                 }
                 h.combine(stopCoords.count)
+                h.combine(isNavigating)
                 return h.finalize()
             }()
             guard newVersion != decorationVersion else { return }
@@ -483,10 +496,16 @@ extension GoogleMapView {
                 endCapMarkers.append(endCapMarker(at: last,  size: 14, opacity: 0.45, zIndex: 2, to: mapView))
             }
 
-            // End caps on active route (bright) — always draw both endpoints.
-            // In navigation the route start is the road-projected position, which differs
-            // from the GPS-position user-pin, so it IS clearly visible.
-            if let first = routeCoords.first {
+            // End caps on the active route (bright).
+            //
+            // The head cap is suppressed while navigating. It used to be drawn deliberately,
+            // because the route start (road-projected) sat apart from the GPS-position user pin —
+            // but that gap was the bug, not a feature to label: it put a second lime dot on the
+            // map a few metres off the chevron, tracking the polyline rather than the rider, which
+            // read as the route's start point and the marker sliding along at different paces.
+            // The route now starts underneath the chevron (`trimActiveRoute`), so the chevron IS
+            // the head marker and a cap here would only double-draw it.
+            if let first = routeCoords.first, !isNavigating {
                 endCapMarkers.append(endCapMarker(at: first, size: 16, opacity: 1.0, zIndex: 2, to: mapView))
             }
             if let last = routeCoords.last {
