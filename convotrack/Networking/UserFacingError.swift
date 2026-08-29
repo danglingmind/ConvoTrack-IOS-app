@@ -76,6 +76,12 @@ enum UserFacingError {
             return "That purchase expired before we could confirm it. Nothing was charged."
         case "SANDBOX_TRANSACTION_IN_PRODUCTION":
             return "That was a test purchase, and this isn't a test. Nothing was charged."
+        case "PURCHASE_ALREADY_CLAIMED":
+            return "That subscription is already tied to another account. Sign in with the one that bought it, or contact us and we'll sort it out."
+        case "PLAY_VERIFICATION_UNAVAILABLE":
+            return "We couldn't reach the store to confirm your purchase. Nothing is lost — try again in a moment."
+        case "PURCHASE_NOT_FOUND", "PURCHASE_NOT_ACTIVE":
+            return "The store doesn't show an active subscription on this account. If you've just bought one, give it a minute and try again."
 
         // MARK: Written straight — no jokes on safety
         case "EMERGENCY_NOT_FOUND":
@@ -159,7 +165,8 @@ extension UserFacingError {
         "RIDE_NOT_ACTIVE_OR_PAUSED", "RIDE_NOT_ACTIVE", "RIDE_NOT_IN_LOBBY", "RIDE_NOT_LOBBY",
         "RIDE_NOT_PAUSED", "MISSING_REQUIRED_FIELDS", "INVALID_WAYPOINTS", "USERNAME_TAKEN",
         "USER_NOT_FOUND", "INVALID_PRODUCT_ID", "INVALID_TRANSACTION_PAYLOAD", "INVALID_TRANSACTION",
-        "TRANSACTION_EXPIRED", "SANDBOX_TRANSACTION_IN_PRODUCTION", "EMERGENCY_NOT_FOUND",
+        "TRANSACTION_EXPIRED", "SANDBOX_TRANSACTION_IN_PRODUCTION", "PURCHASE_ALREADY_CLAIMED",
+        "PLAY_VERIFICATION_UNAVAILABLE", "PURCHASE_NOT_FOUND", "PURCHASE_NOT_ACTIVE", "EMERGENCY_NOT_FOUND",
         "USE_EMERGENCY_EVENT", "REGROUP_NOT_FOUND", "PARTICIPANT_NOT_FOUND", "INTERNAL_SERVER_ERROR",
     ]
 }
