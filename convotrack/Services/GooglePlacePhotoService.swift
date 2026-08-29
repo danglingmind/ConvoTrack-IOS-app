@@ -75,12 +75,27 @@ actor GooglePlacePhotoService {
     private var knownEmpty: Set<String> = []
     /// De-duplicates concurrent requests for the same destination so two views appearing at
     /// once can't double-bill the search.
-    private var inFlight: [String: Task<FetchedPhoto?, Never>] = [:]
+    private var inFlight: [String: Task<FetchOutcome, Never>] = [:]
     private var didPrune = false
 
     private final class CacheEntry {
         let photo: DestinationPhoto
         init(_ photo: DestinationPhoto) { self.photo = photo }
+    }
+
+    /// Why a lookup produced nothing.
+    ///
+    /// `transient` is a statement about the NETWORK, not about the place. Persisting it wrote a
+    /// destination off as photo-less for the full 7-day empty TTL — so opening a lobby once in a
+    /// tunnel meant the hero silently fell back to the route map on every relaunch for a week,
+    /// on full signal.
+    private struct FetchOutcome {
+        let photo: FetchedPhoto?
+        /// True when the lookup failed rather than answering. Never persisted.
+        let isTransient: Bool
+
+        static let noPhoto  = FetchOutcome(photo: nil, isTransient: false)
+        static let transient = FetchOutcome(photo: nil, isTransient: true)
     }
 
     private struct FetchedPhoto {
@@ -118,21 +133,25 @@ actor GooglePlacePhotoService {
             break
         }
 
-        let fetched: FetchedPhoto?
+        let outcome: FetchOutcome
         if let running = inFlight[key] {
-            fetched = await running.value
+            outcome = await running.value
         } else {
-            let task = Task<FetchedPhoto?, Never> {
+            let task = Task<FetchOutcome, Never> {
                 await Self.fetch(query: query, near: coordinate)
             }
             inFlight[key] = task
-            fetched = await task.value
+            outcome = await task.value
             inFlight[key] = nil
         }
 
-        guard let fetched else {
-            knownEmpty.insert(key)
-            DiskCache.storeEmpty(key: key)
+        guard let fetched = outcome.photo else {
+            // Only a resolved answer about the PLACE is remembered. A failed request says nothing
+            // about whether this destination has a photo, so it is retried next appearance.
+            if !outcome.isTransient {
+                knownEmpty.insert(key)
+                DiskCache.storeEmpty(key: key)
+            }
             return nil
         }
 
@@ -316,11 +335,17 @@ actor GooglePlacePhotoService {
 
     // MARK: - Network
 
-    private static func fetch(query: String, near coordinate: CLLocationCoordinate2D) async -> FetchedPhoto? {
-        guard let candidate = await searchPlace(query: query, near: coordinate),
-              let data = await photoData(photoName: candidate.photoName)
-        else { return nil }
-        return FetchedPhoto(data: data, attribution: candidate.attribution)
+    private static func fetch(query: String, near coordinate: CLLocationCoordinate2D) async -> FetchOutcome {
+        let search = await searchPlace(query: query, near: coordinate)
+        guard let candidate = search.candidate else {
+            return search.isTransient ? .transient : .noPhoto
+        }
+        let media = await photoData(photoName: candidate.photoName)
+        guard let data = media.data else {
+            return media.isTransient ? .transient : .noPhoto
+        }
+        return FetchOutcome(photo: FetchedPhoto(data: data, attribution: candidate.attribution),
+                            isTransient: false)
     }
 
     private struct Candidate {
@@ -329,8 +354,12 @@ actor GooglePlacePhotoService {
     }
 
     /// Nearest place to `coordinate` matching `query` that actually has a photo.
-    private static func searchPlace(query: String, near coordinate: CLLocationCoordinate2D) async -> Candidate? {
-        guard let url = URL(string: "https://places.googleapis.com/v1/places:searchText") else { return nil }
+    private static func searchPlace(
+        query: String, near coordinate: CLLocationCoordinate2D
+    ) async -> (candidate: Candidate?, isTransient: Bool) {
+        guard let url = URL(string: "https://places.googleapis.com/v1/places:searchText") else {
+            return (nil, false)
+        }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -352,15 +381,22 @@ actor GooglePlacePhotoService {
                 ]
             ]
         ]
-        guard let payload = try? JSONSerialization.data(withJSONObject: body) else { return nil }
+        guard let payload = try? JSONSerialization.data(withJSONObject: body) else { return (nil, false) }
         request.httpBody = payload
 
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let decoded = try? JSONDecoder().decode(SearchResponse.self, from: data),
+        // A thrown request is the network failing; a 5xx/429 is Google having a bad moment. Both
+        // are transient. A 4xx is a real answer about this query.
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else {
+            return (nil, true)
+        }
+        guard let http = response as? HTTPURLResponse else { return (nil, true) }
+        guard (200...299).contains(http.statusCode) else {
+            return (nil, http.statusCode >= 500 || http.statusCode == 429)
+        }
+        guard let decoded = try? JSONDecoder().decode(SearchResponse.self, from: data),
               // A query with no results returns `{}`, so `places` is legitimately absent.
               let places = decoded.places
-        else { return nil }
+        else { return (nil, false) }
 
         let target = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         let ranked = places.compactMap { place -> (distance: CLLocationDistance, candidate: Candidate)? in
@@ -374,23 +410,27 @@ actor GooglePlacePhotoService {
             return (distance, Candidate(photoName: photo.name, attribution: author))
         }
 
-        return ranked.min { $0.distance < $1.distance }?.candidate
+        return (ranked.min { $0.distance < $1.distance }?.candidate, false)
     }
 
     /// The media endpoint answers with a 302 to the image bytes; `URLSession` follows that for
     /// us. `maxWidthPx` keeps the download itself small — the downsample on decode then bounds
     /// the longest edge, which is what protects us from a tall portrait original.
-    private static func photoData(photoName: String) async -> Data? {
+    private static func photoData(photoName: String) async -> (data: Data?, isTransient: Bool) {
         var components = URLComponents(string: "https://places.googleapis.com/v1/\(photoName)/media")
         components?.queryItems = [
             URLQueryItem(name: "maxWidthPx", value: String(maxDecodedPixelSize)),
             URLQueryItem(name: "key", value: GoogleMapsConfig.apiKey)
         ]
-        guard let url = components?.url,
-              let (data, response) = try? await URLSession.shared.data(from: url),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode)
-        else { return nil }
-        return data
+        guard let url = components?.url else { return (nil, false) }
+        guard let (data, response) = try? await URLSession.shared.data(from: url) else {
+            return (nil, true)
+        }
+        guard let http = response as? HTTPURLResponse else { return (nil, true) }
+        guard (200...299).contains(http.statusCode) else {
+            return (nil, http.statusCode >= 500 || http.statusCode == 429)
+        }
+        return (data, false)
     }
 
     // MARK: - Response models

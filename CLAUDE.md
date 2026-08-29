@@ -8,7 +8,7 @@ This is a pure SwiftUI iOS project — no package manager, no SPM dependencies, 
 
 **Run in simulator:**
 ```
-xcodebuild -project convotrack.xcodeproj -scheme convotrack -destination 'platform=iOS Simulator,name=iPhone 16' build
+xcodebuild -project convotrack.xcodeproj -scheme convotrack -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 ### Backend Service Location
 While integrating with backend always refer to the API spec first and make sure all the payloads and responses are according to the contracts.
@@ -16,6 +16,26 @@ While integrating with backend always refer to the API spec first and make sure 
 path: /Users/ricky/Workspace/convoy-backend
 #### API contract location
 path : /Users/ricky/Workspace/convoy-backend/openapi.json
+
+### Android App Location
+path: `/Users/ricky/Workspace/convotrack-android` — package root
+`app/src/main/java/com/danglingmind/convotrack/`.
+
+**NOT `convoy-android`.** That directory exists but is empty (an orphaned `.idea` folder, no
+source). Anything referring to it is stale.
+
+The Android app is a Compose port of this iOS app and is kept at feature parity with it. When
+changing shared behaviour — socket events, route/navigation logic, ride lifecycle — check whether
+the Android side needs the same change.
+
+**Build:**
+```
+cd /Users/ricky/Workspace/convotrack-android
+./gradlew assembleDebug -Dorg.gradle.java.installations.paths="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+```
+The `-D` flag is required: `gradle/gradle-daemon-jvm.properties` pins the daemon to a JetBrains
+JDK 21, which only ships inside Android Studio and is not on the default toolchain search path.
+Without it the build fails with "Unable to download toolchain matching the requirements".
 
 
 **Open in Xcode (preferred for UI work):**
@@ -105,7 +125,7 @@ The app is currently entirely hardcoded (dummy riders, coordinates, stats). Back
 - **Emergency vs Regroup** — `RegroupBottomSheet` "Emergency" option must emit `ride:emergency` socket event, not `ride:regroup`. The other three reasons (fuel/food/scenic) emit `ride:regroup`.
 - **Turn-by-turn nav** — P1 client-side via `MKDirections` → `MKRoute.steps`. No backend involvement. Banner currently removed from `RideNavigationView`.
 - **Rider titles** — backend stores enum strings (`RIDE_LEADER`, `PACE_KEEPER`, `TRAIL_GUARDIAN`, `FORMATION_RIDER`); iOS maps to display strings client-side.
-- **Invite/join links** — shared links are HTTPS Universal Links (`https://convoy-backend-hx3c.onrender.com/convotrack/join/CODE` via `AppURLs.joinLink(code:)`), **not** the `convotrack://` custom scheme (kept only for legacy/QR back-compat). Custom schemes aren't tappable in messaging apps and have no not-installed fallback. The backend (`convoy-backend/src/routes/deeplink.ts`, registered public/unauth in `app.ts`) serves `/.well-known/apple-app-site-association`, `/.well-known/assetlinks.json`, and a fallback landing page at `/convotrack/join/:code`. iOS: `associated-domains` entitlement (`applinks:…`) + `ConvoTrackApp.handleDeepLink` parses both forms (host-validated). Android mirror in `convoy-android` (App Link intent-filter `autoVerify=true`; `MainActivity` reads `intent.data` → `AppRoot`/`MainScreen` prefill join sheet). **Auto-open requires config, not code:** backend env `APPLE_APP_ID_PREFIX` (Apple Team ID) + `ANDROID_SHA256_FINGERPRINTS` (release cert SHA-256) must be set + redeployed, and the iOS App ID must have Associated Domains enabled; until then the link is tappable and lands on the fallback page but won't jump into the app.
+- **Invite/join links** — shared links are HTTPS Universal Links (`https://convoy-backend-hx3c.onrender.com/convotrack/join/CODE` via `AppURLs.joinLink(code:)`), **not** the `convotrack://` custom scheme (kept only for legacy/QR back-compat). Custom schemes aren't tappable in messaging apps and have no not-installed fallback. The backend (`convoy-backend/src/routes/deeplink.ts`, registered public/unauth in `app.ts`) serves `/.well-known/apple-app-site-association`, `/.well-known/assetlinks.json`, and a fallback landing page at `/convotrack/join/:code`. iOS: `associated-domains` entitlement (`applinks:…`) + `ConvoTrackApp.handleDeepLink` parses both forms (host-validated). Android mirror in `convotrack-android` (App Link intent-filter `autoVerify=true`; `MainActivity` reads `intent.data` → `AppRoot`/`MainScreen` prefill join sheet). **Auto-open requires config, not code:** backend env `APPLE_APP_ID_PREFIX` (Apple Team ID) + `ANDROID_SHA256_FINGERPRINTS` (release cert SHA-256) must be set + redeployed, and the iOS App ID must have Associated Domains enabled; until then the link is tappable and lands on the fallback page but won't jump into the app.
 - **Ride summary stats** — computed 100% server-side (`convoy-backend` `summaryService.ts`); iOS `RideSummaryView` / Android `RideSummaryScreen` are thin renderers. Correct semantics: duration = actual wall-clock (`endedAt − startedAt`), NOT the planned ETA; distance = leader's `maxLeaderProgress` + jitter-guarded off-route `detourMeters`, NOT the planned route distance; `maxGroupSplitMeters` = running max tracked per-tick in `leaderboardEngine.ts`, NOT the final snapshot.
 
 ### Component Locations (not in ConvoTrackTheme.swift)

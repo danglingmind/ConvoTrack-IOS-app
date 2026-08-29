@@ -814,6 +814,21 @@ struct ActiveRideCard: View {
                             .scaledToFill()
                     )
                     .clipped()
+                    // Photographer credit. Google's Places policy requires it wherever a Place
+                    // Photo is displayed, so the lobby is not the only surface that owes it — this
+                    // card shows the same image and was the non-compliant half. Top-trailing keeps
+                    // it clear of the title and RESUME in the card's lower band.
+                    .overlay(alignment: .topTrailing) {
+                        if let attribution = photo.attribution {
+                            Text("Photo: \(attribution) · Google")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.white.opacity(0.7))
+                                .shadow(color: .black.opacity(0.7), radius: 3)
+                                .lineLimit(1)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                        }
+                    }
 
             case .unavailable:
                 if let ride, !ride.waypoints.isEmpty {

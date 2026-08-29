@@ -32,10 +32,16 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published var riders: [LiveRider] = []
     @Published var leaderboardRows: [NavLeaderboardRow] = []
     @Published var mySpeedKmh: Double = 0
-    /// Whether any usable fix has arrived yet. Separates "not moving" from "nothing known", which
-    /// a bare `mySpeedKmh == 0` cannot: both used to render as "--", so the readout showed the
-    /// same thing at a red light as it did before the GPS had said anything at all.
-    @Published private(set) var hasLocationFix = false
+    /// Whether the latest fix actually carried a speed solution. Separates "not moving" from
+    /// "nothing known", which a bare `mySpeedKmh == 0` cannot: both used to render as "--", so the
+    /// readout showed the same thing at a red light as it did before the GPS had said anything at
+    /// all — and once that was fixed by always showing a number, a fix with no speed at all
+    /// rendered as a confident "0 KM/H".
+    @Published private(set) var hasSpeedFix = false
+    /// Whether the rider is actually moving, for the follow camera and the broadcast cadence.
+    /// Kept apart from `mySpeedKmh`, which is flattened to 0 under the display band and also reads
+    /// 0 for a fix carrying no speed: both made a rider who was still riding look parked.
+    @Published private(set) var isMoving = false
     @Published var myRank: Int = 0
     @Published var myDistanceToGoalKm: Double = 0
     @Published var onlineUserIds: Set<String> = []   // authoritative presence for offline markers
@@ -63,16 +69,52 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// is a couple of km/h, so a parked bike reads "3" then "1" then "4" forever. The band is set
     /// under a brisk walk, well below anything this app is ridden at.
     private static let stationarySpeedKmh: Double = 4
+    /// Speed at which the rider counts as moving. Deliberately below `stationarySpeedKmh`: that
+    /// band exists to stop a parked bike's readout flickering, not to decide whether the map keeps
+    /// up with someone crawling through traffic.
+    private static let movingSpeedKmh: Double = 2
+    /// Displacement that counts as movement when a fix carries no speed solution. Well past the
+    /// few metres a stationary fix wanders by, so a parked bike can't fake it.
+    private static let movingDisplacementMeters: Double = 15
+    /// Anchor for that displacement test. Held only while speed-less fixes are arriving.
+    private var movementAnchor: CLLocation? = nil
 
-    /// Speed for display, in km/h.
+    /// Speed for display, in km/h, or nil when the fix carries no speed solution at all.
     ///
-    /// `CLLocation.speed` is negative when the fix carries no valid speed at all — not slow, but
-    /// unknown — and `max(0, …)` quietly turned that into a confident zero.
-    private static func displaySpeedKmh(from location: CLLocation) -> Double {
-        guard location.speed >= 0 else { return 0 }
+    /// `CLLocation.speed` is negative when the fix carries no valid speed — not slow, but unknown
+    /// — and collapsing that to 0 (by `max(0, …)` or by an early `return 0`, which is the same
+    /// confident zero) makes Wi-Fi/cell-derived fixes, the Simulator's custom location and the
+    /// first fixes after `startUpdatingLocation` all read "0 KM/H". Nil is what renders as "--".
+    private static func displaySpeedKmh(from location: CLLocation) -> Double? {
+        guard location.speed >= 0 else { return nil }
         let kmh = location.speed * 3.6
         return kmh < stationarySpeedKmh ? 0 : kmh
     }
+
+    /// Refreshes `isMoving` from whichever signal this fix carries.
+    private func updateMovementState(_ location: CLLocation) {
+        if location.speed >= 0 {
+            movementAnchor = nil
+            isMoving = location.speed * 3.6 >= Self.movingSpeedKmh
+            return
+        }
+        // No speed solution. Reading that as stopped left the follow camera parked for the whole
+        // ride on any fix source that omits speed, so fall back to displacement, which needs none.
+        guard let anchor = movementAnchor else {
+            movementAnchor = location
+            return
+        }
+        if location.distance(from: anchor) >= Self.movingDisplacementMeters {
+            isMoving = true
+            movementAnchor = location
+        } else if location.timestamp.timeIntervalSince(anchor.timestamp) >= 10 {
+            // 15 m unmet over ten seconds is under 5.4 km/h. Re-anchored so the window that
+            // declares movement is always the recent one, not the whole ride.
+            isMoving = false
+            movementAnchor = location
+        }
+    }
+
     /// True when no usable course fix has arrived recently — you're stopped or crawling, and the
     /// compass is the only heading signal left worth showing.
     private var isCourseStale: Bool {
@@ -193,9 +235,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// reflected quickly, rare enough not to be a per-second billing drain.
     private static let etaRefreshInterval: TimeInterval = 60
     private var lastBroadcastDate: Date = .distantPast
-    /// Where the last broadcast went out from, so a rider who has genuinely stopped can be told
-    /// apart from one merely reading 0 km/h between two fixes.
-    private var lastBroadcastLocation: CLLocation? = nil
+    /// Where the last FAST broadcast went out from, so a rider who has genuinely stopped can be
+    /// told apart from one merely reading 0 km/h between two fixes. Deliberately not re-anchored
+    /// by the slow stationary broadcasts: doing so reset the displacement every 10 s, which is
+    /// what let a rider crawling below the bar stay latched on the slow cadence indefinitely.
+    private var lastFastBroadcastLocation: CLLocation? = nil
     private var lastCameraTickDate: Date = .distantPast
     private var remainingStops: [CLLocationCoordinate2D] = []
     // Cumulative travel time from the ride start to each stop (WAYPOINT/DESTINATION), in route order.
@@ -630,8 +674,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     // MARK: - LocationServiceDelegate
 
     func locationService(_ service: LocationService, didUpdate location: CLLocation, battery: Double, signalStrength: String) {
-        mySpeedKmh = Self.displaySpeedKmh(from: location)
-        hasLocationFix = true
+        let displaySpeed = Self.displaySpeedKmh(from: location)
+        mySpeedKmh  = displaySpeed ?? 0
+        hasSpeedFix = displaySpeed != nil
+        updateMovementState(location)
         userLocation = location.coordinate
         // Course is derived from successive fixes, so below a walking pace it wanders wildly —
         // precisely when a rider is stopped at a light and would notice the map spinning. Above
@@ -687,12 +733,21 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // café posting an unchanged coordinate every two seconds for as long as the ride is open.
         // Nothing depends on that: presence runs off its own 5 s `ride:heartbeat`, and a stopped
         // rider's progress and leaderboard position are by definition not changing.
-        let isStationary = mySpeedKmh == 0
-            && lastBroadcastLocation.map { location.distance(from: $0) < 10 } ?? false
+        //
+        // Both halves of the test used to latch a moving rider onto the slow cadence. The speed
+        // came from the band-flattened `mySpeedKmh`, so anything under 4 km/h read as parked; and
+        // the displacement was measured from the last broadcast of ANY kind, re-anchored on every
+        // slow tick, so a ~3 km/h crawl covering ~8 m per 10 s interval never accumulated past the
+        // 10 m bar. Everyone else's pin, leaderboard distance and edge indicator for that rider
+        // then lagged by up to 10 s, in exactly the dense traffic where the pack needs them live.
+        let isStationary = !isMoving
+            && lastFastBroadcastLocation.map { location.distance(from: $0) < 10 } ?? false
         let interval: TimeInterval = isStationary ? 10.0 : 2.0
         guard now.timeIntervalSince(lastBroadcastDate) >= interval else { return }
         lastBroadcastDate = now
-        lastBroadcastLocation = location
+        // Anchored on the last FAST broadcast only, so displacement accumulates across slow ticks
+        // and sustained movement escapes the slow cadence on its own.
+        if !isStationary { lastFastBroadcastLocation = location }
         SocketClient.shared.emitLocationUpdate(
             rideId: rideId,
             lat: location.coordinate.latitude,
@@ -853,8 +908,14 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
         // Draw and track the leader-selected route geometry when available; the steps above (turn
         // instructions) come from the live recompute.
+        //
+        // The stored polyline is not merely the prettier line to draw — it is the one the SERVER
+        // measures everyone against. `progressEngine.computeProgress` derives both `progress` and
+        // `offRoute` from `ride.route_polyline`, so any geometry the client follows instead puts
+        // it in disagreement with the server about where every rider is. It is never swapped out
+        // below; only the instructions stamped onto it can be dropped.
         let storedRoute = GoogleDirectionsService.decodedRoute(polyline)
-        var geometry = storedRoute ?? allCoords
+        let geometry = storedRoute ?? allCoords
 
         // …but only once the two are known to describe the SAME roads.
         //
@@ -884,11 +945,18 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
                 totalTime           = matched.durationSeconds
                 cumulativeStopTimes = [matched.durationSeconds]
             } else {
-                // No instruction set exists for the line the leader drew. Navigating the route we
-                // do have instructions for beats reciting another road's turns over this one; the
-                // leader's choice stays on screen as the dim planned layer, so the divergence is
-                // visible rather than silent.
-                geometry = allCoords
+                // No instruction set could be matched to the line the leader drew — always the
+                // case on a multi-stop ride, where there is no alternative set to search. Drop
+                // the turns rather than the geometry: the banner falls back to "Follow route",
+                // while following `allCoords` instead would have every rider dead on the drawn
+                // line reported `offRoute: true` by the server, ranked off a progress figure
+                // measured on a different road, and charged the gap as `detourMeters` in the
+                // ride summary. Reciting no turns beats reciting another road's turns, and both
+                // beat silently disagreeing with the server about where everyone is.
+                //
+                // `totalTime` stays the recompute's: it is only the bootstrap ETA until the first
+                // traffic-aware refresh lands, and both roads run between the same stops.
+                steps = []
             }
         }
 
@@ -898,10 +966,9 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         adoptNavRoute(geometry, steps: steps)
 
         // `adoptNavRoute` above already set navRoute / its prefix distances / navSegmentIndex.
-        // The dim layer stays the leader's plan even in the fallback above, where navigation had
-        // to fall back onto the route it holds instructions for: the two lines then diverge on
-        // screen, which is the honest picture and the only way anyone would notice.
-        routeCoordinates         = storedRoute ?? geometry
+        // The dim planned layer and the followed line are the same polyline at ride start; they
+        // only part company once a reroute lands, which `calculateFullReroute` handles.
+        routeCoordinates         = geometry
         activeRouteCoordinates   = geometry   // full route until first GPS update trims it
         routeExpectedTravelTime  = totalTime
         stopCumulativeDurations  = cumulativeStopTimes
@@ -1064,20 +1131,33 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// does. Nil is a real answer, not just a failure: the stored polyline may predate a road
     /// change, or have been trimmed, and guessing an alternative in that case would put the wrong
     /// turns on screen — the exact failure this lookup exists to prevent.
+    ///
+    /// Tried against two alternative sets, because either one alone misses matches the other
+    /// finds. TRAFFIC_AWARE first: that is the set `CreateRideView` showed the leader, so it is
+    /// the one their pick provably came from. But Google composes it from live conditions, and a
+    /// ride started hours after it was created is asking a different question of a different road
+    /// network — the traffic-motivated alternative the leader chose at 9am need not be offered at
+    /// noon. TRAFFIC_UNAWARE is the time-invariant road-network set, so it is the stable second
+    /// chance. The cost is one extra Routes API call, and only on rides that would otherwise lose
+    /// their turn guidance entirely.
     private static func alternativeMatching(
         _ stored: [CLLocationCoordinate2D],
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D
     ) async -> DirectionsResult? {
-        guard let options = try? await GoogleDirectionsService.alternativeRoutesWithSteps(
-            from: origin, to: destination
-        ) else { return nil }
-        let scored = options
-            .filter { !$0.steps.isEmpty }
-            .map { (route: $0, deviation: routeDeviation(of: $0.coordinates, from: stored)) }
-        guard let best = scored.min(by: { $0.deviation < $1.deviation }),
-              best.deviation <= routeMatchToleranceMeters else { return nil }
-        return best.route
+        for trafficAware in [true, false] {
+            guard let options = try? await GoogleDirectionsService.alternativeRoutesWithSteps(
+                from: origin, to: destination, trafficAware: trafficAware
+            ) else { continue }
+            let scored = options
+                .filter { !$0.steps.isEmpty }
+                .map { (route: $0, deviation: routeDeviation(of: $0.coordinates, from: stored)) }
+            if let best = scored.min(by: { $0.deviation < $1.deviation }),
+               best.deviation <= routeMatchToleranceMeters {
+                return best.route
+            }
+        }
+        return nil
     }
 
     /// Prefix distances: `result[i]` is metres from the route start to vertex `i`.
@@ -1796,10 +1876,11 @@ struct RideNavigationView: View {
         // Track speed on every tick — including the ones that don't move the camera — so the
         // zoom is already correct whenever a camera command does go out.
         cameraSpeedKmh = wasZero ? vm.mySpeedKmh : cameraSpeedKmh + 0.25 * (vm.mySpeedKmh - cameraSpeedKmh)
-        // `mySpeedKmh` is already zeroed below the stationary band, so "moving" is simply
-        // "non-zero". The 2 km/h this replaces sat inside that band and could never be the
-        // deciding comparison.
-        let isMoving    = vm.mySpeedKmh > 0
+        // From the view model's own movement signal, not the readout. `mySpeedKmh` is zeroed below
+        // the 4 km/h display band, so `> 0` silently meant "> 4 km/h": between 2 and 4 the map
+        // stopped re-centring on a rider still creeping forward, and if they had panned,
+        // `isFreeLooking` never auto-cleared and the viewport stayed frozen behind them.
+        let isMoving    = vm.isMoving
         let idleSeconds = Date().timeIntervalSince(lastInteractionDate)
         let shouldFollow = wasZero || (isMoving && idleSeconds >= 3.0)
         if isFreeLooking && shouldFollow { isFreeLooking = false }
@@ -2131,7 +2212,7 @@ struct RideNavigationView: View {
     /// because a third of the width can't hold them beside three values.
     private var landscapeStatsRow: some View {
         HStack(spacing: 10) {
-            barStat(label: "SPEED", value: vm.hasLocationFix ? String(format: "%.0f", vm.mySpeedKmh) : "--", unit: nil)
+            barStat(label: "SPEED", value: vm.hasSpeedFix ? String(format: "%.0f", vm.mySpeedKmh) : "--", unit: nil)
             barDivider
             barStat(label: "ETA", value: vm.etaString, unit: nil)
             barDivider
@@ -2560,7 +2641,7 @@ struct RideNavigationView: View {
         HStack(spacing: spacing) {
             barStat(
                 label: "SPEED",
-                value: vm.hasLocationFix ? String(format: "%.0f", vm.mySpeedKmh) : "--",
+                value: vm.hasSpeedFix ? String(format: "%.0f", vm.mySpeedKmh) : "--",
                 unit: showUnits ? "KM/H" : nil
             )
             barDivider
