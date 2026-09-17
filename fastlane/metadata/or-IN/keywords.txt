@@ -1,0 +1,1 @@
+group ride,bike ride,ମୋଟରସାଇକଲ ଜିପିଏସ,ଲାଇଭ ଲୋକେସନ,rider,touring,biker

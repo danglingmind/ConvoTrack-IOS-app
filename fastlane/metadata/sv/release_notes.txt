@@ -1,0 +1,8 @@
+• Live-navigeringen är mjukare och mer pålitlig
+• Förare utanför skärmen visas nu som kantmarkörer – tryck för att hoppa direkt till dem
+• Landskapsvyn är finslipad
+• Turhistoriken har nu filter så att du snabbt hittar en tidigare tur
+• Att redigera en tur är nu en hel sida i stället för ett trångt fönster
+• Inbjudningslänkar öppnar nu appen direkt
+• Turledare kan radera en tur och alla i lobbyn får veta det direkt
+• Tydligare och mer specifika felmeddelanden

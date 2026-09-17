@@ -1,0 +1,8 @@
+• A navegação em direto está mais fluida e fiável
+• Os motards fora do ecrã aparecem agora como marcadores na margem: toque para ir directamente até eles
+• Vista horizontal melhorada
+• O histórico de passeios tem agora filtros para encontrar rapidamente um passeio anterior
+• Editar um passeio é agora uma página inteira em vez de uma folha apertada
+• As ligações de convite abrem agora directamente a app
+• O líder pode eliminar um passeio e todos na sala são avisados de imediato
+• Mensagens de erro mais claras e específicas

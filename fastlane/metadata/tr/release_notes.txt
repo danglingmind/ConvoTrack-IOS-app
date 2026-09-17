@@ -1,0 +1,8 @@
+• Canlı navigasyon daha akıcı ve güvenilir
+• Ekran dışına çıkan motorcular artık kenarda işaret olarak görünüyor — dokunup doğrudan yanlarına gidin
+• Yatay görünüm iyileştirildi
+• Sürüş geçmişinde artık filtreler var, eski bir sürüşü hızla bulun
+• Sürüş düzenleme artık dar bir panel yerine tam sayfa
+• Davet bağlantıları artık doğrudan uygulamayı açıyor
+• Sürüş lideri sürüşü silebilir, lobideki herkes anında haberdar olur
+• Daha net ve açıklayıcı hata mesajları

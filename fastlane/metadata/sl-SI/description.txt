@@ -1,0 +1,35 @@
+Vozite kot skupina, ne kot raztegnjena vrsta luči.
+
+ConvoTrack ima vsakega motorista iz vaše skupine na enem zemljevidu v živo — nihče ne ostane zadaj na križišču, nihče ne ugiba, po katerem izvozu je zavil vodja, in nikomur se ni treba ustaviti in vprašati, kje so drugi.
+
+ZEMLJEVID SKUPINE V ŽIVO
+Vidite vsakega motorista v realnem času, skupaj z razdaljo med vami. Tisti, ki zdrsnejo z zaslona, se prikažejo kot oznake ob robu — vedno veste, kdo je zadaj in kako daleč.
+
+NAVIGACIJA ZAVOJ ZA ZAVOJEM
+Popolno vodenje do cilja, s časom prihoda in preostalo razdaljo ves čas na zaslonu. Ob načrtovanju vožnje lahko dodate vmesne postanke.
+
+ZBOR Z ENIM DOTIKOM
+Gorivo, hrana ali postanek za fotografijo? Pošljite poziv na zbor celotni skupini in izberite, kako daleč naprej se dobite. Vsak motorist takoj dobi lokacijo.
+
+KLIC V SILI
+Če kdo pade ali potrebuje pomoč, en dotik pošlje njegovo natančno lokacijo vsem v skupini.
+
+PRIDRUŽITEV V NEKAJ SEKUNDAH
+Vsaka vožnja ima šestznakovno kodo povabila. Delite povezavo, narekujte kodo ali skenirajte QR — motoristi so na zemljevidu, preden si nataknejo rokavice.
+
+VLOGE V SKUPINI
+Vodja Vožnje, Varuh Ritma, Varuh Zaledja in Voznik Formacije se dodelijo glede na to, kako je skupina res vozila, ne po vrstnem redu prijav.
+
+POVZETEK VOŽNJE
+Ko se vožnja konča, vsi dobijo prave številke: dejanski čas na cesti, prevoženo razdaljo, največjo vrzel, ki jo je skupina odprla, in končni vrstni red. Delite kartico s povzetkom z ekipo.
+
+ZGODOVINA VOŽENJ
+Vse vožnje, ki ste jih vodili ali se jim pridružili, na enem mestu.
+
+CONVOTRACK PRO
+Večje skupine, brez mesečne omejitve voženj, statistika v živo in ocene usklajenosti ter popoln arhiv zgodovine voženj za 365 dni.
+
+ConvoTrack Pro je naročnina s samodejnim podaljševanjem. Plačilo se ob potrditvi nakupa zaračuna na vaš račun Apple Account. Samodejno se podaljša, razen če je preklicana vsaj 24 ur pred koncem trenutnega obdobja. Naročnino upravljate v nastavitvah računa Apple Account.
+
+Pravilnik o zasebnosti: https://convotrack.in/privacy
+Pogoji uporabe: https://convotrack.in/terms

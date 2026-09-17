@@ -1,0 +1,8 @@
+• Navigasi langsung kini lebih mulus dan andal
+• Pengendara di luar layar kini muncul sebagai penanda di tepi — ketuk untuk langsung menuju mereka
+• Tampilan lanskap dipoles
+• Riwayat perjalanan kini punya filter, jadi mudah menemukan perjalanan lama
+• Mengedit perjalanan kini satu halaman penuh, bukan panel sempit
+• Tautan undangan kini langsung membuka aplikasi
+• Pemimpin bisa menghapus perjalanan, dan semua di lobi langsung diberi tahu
+• Pesan kesalahan lebih jelas dan spesifik

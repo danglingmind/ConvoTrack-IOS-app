@@ -36,10 +36,17 @@ struct RouteOption: Identifiable {
 enum GoogleDirectionsService {
 
     // trafficAware=true for route planning; false for fast reroute requests (< 500ms)
+    //
+    // `originHeading` is the direction of travel at `origin`, in degrees clockwise from north. The
+    // Routes API uses it to pick the side of the road the vehicle is on, which is the difference
+    // between a reroute that starts with a U-turn and one that assumes the rider can simply set off
+    // back the way they came. Pass nil whenever the caller has no trustworthy course — a stale or
+    // invented heading pins the route to the wrong carriageway.
     static func route(
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D,
-        trafficAware: Bool = true
+        trafficAware: Bool = true,
+        originHeading: Double? = nil
     ) async throws -> DirectionsResult {
         // Routes API v2 — POST, higher-density polylines, traffic-aware
         let url = URL(string: "https://routes.googleapis.com/directions/v2:computeRoutes")!
@@ -55,10 +62,15 @@ enum GoogleDirectionsService {
             forHTTPHeaderField: "X-Goog-FieldMask"
         )
 
+        var originLocation: [String: Any] = [
+            "latLng": ["latitude": origin.latitude, "longitude": origin.longitude]
+        ]
+        // Routes API takes the heading as a whole number of degrees in 0…359.
+        if let originHeading, originHeading.isFinite {
+            originLocation["heading"] = (Int(originHeading.rounded()) % 360 + 360) % 360
+        }
         let body: [String: Any] = [
-            "origin": [
-                "location": ["latLng": ["latitude": origin.latitude, "longitude": origin.longitude]]
-            ],
+            "origin": ["location": originLocation],
             "destination": [
                 "location": ["latLng": ["latitude": destination.latitude, "longitude": destination.longitude]]
             ],

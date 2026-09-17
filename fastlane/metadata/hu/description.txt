@@ -1,0 +1,35 @@
+Menjetek együtt, ne szétszakadt lámpasorként.
+
+A ConvoTrack a csoport minden motorosát egyetlen élő térképen tartja — senki nem szakad le egy kereszteződésnél, senkinek nem kell találgatnia, melyik lehajtón ment a vezető, és senkinek nem kell megállnia, hogy megkérdezze, hol vannak a többiek.
+
+ÉLŐ CSOPORTTÉRKÉP
+Lásd minden motorost valós időben, a köztetek lévő távolsággal együtt. Aki lecsúszik a képernyőről, a szélén jelenik meg jelölőként — mindig tudod, ki van mögötted és milyen messze.
+
+FORDULÓNKÉNTI NAVIGÁCIÓ
+Teljes útvonalvezetés a célig, az érkezési idő és a hátralévő táv folyamatosan a képernyőn. Az útvonal tervezésekor megállókat is felvehetsz.
+
+GYÜLEKEZŐ EGY KOPPINTÁSSAL
+Tankolás, evés vagy fotószünet? Küldj gyülekezőhívást az egész csoportnak, és válaszd ki, milyen messze előre találkozzatok. Minden motoros azonnal megkapja a helyszínt.
+
+VÉSZJELZÉS
+Ha valaki elesik vagy segítségre szorul, egyetlen koppintás elküldi a pontos helyzetét mindenkinek a csoportban.
+
+CSATLAKOZÁS MÁSODPERCEK ALATT
+Minden túrához hatkarakteres meghívókód tartozik. Oszd meg a linket, mondd be a kódot, vagy olvasd be a QR-kódot — a motorosok már a térképen vannak, mielőtt felhúznák a kesztyűt.
+
+SZEREPEK A CSOPORTBAN
+Túravezető, Tempótartó, Sereghajtó Őr és Formációs Motoros — abból jár ki, ahogy a csoport ténylegesen ment, nem a jelentkezési sorrendből.
+
+TÚRAÖSSZEGZÉS
+A túra végén mindenki megkapja a valós számokat: a ténylegesen úton töltött időt, a megtett távot, a csoport legnagyobb szakadását és a végső sorrendet. Oszd meg az összegző kártyát a csapattal.
+
+TÚRANAPLÓ
+Minden túra, amelyet vezettél vagy amelyen részt vettél, egy helyen.
+
+CONVOTRACK PRO
+Nagyobb csoportok, havi túrakorlát nélkül, élő statisztikák és összhangpontszámok, valamint teljes, 365 napos túraelőzmény-archívum.
+
+A ConvoTrack Pro automatikusan megújuló előfizetés. A díjat a vásárlás megerősítésekor terheljük az Apple Account fiókodra. Automatikusan megújul, hacsak legalább 24 órával az aktuális időszak vége előtt le nem mondod. Az előfizetést az Apple Account beállításaiban kezelheted.
+
+Adatvédelmi irányelvek: https://convotrack.in/privacy
+Felhasználási feltételek: https://convotrack.in/terms

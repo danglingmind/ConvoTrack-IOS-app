@@ -1,0 +1,8 @@
+• Navigacija v živo je bolj gladka in zanesljiva
+• Motoristi zunaj zaslona se zdaj prikažejo kot oznake ob robu – tapni jih in skoči naravnost do njih
+• Izpiljen ležeči pogled
+• Zgodovina voženj ima zdaj filtre, da hitro najdeš prejšnjo vožnjo
+• Urejanje vožnje je zdaj cela stran namesto tesnega okna
+• Povezave s povabilom se zdaj odprejo neposredno v aplikaciji
+• Vodja lahko izbriše vožnjo, vsi v predsobi pa to takoj izvedo
+• Jasnejša in bolj določna sporočila o napakah

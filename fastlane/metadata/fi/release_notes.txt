@@ -1,0 +1,8 @@
+• Live-navigointi on sujuvampaa ja luotettavampaa
+• Ruudun ulkopuolelle jäävät ajajat näkyvät nyt reunamerkkeinä – napauta ja hyppää suoraan heidän luokseen
+• Vaakanäkymä on viimeistelty
+• Ajohistoriassa on nyt suodattimet, joten löydät aiemman ajon nopeasti
+• Ajon muokkaus on nyt kokonainen sivu ahtaan paneelin sijaan
+• Kutsulinkit avautuvat nyt suoraan sovelluksessa
+• Ajon johtaja voi poistaa ajon, ja kaikki aulassa saavat siitä heti tiedon
+• Selkeämmät ja täsmällisemmät virheilmoitukset

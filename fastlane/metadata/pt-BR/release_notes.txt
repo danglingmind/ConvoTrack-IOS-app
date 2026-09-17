@@ -1,0 +1,8 @@
+• A navegação ao vivo está mais fluida e confiável
+• Motociclistas fora da tela agora aparecem como marcadores na borda: toque para ir direto até eles
+• Visualização em paisagem aprimorada
+• O histórico de rolês agora tem filtros para achar rapidamente um rolê anterior
+• Editar um rolê agora é uma página inteira em vez de uma folha apertada
+• Links de convite agora abrem direto no app
+• O líder pode excluir um rolê, e toda a galera na sala é avisada na hora
+• Mensagens de erro mais claras e específicas

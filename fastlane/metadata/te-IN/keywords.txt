@@ -1,0 +1,1 @@
+group ride,bike ride,మోటార్‌సైకిల్ జీపీఎస్,లైవ్ లొకేషన్,rider,touring,biker

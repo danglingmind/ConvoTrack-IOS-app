@@ -1,0 +1,8 @@
+• Dẫn đường trực tiếp mượt và ổn định hơn
+• Người lái ra khỏi màn hình giờ hiện thành dấu ở rìa — chạm để nhảy thẳng tới họ
+• Trau chuốt chế độ xem ngang
+• Lịch sử chuyến đi giờ có bộ lọc, tìm lại chuyến cũ rất nhanh
+• Sửa chuyến đi giờ là một trang đầy đủ thay vì bảng chật hẹp
+• Liên kết mời giờ mở thẳng vào ứng dụng
+• Trưởng đoàn có thể xóa chuyến đi, mọi người trong phòng chờ được báo ngay
+• Thông báo lỗi rõ ràng và cụ thể hơn

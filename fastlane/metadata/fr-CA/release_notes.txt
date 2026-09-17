@@ -1,0 +1,8 @@
+• La navigation en direct est plus fluide et plus fiable
+• Les motocyclistes hors écran apparaissent en marqueurs de bord : touchez-les pour y aller directement
+• Vue paysage peaufinée
+• L'historique des rides a des filtres pour retrouver vite une ride passée
+• Modifier une ride se fait maintenant sur une page complète au lieu d'une fiche à l'étroit
+• Les liens d'invitation ouvrent maintenant l'app directement
+• Le chef de ride peut supprimer une ride, et toute la gang dans le salon est avertie tout de suite
+• Messages d'erreur plus clairs et plus précis

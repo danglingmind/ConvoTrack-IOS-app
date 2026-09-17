@@ -1,0 +1,1 @@
+group ride,bike ride,મોટરસાઇકલ જીપીએસ,લાઇવ લોકેશન,rider,touring,રૂટ પ્લાનર,biker

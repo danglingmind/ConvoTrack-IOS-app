@@ -109,6 +109,22 @@ Both `RideLobbyView` and `RideNavigationView` use MapKit's `Map` with:
 - `Triangle` shape (defined in `RideNavigationView.swift`) as the pointer below map pins
 - Lobby map uses `.allowsHitTesting(false)` for a non-interactive preview
 
+### Demo / live-tracking recordings
+Recording a multi-rider demo on simulators is covered by the **`ride-demo` skill**
+(`.claude/skills/ride-demo/`) — it boots N sims, drives the UI by coordinate, moves riders
+along a real Google route at an exact fixed spacing, records, and encodes.
+
+Non-obvious constraints it encodes (all established by measurement, don't rediscover them):
+- **Record ONE device only.** Three concurrent `simctl` encoders drop >50% of frames
+  (130 s of a 241 s take frozen). One encoder → zero dropped frames. Multiple angles = multiple passes.
+- **GPS: `--distance=2`, never `--interval=1`** — the latter teleports the rider 20 m once per second.
+- **Riders must start at route km 0.** Summary distance is the leader's *route progress*, so a
+  mid-route start credits the teleport as ridden (one run reported 151 km/h, 7.8 km split).
+- **Verify place names via Places Autocomplete before typing** — "Kanavepura" resolves to
+  "Kanakapura", 93 km away.
+- Switching Google accounts on a sim requires `simctl erase`; signing out in-app leaves the
+  Safari/ASWebAuthenticationSession cookie and silently re-signs the same account.
+
 ### Backend Spec
 The planned backend (Node.js/Fastify + Socket.IO + PostgreSQL + Clerk auth) is documented at `spec/BackendSpecV2.jsx` — a self-contained React task board. Open it in a browser or any JSX-capable preview. Key contracts:
 - REST: `POST /rides`, `GET /rides/:rideId`, `GET /rides/join/:inviteCode`, etc.

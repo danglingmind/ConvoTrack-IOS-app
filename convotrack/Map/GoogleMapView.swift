@@ -400,10 +400,17 @@ extension GoogleMapView {
                 guard !coords.isEmpty else { return 0 }
                 var h = Hasher()
                 h.combine(coords.count)
-                h.combine(coords.first!.latitude.bitPattern)
-                h.combine(coords.first!.longitude.bitPattern)
-                h.combine(coords.last!.latitude.bitPattern)
-                h.combine(coords.last!.longitude.bitPattern)
+                // Endpoints plus an even sample of the interior. Count and endpoints alone
+                // identified a route by its two ends, so a reroute that happened to run between
+                // the same two points with the same vertex count — the ordinary shape of "same
+                // start, same destination, different road" — was mistaken for the line already on
+                // the map and never redrawn. Sixteen interior probes is a fixed cost per update
+                // and separates any two routes that differ anywhere but their endpoints.
+                for k in 0..<16 {
+                    let idx = (coords.count - 1) * k / 15
+                    h.combine(coords[idx].latitude.bitPattern)
+                    h.combine(coords[idx].longitude.bitPattern)
+                }
                 return h.finalize()
             }()
             guard newVersion != key else { return }

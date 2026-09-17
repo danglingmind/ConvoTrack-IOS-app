@@ -1,0 +1,7 @@
+# built on demand by lib.sh:ensure_bins
+scripts/tap
+scripts/drag
+# per-machine device UDIDs, written by setup_sims.sh
+scripts/devices.conf
+# derived data from the first build
+scripts/.build/

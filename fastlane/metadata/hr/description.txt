@@ -1,0 +1,35 @@
+Vozite kao grupa, a ne kao razvučen niz farova.
+
+ConvoTrack drži svakog motorista iz vaše grupe na jednoj karti uživo — nitko ne ostaje iza na raskrižju, nitko ne pogađa kojim je izlazom otišao vođa i nitko se ne mora zaustavljati da pita gdje su ostali.
+
+KARTA GRUPE UŽIVO
+Vidite svakog motorista u stvarnom vremenu, zajedno s udaljenošću između vas. Oni koji nestanu s ekrana prikazuju se kao oznake na rubu — uvijek znate tko je iza vas i koliko daleko.
+
+NAVIGACIJA ZAVOJ PO ZAVOJ
+Potpuno vođenje do odredišta, s vremenom dolaska i preostalom udaljenošću stalno na ekranu. Pri planiranju vožnje možete dodati usputna stajališta.
+
+OKUPLJANJE JEDNIM DODIROM
+Gorivo, hrana ili stanka za fotografiju? Pošaljite poziv na okupljanje cijeloj grupi i odaberite koliko naprijed se svi trebaju naći. Svaki motorist odmah dobiva lokaciju.
+
+HITNO UPOZORENJE
+Ako netko padne ili treba pomoć, jedan dodir šalje njegovu točnu lokaciju svima u grupi.
+
+PRIDRUŽIVANJE U NEKOLIKO SEKUNDI
+Svaka vožnja ima šesteroznakovni kod pozivnice. Podijelite poveznicu, izdiktirajte kod ili skenirajte QR — motoristi su na karti prije nego što navuku rukavice.
+
+ULOGE U GRUPI
+Vođa Vožnje, Čuvar Ritma, Čuvar Začelja i Vozač Formacije dodjeljuju se prema tome kako je grupa stvarno vozila, a ne prema redoslijedu prijava.
+
+SAŽETAK VOŽNJE
+Kad vožnja završi, svi dobivaju prave brojke: stvarno vrijeme na cesti, prijeđenu udaljenost, najveći razmak koji je grupa otvorila i konačni poredak. Podijelite karticu sa sažetkom s ekipom.
+
+POVIJEST VOŽNJI
+Sve vožnje koje ste vodili ili u kojima ste sudjelovali, na jednom mjestu.
+
+CONVOTRACK PRO
+Veće grupe, bez mjesečnog ograničenja vožnji, statistika uživo i ocjene usklađenosti te potpuni arhiv povijesti vožnji od 365 dana.
+
+ConvoTrack Pro je pretplata koja se automatski obnavlja. Plaćanje se naplaćuje s vašeg Apple Account računa pri potvrdi kupnje. Obnavlja se automatski osim ako se ne otkaže najmanje 24 sata prije kraja tekućeg razdoblja. Pretplatom upravljate u postavkama Apple Account računa.
+
+Pravila privatnosti: https://convotrack.in/privacy
+Uvjeti korištenja: https://convotrack.in/terms

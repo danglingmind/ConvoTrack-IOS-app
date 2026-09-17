@@ -1,0 +1,8 @@
+• La navegación en directo es más fluida y fiable
+• Los moteros fuera de pantalla aparecen como marcadores en el borde: tócalos para saltar directamente
+• Vista horizontal pulida
+• El historial de rutas ya tiene filtros para encontrar rápido una ruta pasada
+• Editar una ruta es ahora una página completa en lugar de una hoja estrecha
+• Los enlaces de invitación abren la app directamente
+• El líder de ruta puede eliminar una ruta y todos en la sala se enteran al momento
+• Mensajes de error más claros y concretos

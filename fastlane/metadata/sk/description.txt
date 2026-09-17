@@ -1,0 +1,35 @@
+Jazdite ako zohratá skupina, nie ako roztiahnutý rad svetiel.
+
+ConvoTrack drží každého motorkára z vašej skupiny na jednej živej mape — nikto sa nestratí na križovatke, nikto nehádá, ktorým zjazdom išiel vedúci, a nikto nemusí zastavovať, aby sa spýtal, kde sú ostatní.
+
+ŽIVÁ MAPA SKUPINY
+Vidíte každého motorkára v reálnom čase vrátane vzdialenosti medzi vami. Tí, ktorí zmiznú z obrazovky, sa zobrazia ako značky pri okraji — vždy viete, kto je vzadu a ako ďaleko.
+
+NAVIGÁCIA ZÁKRUTU PO ZÁKRUTE
+Kompletné navádzanie do cieľa s časom príchodu a zostávajúcou vzdialenosťou stále na obrazovke. Pri plánovaní jazdy môžete pridať zastávky po ceste.
+
+ZRAZ JEDNÝM ŤUKNUTÍM
+Palivo, jedlo alebo zastávka na fotku? Pošlite výzvu na zraz celej skupine a vyberte, ako ďaleko vpredu sa máte stretnúť. Každý motorkár dostane miesto okamžite.
+
+NÚDZOVÝ ALARM
+Ak niekto spadne alebo potrebuje pomoc, jedno ťuknutie odošle jeho presnú polohu všetkým v skupine.
+
+PRIPOJENIE ZA PÁR SEKÚND
+Každá jazda má šesťznakový kód pozvánky. Zdieľajte odkaz, nadiktujte kód alebo naskenujte QR — motorkári sú na mape skôr, ako si stihnú natiahnuť rukavice.
+
+ROLE V SKUPINE
+Vedúci Jazdy, Strážca Tempa, Strážca Konca a Jazdec Formácie sa udeľujú podľa toho, ako skupina naozaj išla, nie podľa poradia prihlásenia.
+
+ZHRNUTIE JAZDY
+Po skončení dostane každý skutočné čísla: reálny čas na ceste, prejdenú vzdialenosť, najväčšiu medzeru, ktorú skupina vytvorila, a konečné poradie. Zdieľajte kartu so zhrnutím s partiou.
+
+HISTÓRIA JÁZD
+Všetky jazdy, ktoré ste viedli alebo absolvovali, na jednom mieste.
+
+CONVOTRACK PRO
+Väčšie skupiny, žiadny mesačný limit jázd, živé štatistiky a skóre zladenosti a kompletný archív histórie jázd za 365 dní.
+
+ConvoTrack Pro je automaticky obnovované predplatné. Platba sa strhne z vášho účtu Apple Account pri potvrdení nákupu. Obnovuje sa automaticky, ak ho nezrušíte aspoň 24 hodín pred koncom aktuálneho obdobia. Predplatné spravujete v nastaveniach účtu Apple Account.
+
+Zásady ochrany osobných údajov: https://convotrack.in/privacy
+Podmienky služby: https://convotrack.in/terms

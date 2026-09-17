@@ -89,6 +89,10 @@ struct ProfileView: View {
                             appState.inviteCode = nil
                             appState.currentRide = nil
                             try? await Clerk.shared.auth.signOut()
+                            // Signing out is the one moment we know the rider may want a different
+                            // account next time; it arms the cookie-free web session that lets
+                            // Google ask which one. See `WebSignInSession`.
+                            WebSignInSession.needsAccountChoice = true
                             dismiss()
                         }
                     }) {

@@ -262,11 +262,74 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// layer, which a reroute deliberately never touches — so navigation must not measure itself
     /// against a plan the rider has already abandoned.
     private var navRoute: [CLLocationCoordinate2D] = []
-    /// Forward-only progress index into `navRoute`.
+    /// Forward-only progress index into `navRoute`, except when `locateAnywhereOnRoute` re-acquires.
     private var navSegmentIndex: Int = 0
+    /// Where the rider sits on `navRoute` as of the last fix — segment, foot of the perpendicular,
+    /// and offset.
+    ///
+    /// ONE search per fix, consumed by the off-route test, the turn banner's progress, the polyline
+    /// trim and distance-to-goal alike. Those four used to run their own searches over three
+    /// different windows (and, in the trim's case, over a single segment with no search at all),
+    /// which is how the drawn line came to disagree with everything else about where the rider was.
+    private var navLocation: RouteLocation? = nil
     /// Perpendicular distance from the last fix to `navRoute`, as measured by `checkOffRoute`.
     /// The undebounced truth behind `isOffRoute`, and what gates polyline trimming.
     private var lastRouteOffsetMeters: Double = .infinity
+
+    /// How far the rider's course may diverge from the direction the route RUNS before this counts
+    /// as riding the wrong way down it, in degrees.
+    ///
+    /// Well past a right angle, so nothing a rider does while genuinely following the route can
+    /// trip it: a hairpin is entered and left at a hundred-odd degrees to the road's mean bearing,
+    /// and the look-ahead `routeBearingAhead` measures over smooths those anyway. Only travel that
+    /// is substantially the reverse of the line clears 120°, and travel that is substantially the
+    /// reverse of the line is precisely what nothing else here can see.
+    private static let wrongWayHeadingDeltaDegrees: Double = 120
+    /// Consecutive wrong-way fixes before the followed route is treated as abandoned. Matches the
+    /// lateral off-route debounce: three seconds of agreement, not one noisy bearing.
+    private static let wrongWayConfirmCount = 3
+
+    /// This fix's raw verdict: the rider is sitting on the line but pointed back down it.
+    ///
+    /// Undebounced on purpose — it gates the polyline trim and the road-bearing override, both of
+    /// which must stop the moment the direction disagrees. Snapping the chevron to the road's
+    /// bearing while the rider rides the other way is what makes the marker flip between the way
+    /// they are going and the way the route goes, once per fix.
+    private var isWrongWayFix = false
+    private var wrongWayCount = 0
+    /// Along-route progress at the previous fix, for the regression half of the wrong-way test.
+    private var previousProgressMeters: Double? = nil
+
+    /// How far, along the route, a U-turn's own junction still counts as being performed.
+    ///
+    /// The one place where riding against the line is exactly what the route asked for. A U-turn's
+    /// two legs run within metres of each other — on an undivided road, within nothing at all — so
+    /// through the turn the nearest segment can be either of them, and half of those readings put
+    /// the road's bearing 180° from the rider while they do precisely as instructed. Sixty metres
+    /// either side of the junction covers the approach, the apex and the exit at any speed a U-turn
+    /// is taken at.
+    private static let uTurnSuppressionMeters: Double = 60
+    /// `isWrongWayFix` held for `wrongWayConfirmCount` consecutive fixes — the point at which the
+    /// route is treated as abandoned and a reroute is asked for.
+    private var isWrongWay = false
+
+    /// Metres per degree of latitude. Constant enough at any latitude for the spans measured here.
+    fileprivate static let metersPerDegreeLat: Double = 111_132
+    /// Metres per degree of longitude at the equator; scaled by cos(latitude) at the point of use.
+    fileprivate static let metersPerDegreeLng: Double = 111_320
+
+    /// How far AHEAD of the current progress index the per-fix search looks, in metres.
+    ///
+    /// Sized in metres rather than in vertices, which is what the old fixed 200-segment window got
+    /// wrong. Google's HIGH_QUALITY geometry runs 2–3 m per vertex through a bend and tens of
+    /// metres on an open highway, so 200 segments is anywhere between 500 m and 8 km depending on
+    /// where the rider happens to be. At the dense end that is less than twenty seconds of
+    /// motorway driving: one skipped fix — a tunnel, the app suspended in the background — put the
+    /// true position outside the window, nothing inside it was within the acceptance bound, and
+    /// the index then froze for the REST OF THE RIDE.
+    fileprivate static let routeLookaheadMeters: Double = 3_000
+    /// How far BEHIND the index the search may reach, to absorb GPS jitter around a vertex.
+    fileprivate static let routeLookbehindMeters: Double = 60
     private var consecutiveOffCount: Int = 0
     private var consecutiveOnCount: Int = 0
     private let offRouteConfirmCount = 3   // consecutive off-route readings before flagging
@@ -320,9 +383,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             // value also drives the camera bearing, letting the compass win swung the entire map
             // with the handlebars instead of following the road.
             guard self.isCourseStale else { return }
-            let raw = abs(heading - self.userHeading).truncatingRemainder(dividingBy: 360)
-            let delta = min(raw, 360 - raw)
-            guard delta >= 5 else { return }
+            guard Self.headingDelta(heading, self.userHeading) >= 5 else { return }
             self.userHeading = heading
         }
         LocationService.shared.requestPermission()
@@ -475,7 +536,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
     /// Nearest point on `route` to `point`, projected onto the closest segment (not just the nearest
     /// vertex). Returns the segment's start index and the projected coordinate. Uses the same
-    /// flat-earth frame as `trimActiveRoute` / `distanceToLineSegment`.
+    /// flat-earth frame as `segmentProjection`.
     ///
     /// `from` bounds the search to segments at or after that index — see the monotone stamping in
     /// `stampAlongRouteDistances`. It defaults to 0, i.e. the whole route.
@@ -690,18 +751,18 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // updateCurrentStep measures progress from. Reversed, every step decision used the
         // previous fix's progress.
         checkOffRoute(location: location)
-        updateCurrentStep(location: location)
+        updateCurrentStep()
         refreshEtaIfNeeded(from: location)
 
-        if needsInitialRouteCheck && !navRoute.isEmpty {
+        if needsInitialRouteCheck && navRoute.count >= 2 {
             needsInitialRouteCheck = false
-            if minimumDistanceToUpcomingRoute(from: location) > offRouteThresholdMeters,
-               !isRerouteInFlight {
+            if lastRouteOffsetMeters > offRouteThresholdMeters, !isRerouteInFlight {
                 isOffRoute = true
                 consecutiveOffCount = offRouteConfirmCount
                 lastRerouteOrigin = location
                 let coord = location.coordinate
-                Task { await calculateFullReroute(from: coord) }
+                let heading = Self.validCourse(location)
+                Task { await calculateFullReroute(from: coord, heading: heading) }
             }
         }
 
@@ -710,14 +771,30 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // after a jitter spike cleared — the head stayed frozen wherever it was last cut while the
         // rider drove on, detaching it from the marker for exactly as long as the debounce ran.
         // Proximity to the route we are following is the real precondition for trimming it.
-        if lastRouteOffsetMeters <= offRouteThresholdMeters { trimActiveRoute(to: location) }
+        //
+        // Direction gates it too, not just the offset. A rider riding the route backwards is within
+        // the offset by definition, and trimming to them re-cuts the bright line backwards fix by
+        // fix while the road-bearing override spins the chevron to face the way the route goes
+        // rather than the way they are going — the two fighting over the marker once per fix.
+        // Freezing the line where it was, exactly as off-route does, leaves the marker on the
+        // honest raw fix until the reroute lands.
+        if lastRouteOffsetMeters <= offRouteThresholdMeters, !isWrongWayFix {
+            trimActiveRoute(to: location)
+        }
 
         // Drive DIST/ETA from the locally-trimmed remaining route rather than the server's
         // `progress`. The server value is a nearest-point projection that reads ~full (zeroing
         // distance-to-goal) whenever the rider isn't cleanly on-route — e.g. the simulator's fixed
         // default location. `activeRouteCoordinates` starts at the rider's projected position and
         // is frozen while off-route, so its length is a stable remaining-distance signal.
-        if activeRouteCoordinates.count >= 2 {
+        // Taken from the same `navLocation` the polyline was cut with — total route length minus
+        // progress — so the readout cannot disagree with the drawn line. Measuring the trimmed
+        // polyline's own length instead (the previous approach) ran a second, independent
+        // full-route nearest-point search per fix and went stale for as long as trimming was
+        // gated off.
+        if navLocation != nil, let navLength = navRouteCumulative.last, navLength > 0 {
+            myDistanceToGoalKm = max(0, navLength - progressAlongRoute()) / 1000
+        } else if activeRouteCoordinates.count >= 2 {
             myDistanceToGoalKm = Self.remainingRouteLength(activeRouteCoordinates, from: location) / 1000
         }
 
@@ -898,11 +975,20 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         for i in 0..<sorted.count - 1 {
             let origin = CLLocationCoordinate2D(latitude: sorted[i].lat,   longitude: sorted[i].lng)
             let dest   = CLLocationCoordinate2D(latitude: sorted[i+1].lat, longitude: sorted[i+1].lng)
-            if let result = try? await GoogleDirectionsService.route(from: origin, to: dest) {
-                allCoords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
-                totalTime += result.durationSeconds
-                steps += Self.makeNavSteps(from: result.steps)
+            // A skipped leg is not a degraded route, it is a WRONG one: the polyline then runs
+            // dead-straight from one stop to the next, across whatever happens to be in between.
+            // Abandoning the whole recompute leaves `storedRoute` to supply the geometry below,
+            // which is also what the server measures everyone against.
+            guard let result = await Self.routeLeg(from: origin, to: dest, trafficAware: true) else {
+                allCoords = []
+                steps = []
+                cumulativeStopTimes = []
+                totalTime = 0
+                break
             }
+            allCoords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
+            totalTime += result.durationSeconds
+            steps += Self.makeNavSteps(from: result.steps)
             cumulativeStopTimes.append(totalTime)
         }
 
@@ -993,9 +1079,9 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// Comparing progress against each step's along-route end is a pure function of position, so
     /// it self-corrects: passing a turn advances by itself, and several steps can be crossed in
     /// one fix.
-    private func updateCurrentStep(location: CLLocation) {
+    private func updateCurrentStep() {
         guard !navSteps.isEmpty else { return }
-        let progress = progressAlongRoute(location)
+        let progress = progressAlongRoute()
 
         // First step that still ends ahead of us.
         //
@@ -1048,15 +1134,24 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         return ("Arrive at destination", "ARRIVE", last.endDistanceAlongRoute)
     }
 
-    /// Rider's distance along the drawn route. Built on `navSegmentIndex`, which
-    /// `advanceRouteProgress` only ever moves forward inside a window — so progress cannot jump
-    /// backwards (or leap ahead) where a route passes close to itself.
-    private func progressAlongRoute(_ location: CLLocation) -> Double {
+    /// Rider's distance along the drawn route, read off the single `navLocation` the fix
+    /// computed. `locateOnNavRoute` only ever moves that forward inside a window — barring a
+    /// deliberate re-acquire — so progress cannot jump backwards (or leap ahead) where a route
+    /// passes close to itself.
+    private func progressAlongRoute() -> Double {
+        guard let hit = navLocation else { return 0 }
+        return progressAlongRoute(at: hit)
+    }
+
+    /// The rider's distance along `navRoute` at `hit`.
+    private func progressAlongRoute(at hit: RouteLocation) -> Double {
         guard navRoute.count >= 2,
               navRouteCumulative.count == navRoute.count else { return 0 }
-        let i = min(navSegmentIndex, navRoute.count - 2)
+        // Reads the location the fix already computed rather than re-projecting, so progress
+        // cannot disagree with the drawn polyline about which segment the rider is on.
+        let i = min(hit.segmentIndex, navRoute.count - 2)
         let a = navRoute[i]
-        let projected = Self.projectOntoSegment(location.coordinate, a: a, b: navRoute[i + 1])
+        let projected = hit.point
         let alongSegment = CLLocation(latitude: a.latitude, longitude: a.longitude)
             .distance(from: CLLocation(latitude: projected.latitude, longitude: projected.longitude))
         return navRouteCumulative[i] + alongSegment
@@ -1216,11 +1311,12 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// Returns the clamped foot of the perpendicular, the segment parameter `t` (0 = at `a`,
     /// 1 = at `b`), and the metric distance from `point` to that foot. `t` matters to callers as
     /// much as the point does: `t == 1` means the projection ran off the far end, i.e. the rider
-    /// is already PAST this segment — which is how `advanceRouteProgress` tells "sitting on this
-    /// segment" apart from "near its end, heading away".
+    /// is already PAST this segment — which is how `scanSegments` tells "sitting on this segment"
+    /// apart from "near its end, heading away".
     ///
-    /// One implementation for all three former copies of this math (progress tracking, route
-    /// trimming, off-route distance), so they cannot disagree about where the rider is.
+    /// One implementation for all four former copies of this math (progress tracking, route
+    /// trimming, off-route distance, remaining length), so they cannot disagree about where the
+    /// rider is.
     private static func segmentProjection(
         of point: CLLocationCoordinate2D,
         a: CLLocationCoordinate2D,
@@ -1237,18 +1333,15 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             latitude:  a.latitude  + t * (b.latitude  - a.latitude),
             longitude: a.longitude + t * (b.longitude - a.longitude)
         )
-        let distance = CLLocation(latitude: point.latitude, longitude: point.longitude)
-            .distance(from: CLLocation(latitude: foot.latitude, longitude: foot.longitude))
-        return (foot, t, distance)
-    }
-
-    /// Closest point to `point` on the segment a→b.
-    private static func projectOntoSegment(
-        _ point: CLLocationCoordinate2D,
-        a: CLLocationCoordinate2D,
-        b: CLLocationCoordinate2D
-    ) -> CLLocationCoordinate2D {
-        segmentProjection(of: point, a: a, b: b).point
+        // Equirectangular rather than geodesic. This runs hundreds of times per GPS fix inside
+        // `locateOnRoute`, and `CLLocation.distance(from:)` is two orders of magnitude more
+        // expensive than the arithmetic above it. Over the tens of metres a perpendicular offset
+        // ever spans the two agree to well under a centimetre, which is noise against a 40 m
+        // off-route threshold. It is also what made the old code afford only a 200-segment window;
+        // the cheap distance is what lets the window be sized in metres instead.
+        let dLat = (point.latitude  - foot.latitude)  * Self.metersPerDegreeLat
+        let dLng = (point.longitude - foot.longitude) * Self.metersPerDegreeLng * cosLat
+        return (foot, t, (dLat * dLat + dLng * dLng).squareRoot())
     }
 
     /// Keeps `etaSecondsRemaining` moving on every fix, and re-asks the Routes API for a
@@ -1294,9 +1387,13 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             remainingStops.removeFirst()
         }
 
-        advanceRouteProgress(to: location)
-        lastRouteOffsetMeters = minimumDistanceToUpcomingRoute(from: location)
-        let rawOffRoute = lastRouteOffsetMeters > offRouteThresholdMeters
+        locateOnNavRoute(location)
+        updateWrongWay(location: location)
+        // Two ways to have left the route, and the second is invisible to the first. Distance
+        // answers "am I on this road"; `isWrongWay` answers "am I going down it" — riding the
+        // planned road in reverse holds the offset at a few metres indefinitely, so the distance
+        // test alone waits for the rider to stray sideways before it admits anything is wrong.
+        let rawOffRoute = lastRouteOffsetMeters > offRouteThresholdMeters || isWrongWay
 
         if rawOffRoute {
             consecutiveOffCount += 1
@@ -1306,9 +1403,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             consecutiveOffCount = 0
         }
 
-        if !isOffRoute && consecutiveOffCount >= offRouteConfirmCount {
+        // `isWrongWay` carries its own confirmation count, so it flags immediately rather than
+        // waiting out a second three-fix debounce on top of the one it has already served.
+        if !isOffRoute && (isWrongWay || consecutiveOffCount >= offRouteConfirmCount) {
             isOffRoute = true
-        } else if isOffRoute && consecutiveOnCount >= onRouteClearCount {
+        } else if isOffRoute && !isWrongWay && consecutiveOnCount >= onRouteClearCount {
             isOffRoute = false
         }
 
@@ -1318,17 +1417,47 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             if let last = lastRerouteOrigin, location.distance(from: last) < 200 { return }
             lastRerouteOrigin = location
             let coord = location.coordinate
-            Task { await self.calculateFullReroute(from: coord) }
+            let heading = Self.validCourse(location)
+            Task { await self.calculateFullReroute(from: coord, heading: heading) }
         } else {
             isRerouteInFlight = false
             lastRerouteOrigin = nil
         }
     }
 
+    /// One Directions leg, retried once before giving up.
+    ///
+    /// The retry is what makes failing closed affordable: most leg failures are a transient 429 or
+    /// a dropped connection on a moving bike, and without a second attempt a single blip would
+    /// discard an otherwise good route.
+    private static func routeLeg(
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D,
+        trafficAware: Bool = false,
+        originHeading: Double? = nil
+    ) async -> DirectionsResult? {
+        for attempt in 0..<2 {
+            if let result = try? await GoogleDirectionsService.route(
+                from: origin, to: destination, trafficAware: trafficAware, originHeading: originHeading
+            ) {
+                return result
+            }
+            if attempt == 0 { try? await Task.sleep(nanoseconds: 300_000_000) }
+        }
+        return nil
+    }
+
     /// Recalculates the full remaining route from the user's current position through
     /// all remaining stops to the destination, writing the result into activeRouteCoordinates.
     /// The original routeCoordinates is never touched — it stays as the dim planned-route layer.
-    private func calculateFullReroute(from origin: CLLocationCoordinate2D) async {
+    ///
+    /// `heading` is the rider's own direction of travel, handed to the Routes API so the reroute
+    /// leaves from the side of the road they are actually on. Without it a reroute asked for while
+    /// riding the wrong way comes back running straight back down the road the rider has just come
+    /// along, as if they could reverse — an instruction nobody can follow, which puts them against
+    /// the new route on the very next fix and rerouting again 200 m later. With it, Google returns
+    /// the U-turn.
+    private func calculateFullReroute(from origin: CLLocationCoordinate2D, heading: Double? = nil) async {
         guard !remainingStops.isEmpty else { return }
         isRerouteInFlight = true
         let stops = [origin] + remainingStops
@@ -1338,9 +1467,21 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // longer on the path.
         var steps: [NavStep] = []
         for i in 0..<stops.count - 1 {
-            guard let result = try? await GoogleDirectionsService.route(
-                from: stops[i], to: stops[i + 1], trafficAware: false
-            ) else { continue }
+            // Every leg or none. Skipping one used to splice a dead-straight line between two
+            // stops into the followed route; skipping the FIRST one was worse still, because the
+            // reroute then no longer began at the rider — navigation adopted a polyline starting
+            // at some stop down the road, reset progress to its head, immediately declared the
+            // rider off-route, and re-rerouted every 200 m for the rest of the ride. An abandoned
+            // reroute simply leaves the previous route in place and lets the next fix try again.
+            // The heading applies to the FIRST leg only — it describes where the rider is pointed
+            // now, and every later leg starts from a stop they have yet to reach.
+            guard let result = await Self.routeLeg(
+                from: stops[i], to: stops[i + 1],
+                originHeading: i == 0 ? heading : nil
+            ) else {
+                isRerouteInFlight = false
+                return
+            }
             coords += (i == 0) ? result.coordinates : Array(result.coordinates.dropFirst())
             steps += Self.makeNavSteps(from: result.steps)
         }
@@ -1363,6 +1504,13 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         etaSecondsRemaining = nil
         lastEtaRefresh      = .distantPast
         navRoute            = route
+        navLocation         = nil
+        // The verdict belonged to the route we just abandoned; the new one starts at the rider,
+        // and progress is measured in a new frame, so the previous figure means nothing here.
+        isWrongWayFix       = false
+        wrongWayCount       = 0
+        isWrongWay          = false
+        previousProgressMeters = nil
         navRouteCumulative  = Self.cumulativeDistances(route)
         navSegmentIndex     = 0
         navSteps            = Self.stampAlongRouteDistances(steps, route: route, cumulative: navRouteCumulative)
@@ -1374,31 +1522,254 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     }
 
     /// Advance `navSegmentIndex` to the closest upcoming segment, never backwards.
-    private func advanceRouteProgress(to location: CLLocation) {
-        guard navRoute.count >= 2 else { return }
-        let lookEnd = min(navRoute.count - 2, navSegmentIndex + 200)
-        guard lookEnd >= navSegmentIndex else { return }
+    /// Finds the rider on `navRoute` and publishes the result into `navLocation`,
+    /// `navSegmentIndex` and `lastRouteOffsetMeters`.
+    ///
+    /// Two passes. The windowed one is the normal case and keeps progress monotone, which is what
+    /// stops a noisy fix from throwing the index onto the other carriageway of a divided road or
+    /// the return leg of an out-and-back. The full-route pass runs only once the window has failed
+    /// to put the rider on the road at all, and its result is taken only if it does — that is the
+    /// recovery the old code had no equivalent of, so a single GPS gap wider than the fixed
+    /// 200-segment window froze the index for the remainder of the ride and left the bright line
+    /// anchored wherever it had last been cut.
+    private func locateOnNavRoute(_ location: CLLocation) {
+        let windowed = Self.locateOnRoute(
+            navRoute, cumulative: navRouteCumulative,
+            from: location.coordinate, fromIndex: navSegmentIndex
+        )
 
-        var minDist = Double.infinity
-        var bestIdx = navSegmentIndex
-        for i in navSegmentIndex...lookEnd {
-            let hit = Self.segmentProjection(of: location.coordinate, a: navRoute[i], b: navRoute[i + 1])
-            if hit.distance < minDist { minDist = hit.distance; bestIdx = i }
-            // Stop early only when the rider is sitting ON this segment — `t < 1` — not merely
-            // close to its far endpoint. The old `minDist < 5` break tested proximity alone, so on
-            // dense curve geometry (Google polylines run 2–3 m per vertex through a bend) the very
-            // first segment tried, the one already behind the rider, kept satisfying it and the
-            // index never advanced. `trimActiveRoute` then clamped the polyline head to a vertex
-            // the rider had already driven through: the bright line's start stalled while the
-            // chevron carried on, then jumped to catch up — the disjointed, uneven-pace head this
-            // search feeds.
-            if hit.distance < 5 && hit.t < 0.999 { break }
+        var accepted = windowed
+        if windowed == nil || windowed!.distance > offRouteThresholdMeters {
+            if let reacquired = reacquireOnNavRoute(from: location.coordinate) {
+                accepted = reacquired
+            }
         }
-        // Only advance if user is actually near the route — prevents a far-away GPS fix
-        // from jumping the index to the end of a short route, which caused the straight-line bug.
-        if bestIdx > navSegmentIndex && minDist <= 80 {
-            navSegmentIndex = bestIdx
+        guard let accepted else { return }
+
+        // Detection always sees the fresh measurement...
+        lastRouteOffsetMeters = accepted.distance
+        // ...but progress is committed only while the rider is genuinely on the road. A fix that
+        // has left the route still has a nearest point on it, and that point runs forward along
+        // the line as the rider drives away parallel to it — committing it would walk the index
+        // (and with it the turn banner and distance-to-goal) down a road nobody is on, and on a
+        // ride with no stops left to reroute through it would eventually report arrival. Holding
+        // the last on-route position is also what the frozen polyline already implies.
+        if accepted.distance <= offRouteThresholdMeters {
+            navLocation = accepted
+            navSegmentIndex = accepted.segmentIndex
         }
+    }
+
+    /// The full-route re-acquire, accepted only when it lands AHEAD of the progress already
+    /// committed.
+    ///
+    /// The re-acquire exists for one failure: a gap in the fixes — a tunnel, the app suspended in
+    /// the background — carrying the rider past the end of the windowed search. That gap always
+    /// moves them FORWARD. A match found behind the committed progress is therefore never the case
+    /// this is for; it is the rider riding back down the route, and taking it is what made that
+    /// invisible. The lateral offset it reports is a couple of metres — the rider is exactly on the
+    /// road, just facing the other way — so `checkOffRoute` saw a rider comfortably on-route, never
+    /// rerouted, and the index walked backwards down the line while the turn banner (forward-only
+    /// by construction) stayed where it was.
+    ///
+    /// Refusing it leaves the windowed distance standing, which grows as the rider rides away from
+    /// the window's tail, so the ordinary off-route test trips within a hundred-odd metres and the
+    /// reroute follows. That is the second net under `isWrongWay`, and the one that still works
+    /// when the fixes carry no usable course at all — crawling in traffic, or a fix with no course.
+    ///
+    /// `routeLookbehindMeters` of slack, the same the windowed search allows, so jitter around a
+    /// vertex is not mistaken for a reversal.
+    private func reacquireOnNavRoute(from coordinate: CLLocationCoordinate2D) -> RouteLocation? {
+        guard let candidate = Self.locateAnywhereOnRoute(navRoute, from: coordinate),
+              candidate.distance <= offRouteThresholdMeters else { return nil }
+        guard let here = navLocation else { return candidate }
+        let committed = progressAlongRoute(at: here)
+        let found = progressAlongRoute(at: candidate)
+        return found >= committed - Self.routeLookbehindMeters ? candidate : nil
+    }
+
+    /// Refreshes `isWrongWayFix`, `wrongWayCount` and `isWrongWay` from this fix.
+    ///
+    /// Every other test here measures distance, and distance alone cannot tell "riding along the
+    /// route" from "riding back down it". Ride the planned road in reverse — the U-turn still
+    /// kilometres ahead — and the perpendicular offset stays at a few metres for as long as you
+    /// keep doing it, which is well inside the off-route threshold. Detection therefore never
+    /// fires, the bright line is re-cut backwards fix by fix, and no reroute is ever requested; the
+    /// route only updates once the rider happens to stray far enough SIDEWAYS for the distance test
+    /// to notice, which is the "stale path until I reach a point where the reroute can be drawn"
+    /// symptom.
+    ///
+    /// Only asked while the rider is laterally ON the followed route: `navLocation` holds the last
+    /// on-route position, so once they have left the line it describes a stretch of road they are
+    /// no longer on, and the bearing there says nothing about where they are pointed now. Off the
+    /// line the distance test already has them anyway — this is the case only it can see, a rider
+    /// dead on the route and going the other way.
+    private func updateWrongWay(location: CLLocation) {
+        let progress = navLocation.map { progressAlongRoute(at: $0) }
+        let previous = previousProgressMeters
+        if let progress { previousProgressMeters = progress }
+        // Corroborated by the rider's own progress falling, which is the other half of what
+        // "backwards" means and what tells this apart from a projection that has momentarily
+        // latched onto the far side of a route that doubles back on itself: such a flip jumps
+        // progress FORWARD, never back. A metre of slack absorbs the jitter of a fix that is
+        // barely moving.
+        let regressed = progress != nil && previous != nil && progress! < previous! - 1
+
+        var against = false
+        if let here = navLocation,
+           let course = Self.validCourse(location),
+           let progress, regressed,
+           lastRouteOffsetMeters <= offRouteThresholdMeters,
+           !isNearUTurn(progressMeters: progress),
+           // The road's bearing, not the raw segment's, for the reason `routeBearingAhead` exists:
+           // a 2–3 m segment's bearing swings hard from vertex to vertex, and a single vertex
+           // pointing back at the rider must not be read as the rider pointing back at it.
+           let road = routeBearingAhead(from: here.point, segmentIndex: here.segmentIndex) {
+            against = Self.headingDelta(course, road) > Self.wrongWayHeadingDeltaDegrees
+        }
+        isWrongWayFix = against
+        wrongWayCount = against ? wrongWayCount + 1 : 0
+        isWrongWay = wrongWayCount >= Self.wrongWayConfirmCount
+    }
+
+    /// True when `progressMeters` falls within `uTurnSuppressionMeters` of a U-turn junction on
+    /// the followed route.
+    ///
+    /// A step's maneuver is the one taken to ENTER it (see `upcomingBanner`), so the junction where
+    /// a U-turn is performed is the END of the step before it.
+    private func isNearUTurn(progressMeters: Double) -> Bool {
+        guard navSteps.count >= 2 else { return false }
+        for j in 1..<navSteps.count {
+            guard navSteps[j].maneuver?.hasPrefix("UTURN") == true else { continue }
+            if abs(progressMeters - navSteps[j - 1].endDistanceAlongRoute) <= Self.uTurnSuppressionMeters {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// The fix's course, or nil when it carries none worth believing. Course is derived from
+    /// successive fixes, so below a walking pace it wanders wildly — and reading that noise as a
+    /// reversal would tear up the route of every rider waiting at a light.
+    private static func validCourse(_ location: CLLocation) -> Double? {
+        guard location.course >= 0, location.speed >= courseValidSpeedMps else { return nil }
+        return location.course
+    }
+
+    /// Where the rider is on the route: the segment, the foot of the perpendicular, and the offset.
+    struct RouteLocation {
+        let segmentIndex: Int
+        let point: CLLocationCoordinate2D
+        /// Position along the segment, 0…1. `1` means the projection ran off the far end.
+        let t: Double
+        /// Perpendicular distance from the fix to `point`, in metres.
+        let distance: Double
+    }
+
+    /// The single answer to "where is the rider on this route", computed once per GPS fix.
+    ///
+    /// Everything downstream — the off-route test, the along-route progress that drives the turn
+    /// banner, and above all the polyline trim that decides what is DRAWN — now reads this one
+    /// result. They used to run three different searches with three different windows:
+    /// `advanceRouteProgress` over 200 segments with an 80 m acceptance bound,
+    /// `minimumDistanceToUpcomingRoute` over a *different* 105-segment window, and the trim over
+    /// exactly ONE segment, the one at the index, with no search at all.
+    ///
+    /// That last one is what drew the straight lines. The moment the index lagged reality — and
+    /// the paragraph on `routeLookaheadMeters` lists several ways it could — the trim projected
+    /// the rider onto a segment hundreds of metres behind, then emitted `rider → that stale point
+    /// → the route onwards from there`. On screen: a long straight chord shooting off the chevron
+    /// across the map, with the route doubling back to meet it. Meanwhile the off-route gate,
+    /// searching its own wider window, found the rider comfortably on the road and let the bad
+    /// geometry through.
+    fileprivate static func locateOnRoute(
+        _ route: [CLLocationCoordinate2D],
+        cumulative: [Double],
+        from: CLLocationCoordinate2D,
+        fromIndex: Int
+    ) -> RouteLocation? {
+        guard route.count >= 2 else { return nil }
+        let lastSegment = route.count - 2
+        let anchor = min(max(fromIndex, 0), lastSegment)
+
+        let start: Int
+        let end: Int
+        if cumulative.count == route.count {
+            // Window bounds in metres along the route, resolved to vertex indices through the
+            // prefix sums we already keep.
+            let here = cumulative[anchor]
+            start = min(max(lowerBound(cumulative, here - routeLookbehindMeters) - 1, 0), lastSegment)
+            end = min(max(lowerBound(cumulative, here + routeLookaheadMeters), start), lastSegment)
+        } else {
+            start = anchor
+            end = min(lastSegment, anchor + 200)
+        }
+        return scanSegments(route, from: from, start: start, end: end)
+    }
+
+    /// Full-route search, used only to RE-ACQUIRE after the windowed search has lost the rider.
+    ///
+    /// Progress is forward-only by design, because a route that touches itself — a loop, an
+    /// out-and-back, a cloverleaf, the two carriageways of a divided highway — would otherwise let
+    /// a single noisy fix throw the index onto the wrong pass. But forward-only with no escape
+    /// hatch is how the index came to freeze permanently after one GPS gap. This is the escape
+    /// hatch: the caller runs it only when the window has already failed, and accepts the result
+    /// only when it lands the rider genuinely on the road.
+    fileprivate static func locateAnywhereOnRoute(
+        _ route: [CLLocationCoordinate2D],
+        from: CLLocationCoordinate2D
+    ) -> RouteLocation? {
+        guard route.count >= 2 else { return nil }
+        return scanSegments(route, from: from, start: 0, end: route.count - 2)
+    }
+
+    /// First index in the sorted prefix-sum array whose value is >= `target`.
+    private static func lowerBound(_ cumulative: [Double], _ target: Double) -> Int {
+        var lo = 0, hi = cumulative.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if cumulative[mid] < target { lo = mid + 1 } else { hi = mid }
+        }
+        return lo
+    }
+
+    /// Nearest segment to `from` in `start…end`, by true minimum — no early exit.
+    ///
+    /// The old scan broke out at the FIRST segment closer than 5 m whose `t < 0.999`, which is not
+    /// the nearest segment, only the first acceptable one. Where a route runs back alongside
+    /// itself the outbound and return carriageways are both within 5 m in polyline terms, so the
+    /// scan could latch onto whichever pass came first in the vertex order and stay there. Taking
+    /// the real minimum costs a few hundred multiply-adds per fix now that `segmentProjection` no
+    /// longer calls a geodesic.
+    ///
+    /// Ties go to the LATER segment when the rider is interior to it (`t` strictly inside 0…1).
+    /// Two segments meeting at the vertex the rider is standing on report the same distance;
+    /// picking the one the rider is on rather than the one they have finished is what keeps the
+    /// polyline head moving at the chevron's pace instead of stalling on a vertex and then jumping
+    /// to catch up.
+    private static func scanSegments(
+        _ route: [CLLocationCoordinate2D],
+        from: CLLocationCoordinate2D,
+        start: Int,
+        end: Int
+    ) -> RouteLocation? {
+        guard end >= start else { return nil }
+        var best: RouteLocation? = nil
+        for i in start...end {
+            let hit = segmentProjection(of: from, a: route[i], b: route[i + 1])
+            let interior = hit.t > 0.001 && hit.t < 0.999
+            let better: Bool
+            if let current = best {
+                better = hit.distance < current.distance - 0.01
+                    || (hit.distance <= current.distance + 0.01 && interior)
+            } else {
+                better = true
+            }
+            if better {
+                best = RouteLocation(segmentIndex: i, point: hit.point, t: hit.t, distance: hit.distance)
+            }
+        }
+        return best
     }
 
     /// Places the rider marker AND cuts the bright polyline to start underneath it — one call,
@@ -1416,14 +1787,15 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// coordinate and the polyline is drawn from there back onto the road: still one connected
     /// line starting at the chevron, rather than two things floating apart.
     private func trimActiveRoute(to location: CLLocation) {
-        guard navRoute.count >= 2 else { return }
-        let i    = navSegmentIndex
-        let next = min(i + 1, navRoute.count - 1)
+        guard navRoute.count >= 2, let hit = navLocation else { return }
+        let next = min(hit.segmentIndex + 1, navRoute.count - 1)
 
-        let hit = Self.segmentProjection(of: location.coordinate, a: navRoute[i], b: navRoute[next])
         // A wild fix inside an on-route run must not be yanked onto the line — the off-route flag
         // needs three consecutive readings to trip, so this bound is what stops us claiming
-        // precision we don't have in between.
+        // precision we don't have in between. The leader drawn below is now bounded by the
+        // caller's off-route gate (trimming stops entirely past `offRouteThresholdMeters`) because
+        // `hit` is a genuine nearest-point search; when it was a projection onto one stale segment
+        // the "short leader" could be any length at all.
         let snapped = hit.distance <= Self.snapMaxOffsetMeters
         let head = snapped ? hit.point : location.coordinate
 
@@ -1435,7 +1807,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // this same value, so the map steadies with it. Only meaningful while snapped: off the
         // line, the road ahead is not the direction the rider is going.
         if snapped, location.speed >= Self.courseValidSpeedMps,
-           let bearing = routeBearingAhead(from: hit.point) {
+           let bearing = routeBearingAhead(from: hit.point, segmentIndex: hit.segmentIndex) {
             userHeading = bearing
             // Counts as a fresh heading for `isCourseStale`, otherwise the compass fallback would
             // wake up five seconds in and start fighting the road bearing.
@@ -1454,11 +1826,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// Measured over a look-ahead rather than from the single segment under the rider because
     /// route polylines are dense — a 2–3 m segment's bearing swings hard from vertex to vertex,
     /// which would make the chevron (and the camera) twitch on every fix.
-    private func routeBearingAhead(from projected: CLLocationCoordinate2D) -> Double? {
+    private func routeBearingAhead(from projected: CLLocationCoordinate2D, segmentIndex: Int) -> Double? {
         guard navRoute.count >= 2 else { return nil }
         var remaining = Self.routeBearingLookaheadMeters
         var cursor = projected
-        var i = navSegmentIndex + 1
+        var i = segmentIndex + 1
         while i < navRoute.count {
             let next = navRoute[i]
             let step = CLLocation(latitude: cursor.latitude, longitude: cursor.longitude)
@@ -1473,6 +1845,12 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         return nil
     }
 
+    /// Smallest absolute difference between two compass bearings, in degrees (0…180).
+    fileprivate static func headingDelta(_ a: Double, _ b: Double) -> Double {
+        let raw = abs(a - b).truncatingRemainder(dividingBy: 360)
+        return min(raw, 360 - raw)
+    }
+
     /// Initial great-circle bearing from `a` to `b`, in degrees clockwise from true north —
     /// the same convention as `CLLocation.course` and `GMSMarker.rotation`.
     private static func bearing(from a: CLLocationCoordinate2D, to b: CLLocationCoordinate2D) -> Double {
@@ -1485,27 +1863,6 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     }
 
     /// Minimum perpendicular distance to any segment in a window around the current progress index.
-    private func minimumDistanceToUpcomingRoute(from location: CLLocation) -> Double {
-        guard navRoute.count >= 2 else { return 0 }
-        let start = max(0, navSegmentIndex - 5)
-        let end = min(navRoute.count - 2, navSegmentIndex + 100)
-        guard end >= start else { return 0 }
-
-        var minDist = Double.infinity
-        for i in start...end {
-            let d = distanceToLineSegment(from: location, a: navRoute[i], b: navRoute[i + 1])
-            if d < minDist { minDist = d }
-            if minDist < 5 { return minDist }
-        }
-        return minDist
-    }
-
-    /// Perpendicular distance from `point` to segment A→B, clamped to the segment ends.
-    private func distanceToLineSegment(from point: CLLocation, a: CLLocationCoordinate2D, b: CLLocationCoordinate2D) -> Double {
-        Self.segmentProjection(of: point.coordinate, a: a, b: b).distance
-    }
-
-
 }
 
 // MARK: - Main View

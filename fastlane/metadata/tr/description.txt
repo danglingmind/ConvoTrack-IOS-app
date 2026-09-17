@@ -1,0 +1,35 @@
+Dağılmış bir far dizisi gibi değil, tek bir grup halinde sürün.
+
+ConvoTrack, grubunuzdaki her motorcuyu tek bir canlı haritada tutar — böylece kimse kavşakta kopmaz, kimse liderin hangi çıkışa girdiğini tahmin etmek zorunda kalmaz ve kimse herkesin nerede olduğunu sormak için kenara çekmek zorunda kalmaz.
+
+CANLI GRUP HARİTASI
+Her motorcuyu gerçek zamanlı olarak, sizinle aralarındaki mesafeyle birlikte görün. Ekranınızdan çıkan sürücüler kenar işaretleri olarak belirir; böylece arkanızda kimin olduğunu ve ne kadar geride kaldığını her an bilirsiniz.
+
+ADIM ADIM YOL TARİFİ
+Varış noktasına kadar tam rota rehberliği; tahmini varış süresi ve kalan mesafe her zaman ekranda. Sürüşü planlarken yol üzerine duraklar ekleyin.
+
+TEK DOKUNUŞLA TOPLANMA
+Yakıt, yemek ya da fotoğraf molası mı lazım? Tüm gruba toplanma çağrısı gönderin ve herkesin ne kadar ileride buluşacağını seçin. Her motorcuya konum anında ulaşır.
+
+ACİL DURUM UYARISI
+Biri düşerse ya da yardıma ihtiyaç duyarsa, tek dokunuş tam konumunu gruptaki herkese iletir.
+
+SANİYELER İÇİNDE KATILIN
+Her sürüş için altı karakterlik bir davet kodu oluşturulur. Bağlantıyı paylaşın, kodu yüksek sesle okuyun ya da QR kodunu okutun — sürücüler daha eldivenlerini takmadan haritada olur.
+
+SÜRÜŞ ROLLERİ
+Sürüş Lideri, Tempo Koruyucu, İz Bekçisi ve Formasyon Sürücüsü rolleri, kimin önce kaydolduğuna göre değil, grubun gerçekte nasıl sürdüğüne göre kazanılır.
+
+SÜRÜŞ ÖZETİ
+Sürüş bittiğinde herkes gerçek rakamları alır: yolda geçen gerçek süre, kat edilen mesafe, grubun açtığı en geniş aralık ve son sıralama. Özet kartını ekiple paylaşın.
+
+SÜRÜŞ GEÇMİŞİ
+Liderliğini yaptığınız ya da katıldığınız her sürüş, tek bir yerde saklanır.
+
+CONVOTRACK PRO
+Daha büyük gruplar, aylık sürüş sınırı yok, canlı istatistikler ve uyum puanları, ayrıca tam 365 günlük sürüş geçmişi arşivi.
+
+ConvoTrack Pro, otomatik yenilenen bir aboneliktir. Ödeme, satın alma onayında Apple Account hesabınızdan tahsil edilir. Mevcut dönemin bitiminden en az 24 saat önce iptal edilmediği sürece otomatik olarak yenilenir. Aboneliğinizi Apple Account ayarlarınızdan yönetin veya iptal edin.
+
+Gizlilik Politikası: https://convotrack.in/privacy
+Kullanım Koşulları: https://convotrack.in/terms

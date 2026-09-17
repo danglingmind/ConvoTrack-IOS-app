@@ -1,0 +1,8 @@
+• Live-navigasjonen er jevnere og mer pålitelig
+• Kjørere utenfor skjermen vises nå som kantmarkører – trykk for å hoppe rett til dem
+• Landskapsvisningen er finpusset
+• Turhistorikken har nå filtre, så du raskt finner en tidligere tur
+• Å redigere en tur er nå en hel side i stedet for et trangt panel
+• Invitasjonslenker åpner nå appen direkte
+• Turledere kan slette en tur, og alle i lobbyen får beskjed med en gang
+• Klarere og mer spesifikke feilmeldinger

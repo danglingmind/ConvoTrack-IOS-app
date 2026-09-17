@@ -1,6 +1,28 @@
 import SwiftUI
 import ClerkKit
 
+/// Whether the next Google sign-in must run in a fresh, cookie-free web session.
+///
+/// `ASWebAuthenticationSession` shares Safari's cookie jar by default, and that is what makes the
+/// sign-in after a sign-out silent: Google still holds a session for the account that just left,
+/// sees exactly one signed-in identity, skips the account chooser entirely and hands that same
+/// identity straight back. Nothing in the app can ask for the chooser directly — the OAuth
+/// `prompt=select_account` parameter is supported by Clerk's API but not exposed by ClerkKit's
+/// sign-in flow — so the cookie jar is the only lever there is.
+///
+/// Running ephemeral ALWAYS would make every rider type their Google password on a fresh install,
+/// where there is no stale identity to escape in the first place. So it is armed by a sign-out and
+/// disarmed by the sign-in that follows it: the first sign-in on a device stays one tap, and the
+/// one after a sign-out lets you pick the account.
+enum WebSignInSession {
+    private static let key = "convotrack.needsAccountChoice"
+
+    static var needsAccountChoice: Bool {
+        get { UserDefaults.standard.bool(forKey: key) }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
+}
+
 struct AuthView: View {
     @Environment(Clerk.self) private var clerk
     @Environment(\.openURL) private var openURL
@@ -196,7 +218,13 @@ struct AuthView: View {
         signingInProvider = .google
         Task {
             do {
-                try await clerk.auth.signInWithOAuth(provider: .google)
+                try await clerk.auth.signInWithOAuth(
+                    provider: .google,
+                    prefersEphemeralWebBrowserSession: WebSignInSession.needsAccountChoice
+                )
+                // Cleared only on success: an abandoned or failed attempt leaves the rider exactly
+                // where they were, still needing the chooser next time.
+                WebSignInSession.needsAccountChoice = false
                 navigateToMain = true
             } catch {
                 errorMessage = error.riderMessage
