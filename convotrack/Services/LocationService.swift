@@ -76,12 +76,61 @@ final class LocationService: NSObject {
             manager.showsBackgroundLocationIndicator = true
         }
         manager.startUpdatingLocation()
+        Task { @MainActor in self.syncHeadingOrientation() }
         manager.startUpdatingHeading()
     }
 
     func stop() {
         manager.stopUpdatingLocation()
         manager.stopUpdatingHeading()
+    }
+
+    // MARK: - Heading reference frame
+
+    /// Keeps `headingOrientation` pointing at whichever edge of the phone the rider is actually
+    /// looking "through".
+    ///
+    /// `CLHeading` is not reported relative to the phone's physical top — it is reported relative
+    /// to whichever edge `headingOrientation` nominates, and that property defaults to
+    /// `.portrait`, meaning the top. Nothing here ever set it, so the compass spent its whole life
+    /// answering "where is the TOP OF THE PHONE pointing?" when the question navigation actually
+    /// asks is "where is the RIDER pointing?". Those are the same question only while the screen
+    /// is upright. Turn the phone sideways on the mount — either way round — and they differ by
+    /// exactly 90°, so the heading-up camera and the direction chevron, which both read this one
+    /// value, sat a quarter-turn askew for as long as the rider stayed in landscape.
+    ///
+    /// The reference is the *interface* orientation rather than `UIDevice.current.orientation`,
+    /// for three reasons: it is the top of the UI that faces the way the rider is facing; it
+    /// already respects a rotation lock, so a screen that stays portrait keeps a portrait heading
+    /// instead of chasing a phone that merely tipped over; and it cannot report `.faceUp` or
+    /// `.faceDown`, which are not headings at all and which a device-orientation reading would
+    /// have to discard by hand.
+    ///
+    /// The two landscape cases cross over. UIKit defines
+    /// `UIInterfaceOrientationLandscapeLeft == UIDeviceOrientationLandscapeRight` (and vice
+    /// versa), and `CLDeviceOrientation` follows the *device* convention, so mapping the names
+    /// straight across would leave landscape 180° out — a worse bug than the one being fixed,
+    /// and one that looks correct in portrait testing.
+    @MainActor
+    private func syncHeadingOrientation() {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        guard let scene else { return }
+
+        let reference: CLDeviceOrientation
+        switch scene.interfaceOrientation {
+        case .portrait:             reference = .portrait
+        case .portraitUpsideDown:   reference = .portraitUpsideDown
+        case .landscapeLeft:        reference = .landscapeRight
+        case .landscapeRight:       reference = .landscapeLeft
+        default:
+            // `.unknown` during a rotation transition. Hold the last good reference rather than
+            // snapping back to portrait, which would flick the map a quarter-turn mid-rotation.
+            return
+        }
+
+        guard manager.headingOrientation != reference else { return }
+        manager.headingOrientation = reference
     }
 
     // MARK: - Private
@@ -143,7 +192,15 @@ extension LocationService: CLLocationManagerDelegate {
         guard newHeading.headingAccuracy >= 0 else { return }
         let heading = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
         let cb = onHeadingUpdate
-        Task { @MainActor in cb?(heading) }
+        Task { @MainActor in
+            // Re-checked per tick rather than driven off a rotation notification. The device
+            // notification fires before UIKit has settled the new interface orientation, so a
+            // one-shot handler reads the value it is trying to replace; polling here is immune to
+            // that ordering, costs a couple of property reads a second, and self-heals within one
+            // sample of any rotation.
+            self.syncHeadingOrientation()
+            cb?(heading)
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -164,6 +221,7 @@ extension LocationService: CLLocationManagerDelegate {
             // Foreground-only; background updates won't work.
             // The ride flow calls start() explicitly after the user begins a ride.
             manager.startUpdatingLocation()
+            Task { @MainActor in self.syncHeadingOrientation() }
             manager.startUpdatingHeading()
         default:
             break
