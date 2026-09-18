@@ -1,8 +1,2 @@
-• Live-navigationen er mere flydende og pålidelig
-• Kørere uden for skærmen vises nu som kantmarkører – tryk for at hoppe direkte til dem
-• Landskabsvisningen er finpudset
-• Turhistorikken har nu filtre, så du hurtigt finder en tidligere tur
-• Redigering af en tur er nu en hel side i stedet for et trangt panel
-• Invitationslinks åbner nu direkte i appen
-• Turledere kan slette en tur, og alle i lobbyen får det straks at vide
-• Klarere og mere præcise fejlmeddelelser
+• Omberegning af ruten er hurtigere og mere præcis, når du kører væk fra ruten.
+• Retningspilen i liggende format er rettet – med telefonen på tværs i holderen peger kortet nu den vej, du rent faktisk kører.

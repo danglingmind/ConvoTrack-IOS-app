@@ -1,8 +1,2 @@
-• Live navigation is smoother and more reliable
-• Riders who drift off-screen now appear as edge markers you can tap to jump straight to them
-• Polished the landscape riding view
-• Ride history now has filters, so you can find a past ride fast
-• Editing a ride is a full page instead of a cramped sheet
-• Invite links now open straight into the app
-• Ride leaders can delete a ride, and everyone in the lobby is told right away
-• Clearer, more specific error messages
+• Rerouting is faster and more accurate when you go off route.
+• Fixed the direction arrow in landscape — with the phone sideways on the mount, the map now points the way you're actually riding.

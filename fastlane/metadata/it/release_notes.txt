@@ -1,8 +1,2 @@
-• La navigazione in tempo reale è più fluida e affidabile
-• I motociclisti fuori schermo appaiono come indicatori sul bordo: toccali per raggiungerli subito
-• Vista orizzontale rifinita
-• La cronologia dei giri ora ha i filtri, per ritrovare in fretta un giro passato
-• Modificare un giro ora è una pagina intera invece di un pannello stretto
-• I link di invito ora aprono direttamente l'app
-• Il capogruppo può eliminare un giro e tutti nella lobby vengono avvisati subito
-• Messaggi di errore più chiari e specifici
+• Il ricalcolo del percorso è più rapido e preciso quando esci dall'itinerario.
+• Corretta la freccia di direzione in orizzontale: con il telefono di lato sul supporto, la mappa ora punta nella direzione in cui stai davvero viaggiando.

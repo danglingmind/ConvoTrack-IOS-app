@@ -1,8 +1,2 @@
-• La navigation en direct est plus fluide et plus fiable
-• Les motards hors écran apparaissent en marqueurs de bord : touchez-les pour y aller directement
-• Vue paysage peaufinée
-• L'historique des sorties dispose de filtres pour retrouver vite une sortie passée
-• Modifier une sortie se fait désormais sur une page entière au lieu d'une fiche à l'étroit
-• Les liens d'invitation ouvrent maintenant l'app directement
-• Le chef de sortie peut supprimer une sortie ; tout le monde dans le salon est prévenu aussitôt
-• Messages d'erreur plus clairs et plus précis
+• Le recalcul d'itinéraire est plus rapide et plus précis lorsque vous sortez du trajet.
+• Correction de la flèche de direction en mode paysage : téléphone posé de côté sur le support, la carte indique désormais la direction dans laquelle vous roulez réellement.

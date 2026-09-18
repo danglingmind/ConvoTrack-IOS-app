@@ -1,8 +1,2 @@
-• Live navigatie is soepeler en betrouwbaarder
-• Motorrijders buiten beeld verschijnen nu als randmarkeringen – tik erop om er direct heen te springen
-• De liggende weergave is verbeterd
-• Ritgeschiedenis heeft nu filters, zodat je een eerdere rit snel terugvindt
-• Een rit bewerken is nu een volledige pagina in plaats van een krap venster
-• Uitnodigingslinks openen nu direct de app
-• Ritleiders kunnen een rit verwijderen; iedereen in de lobby hoort het meteen
-• Duidelijkere, specifiekere foutmeldingen
+• De route wordt sneller en nauwkeuriger herberekend wanneer je van de route afwijkt.
+• De richtingspijl in liggende weergave is hersteld: met de telefoon dwars in de houder wijst de kaart nu de kant op waar je echt naartoe rijdt.

@@ -1,8 +1,2 @@
-• Navigacija uživo je glađa i pouzdanija
-• Motoristi izvan zaslona sada se prikazuju kao oznake uz rub – dodirni ih da skočiš izravno do njih
-• Dorađen vodoravni prikaz
-• Povijest vožnji sada ima filtre pa brzo pronađeš raniju vožnju
-• Uređivanje vožnje sada je cijela stranica umjesto skučenog prozora
-• Pozivnice se sada otvaraju izravno u aplikaciji
-• Vođa može obrisati vožnju, a svi u predvorju odmah saznaju
-• Jasnije i konkretnije poruke o pogreškama
+• Ponovno izračunavanje rute brže je i točnije kada skrenete s rute.
+• Ispravljena je strelica smjera u vodoravnom prikazu – kad je telefon položen bočno na nosaču, karta sada pokazuje smjer u kojem stvarno vozite.

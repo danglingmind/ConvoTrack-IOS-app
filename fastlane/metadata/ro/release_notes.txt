@@ -1,8 +1,2 @@
-• Navigarea în timp real este mai fluidă și mai fiabilă
-• Motocicliștii ieșiți din ecran apar acum ca marcaje pe margine: atinge-le ca să ajungi direct la ei
-• Vizualizarea pe orizontală a fost rafinată
-• Istoricul turelor are acum filtre, ca să găsești rapid o tură anterioară
-• Editarea unei ture este acum o pagină întreagă în loc de un panou înghesuit
-• Linkurile de invitație deschid acum direct aplicația
-• Liderul poate șterge o tură, iar toți din lobby află imediat
-• Mesaje de eroare mai clare și mai precise
+• Recalcularea traseului este mai rapidă și mai precisă când ieși de pe traseu.
+• Am corectat săgeata de direcție în modul peisaj – cu telefonul așezat pe lat în suport, harta indică acum direcția în care mergi cu adevărat.

@@ -1,8 +1,2 @@
-• Nawigacja na żywo działa płynniej i stabilniej
-• Motocykliści poza ekranem pojawiają się teraz jako znaczniki przy krawędzi – dotknij, by przeskoczyć wprost do nich
-• Dopracowany widok poziomy
-• Historia tras ma teraz filtry, więc szybko znajdziesz wcześniejszą trasę
-• Edycja trasy to teraz cała strona zamiast ciasnego panelu
-• Linki z zaproszeniem otwierają się teraz bezpośrednio w aplikacji
-• Prowadzący może usunąć trasę, a wszyscy w poczekalni od razu się o tym dowiedzą
-• Czytelniejsze i bardziej konkretne komunikaty o błędach
+• Przeliczanie trasy jest szybsze i dokładniejsze, gdy zjedziesz z trasy.
+• Naprawiliśmy strzałkę kierunku w widoku poziomym – gdy telefon leży bokiem w uchwycie, mapa wskazuje teraz kierunek, w którym naprawdę jedziesz.

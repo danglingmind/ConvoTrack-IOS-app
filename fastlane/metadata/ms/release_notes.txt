@@ -1,8 +1,2 @@
-• Navigasi langsung kini lebih lancar dan boleh dipercayai
-• Penunggang di luar skrin kini muncul sebagai penanda di tepi — ketik untuk terus ke mereka
-• Paparan landskap diperhalus
-• Sejarah perjalanan kini ada penapis, jadi mudah mencari perjalanan lalu
-• Menyunting perjalanan kini satu halaman penuh, bukan panel sempit
-• Pautan jemputan kini terus membuka aplikasi
-• Ketua boleh memadam perjalanan, dan semua di lobi diberitahu serta-merta
-• Mesej ralat lebih jelas dan khusus
+• Pengiraan semula laluan lebih pantas dan lebih tepat apabila anda tersasar dari laluan.
+• Membaiki anak panah arah dalam mod lanskap — dengan telefon dipasang melintang pada pemegang, peta kini menunjuk ke arah yang anda betul-betul tuju.

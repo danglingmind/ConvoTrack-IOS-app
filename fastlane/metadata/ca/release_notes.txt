@@ -1,8 +1,2 @@
-• La navegació en directe és més fluida i fiable
-• Els motoristes fora de pantalla apareixen com a marcadors a la vora: toca'ls per anar-hi directament
-• Vista horitzontal polida
-• L'historial de rutes ara té filtres per trobar ràpidament una ruta passada
-• Editar una ruta ara és una pàgina completa en lloc d'un full estret
-• Els enllaços d'invitació ara obren l'app directament
-• El líder pot eliminar una ruta i tothom a la sala se n'assabenta a l'instant
-• Missatges d'error més clars i concrets
+• El recàlcul de la ruta és més ràpid i precís quan et surts del recorregut.
+• S'ha corregit la fletxa de direcció en mode horitzontal: amb el telèfon de costat al suport, el mapa ara apunta cap a on condueixes realment.

@@ -1,8 +1,2 @@
-• La navegación en vivo es más fluida y confiable
-• Los motociclistas fuera de pantalla aparecen como marcadores en el borde: tócalos para ir directo a ellos
-• Vista horizontal pulida
-• El historial de rodadas ya tiene filtros para encontrar rápido una rodada anterior
-• Editar una rodada ahora es una página completa en lugar de una hoja apretada
-• Los enlaces de invitación abren la app directamente
-• El líder puede eliminar una rodada y toda la banda en la sala se entera al instante
-• Mensajes de error más claros y específicos
+• El recálculo de la ruta es más rápido y preciso cuando te sales del recorrido.
+• Se corrigió la flecha de dirección en horizontal: con el teléfono de lado en el soporte, el mapa ahora apunta hacia donde realmente vas.

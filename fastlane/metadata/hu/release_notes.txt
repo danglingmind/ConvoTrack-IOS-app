@@ -1,8 +1,2 @@
-• A valós idejű navigáció simább és megbízhatóbb
-• A képernyőn kívülre kerülő motorosok most a szélen jelennek meg jelölőként – koppints, és egyből hozzájuk ugorhatsz
-• Csiszolt fekvő nézet
-• A túranaplóban már vannak szűrők, így gyorsan megtalálsz egy korábbi túrát
-• A túra szerkesztése immár teljes oldal a szűk panel helyett
-• A meghívó linkek most közvetlenül az appot nyitják meg
-• A túravezető törölheti a túrát, és a váróban mindenki azonnal értesül róla
-• Világosabb, konkrétabb hibaüzenetek
+• Az útvonal újratervezése gyorsabb és pontosabb, ha letérsz az útvonalról.
+• Javítottuk az iránynyilat fekvő nézetben – ha a telefon oldalra fordítva van a tartóban, a térkép mostantól abba az irányba mutat, amerre valóban haladsz.

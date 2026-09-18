@@ -1,8 +1,2 @@
-• Die Live-Navigation läuft flüssiger und zuverlässiger
-• Fahrer außerhalb des Bildschirms erscheinen jetzt als Randmarker – antippen und direkt hinspringen
-• Die Querformat-Ansicht wurde überarbeitet
-• Der Tourverlauf hat jetzt Filter, damit du alte Fahrten schnell findest
-• Eine Fahrt zu bearbeiten ist jetzt eine ganze Seite statt eines engen Sheets
-• Einladungslinks öffnen jetzt direkt die App
-• Tourleiter können eine Fahrt löschen, alle in der Lobby werden sofort informiert
-• Klarere, konkretere Fehlermeldungen
+• Die Neuberechnung der Route ist schneller und genauer, wenn du von der Route abkommst.
+• Der Richtungspfeil im Querformat wurde korrigiert – liegt das Handy quer in der Halterung, zeigt die Karte jetzt in die Richtung, in die du tatsächlich fährst.

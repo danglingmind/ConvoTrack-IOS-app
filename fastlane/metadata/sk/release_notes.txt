@@ -1,8 +1,2 @@
-• Živá navigácia je plynulejšia a spoľahlivejšia
-• Motorkári mimo obrazovky sa teraz zobrazujú ako značky pri okraji – ťuknutím na ne prejdete priamo k nim
-• Vyladené zobrazenie na šírku
-• História jázd má teraz filtre, takže skoršiu jazdu nájdete rýchlo
-• Úprava jazdy je teraz celá stránka namiesto stiesneného panela
-• Odkazy s pozvánkou sa teraz otvárajú priamo v aplikácii
-• Vedúci môže jazdu zmazať a všetci v čakárni sa to hneď dozvedia
-• Zrozumiteľnejšie a konkrétnejšie chybové hlásenia
+• Prepočítanie trasy je rýchlejšie a presnejšie, keď zídete z trasy.
+• Opravili sme šípku smeru v režime na šírku – keď je telefón otočený v držiaku nabok, mapa teraz ukazuje smer, ktorým naozaj idete.
