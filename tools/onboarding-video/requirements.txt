@@ -1,0 +1,4 @@
+pillow>=11
+numpy
+pillow-heif
+opencv-python-headless

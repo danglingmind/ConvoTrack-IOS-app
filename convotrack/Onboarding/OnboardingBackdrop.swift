@@ -24,14 +24,18 @@ struct OnboardingBackdrop: View {
     let videoName: String
     let posterName: String
     let variant: RouteBackdrop.Variant
-    /// False = hold on the poster / freeze the stand-in.
+    /// False (Reduce Motion, autoplay off, Low Power) = poster only. The video layer is not
+    /// mounted at all: a paused player still draws its first frame over the poster, and the
+    /// poster is the frame chosen to tell the whole story.
+    let allowsMotion: Bool
+    /// False = hold on the current frame (the rider tapped pause) / freeze the stand-in.
     let isPlaying: Bool
 
     var body: some View {
         ZStack {
             Color.surfaceContainerLowest
 
-            if let url = Bundle.main.url(forResource: videoName, withExtension: "mp4") {
+            if allowsMotion, let url = Bundle.main.url(forResource: videoName, withExtension: "mp4") {
                 poster
                 LoopingVideoView(url: url, isPlaying: isPlaying)
             } else if UIImage(named: posterName) != nil {

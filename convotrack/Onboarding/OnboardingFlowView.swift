@@ -19,6 +19,12 @@ struct OnboardingFlowView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var index = 0
     @State private var userPaused = false
+    /// Background-video tint (deep teal). Tuning: the opacity at the use site sets the strength.
+    private static let videoTint = Color(red: 0.03, green: 0.13, blue: 0.16)
+    // Measured copy geometry, for sizing the gradient behind the text.
+    @State private var copyHeight: CGFloat = 0
+    @State private var copyViewport: CGFloat = .infinity
+    @State private var footerHeight: CGFloat = 0
 
     private let pages: [ValuePage] = [
         ValuePage(id: 0,
@@ -109,60 +115,107 @@ struct OnboardingFlowView: View {
     // MARK: Page
 
     private func pageView(_ page: ValuePage) -> some View {
-        ZStack(alignment: .bottom) {
-            OnboardingBackdrop(
-                videoName: page.videoName,
-                posterName: page.posterName,
-                variant: page.variant,
-                isPlaying: motionAllowed && !userPaused
-            )
+        VStack(spacing: 0) {
+            // Scrollable so the copy stays reachable at the largest accessibility text sizes.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(page.eyebrow)
+                        .font(.caption.weight(.bold).monospaced())
+                        .tracking(2)
+                        .foregroundStyle(Color.onSurfaceVariant)
+                    Text(page.headline)
+                        .font(.largeTitle.weight(.bold))
+                        .foregroundStyle(Color.onSurface)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(page.body)
+                        .font(.body)
+                        .foregroundStyle(Color.onSurfaceVariant)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { copyHeight = $0 }
+            }
+            .defaultScrollAnchor(.bottom)
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { copyViewport = $0 }
 
-            // Scrim: text sits in the lower part of the screen on near-opaque surface, so contrast
-            // holds over the brightest frame of any clip.
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0.0),
-                    .init(color: .clear, location: 0.38),
-                    .init(color: Color.surfaceDim.opacity(0.88), location: 0.60),
-                    .init(color: Color.surfaceDim.opacity(0.97), location: 0.78),
-                    .init(color: Color.surfaceDim, location: 1.0),
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
+            footer
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { footerHeight = $0 }
+        }
+        .padding(.top, 72)   // clear of the Skip / pause row
+        // Backgrounds, not ZStack siblings: they fill the screen edge to edge without feeding
+        // their size back into layout. (The aspect-filled video used to push the whole page,
+        // top bar included, up under the status bar.)
+        .background(alignment: .bottom) { copyScrim }
+        .background(alignment: .top) {
+            // Just enough fade for the clock, pause and Skip to read over the video.
+            LinearGradient(colors: [Color.surfaceDim.opacity(0.7), .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 96)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+        }
+        .background {
+            ZStack {
+                OnboardingBackdrop(
+                    videoName: page.videoName,
+                    posterName: page.posterName,
+                    variant: page.variant,
+                    allowsMotion: motionAllowed,
+                    isPlaying: motionAllowed && !userPaused
+                )
+                // Push the clip behind the real UI: a dark teal tint-and-dim (lime's opposite, so
+                // the clip's route turns olive and the Continue button is the only true lime on
+                // screen; white labels drop to a cool grey under the headline), plus a vignette
+                // so the edges recede and the riders in the middle hold the eye.
+                Self.videoTint.opacity(0.55)
+                RadialGradient(
+                    colors: [.clear, Color.surfaceDim.opacity(0.55)],
+                    center: UnitPoint(x: 0.5, y: 0.38),
+                    startRadius: 140, endRadius: 560
+                )
+            }
             .ignoresSafeArea()
             .allowsHitTesting(false)
-
-            VStack(spacing: 0) {
-                // Scrollable so the copy stays reachable at the largest accessibility text sizes.
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(page.eyebrow)
-                            .font(.caption.weight(.bold).monospaced())
-                            .tracking(2)
-                            .foregroundStyle(Color.onSurfaceVariant)
-                        Text(page.headline)
-                            .font(.largeTitle.weight(.bold))
-                            .foregroundStyle(Color.onSurface)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(page.body)
-                            .font(.body)
-                            .foregroundStyle(Color.onSurfaceVariant)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 24)
-                }
-                .defaultScrollAnchor(.bottom)
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(maxHeight: .infinity, alignment: .bottom)
-
-                footer
-            }
-            .padding(.top, 72)   // clear of the Skip / pause row
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(page.description))
+    }
+
+    /// Full-screen video stays visible; only the copy gets a backing. The gradient is sized to
+    /// the text actually on screen (so it grows with Dynamic Type): clear `scrimLead` above the
+    /// eyebrow, ~80% behind the headline, ~90% behind the body, solid behind Continue.
+    private var copyScrim: some View {
+        // Gentle and capped: the tinted, vignetted video is already dark, so the copy holds
+        // contrast (eyebrow/body >= 4.5:1, headline >= 3:1, see tools/onboarding-video/qa.py)
+        // without the panel going near-black. Clear `lead` above the copy, half strength at the
+        // eyebrow, full `peak` only once the body has started.
+        let lead: CGFloat = 100
+        let peak = 0.5   // lower than ~0.45 and the eyebrow drops under 4.5:1 (qa.py)
+        let text = min(copyHeight, copyViewport)
+        let total = max(lead + text + footerHeight, 1)
+        let a = lead / total
+        let gradient = LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: Color.surfaceDim.opacity(peak * 0.15), location: a * 0.5),
+                .init(color: Color.surfaceDim.opacity(peak * 0.5), location: a),
+                .init(color: Color.surfaceDim.opacity(peak * 0.8), location: (lead + text * 0.35) / total),
+                .init(color: Color.surfaceDim.opacity(peak * 0.95), location: (lead + text * 0.7) / total),
+                .init(color: Color.surfaceDim.opacity(peak), location: (lead + text) / total),
+                .init(color: Color.surfaceDim.opacity(peak), location: 1),
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
+        // The tail runs on under the home indicator; backgrounds aren't clipped.
+        return VStack(spacing: 0) {
+            gradient.frame(height: total)
+            Color.surfaceDim.opacity(peak).frame(height: 60)
+        }
+        .padding(.bottom, -60)
+        .allowsHitTesting(false)
     }
 
     private var footer: some View {
