@@ -24,6 +24,10 @@ enum WebSignInSession {
 }
 
 struct AuthView: View {
+    /// When set, the host (ContentView) owns what comes next. When nil, AuthView presents
+    /// MainTabView itself — the previous behaviour, kept for previews.
+    var onAuthenticated: (() -> Void)? = nil
+
     @Environment(Clerk.self) private var clerk
     @Environment(\.openURL) private var openURL
     @EnvironmentObject private var membershipStore: MembershipStore
@@ -54,7 +58,7 @@ struct AuthView: View {
         .preferredColorScheme(.dark)
         .opacity(appeared ? 1 : 0)
         .onAppear {
-            if clerk.user != nil { navigateToMain = true }
+            if clerk.user != nil { finishAuth() }
             withAnimation(.easeIn(duration: 0.8)) { appeared = true }
         }
         .fullScreenCover(isPresented: $navigateToMain) {
@@ -133,6 +137,12 @@ struct AuthView: View {
 
     private var authButtons: some View {
         VStack(spacing: 16) {
+            Text("Sign in to keep your rides and ride with others.")
+                .font(.subheadline)
+                .foregroundStyle(Color.onSurfaceVariant)
+                .multilineTextAlignment(.center)
+                .padding(.bottom, 4)
+
             // Google — bg-primary-fixed, border-2 border-primary-fixed, btn-glow
             signInButton(
                 label: "Continue with Google",
@@ -212,6 +222,10 @@ struct AuthView: View {
         .frame(width: 350)
     }
 
+    private func finishAuth() {
+        if let onAuthenticated { onAuthenticated() } else { navigateToMain = true }
+    }
+
     // MARK: - Auth Actions
 
     private func signInWithGoogle() {
@@ -225,7 +239,7 @@ struct AuthView: View {
                 // Cleared only on success: an abandoned or failed attempt leaves the rider exactly
                 // where they were, still needing the chooser next time.
                 WebSignInSession.needsAccountChoice = false
-                navigateToMain = true
+                finishAuth()
             } catch {
                 errorMessage = error.riderMessage
                 showError = true
@@ -239,7 +253,7 @@ struct AuthView: View {
         Task {
             do {
                 try await clerk.auth.signInWithApple()
-                navigateToMain = true
+                finishAuth()
             } catch {
                 errorMessage = error.riderMessage
                 showError = true

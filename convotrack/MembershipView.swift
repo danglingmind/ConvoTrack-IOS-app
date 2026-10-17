@@ -1,9 +1,32 @@
 import SwiftUI
 import StoreKit
 
+enum MembershipPresentation {
+    /// Presented as a sheet from Profile / CreateRide / EditRide.
+    case sheet
+    /// Shown inline once, at the end of first-run onboarding.
+    case onboarding
+}
+
 struct MembershipView: View {
     @EnvironmentObject private var store: MembershipStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let presentation: MembershipPresentation
+    private let onFinish: (() -> Void)?
+
+    /// - Parameter onFinish: called instead of `dismiss()` when the host isn't a sheet.
+    init(presentation: MembershipPresentation = .sheet, onFinish: (() -> Void)? = nil) {
+        self.presentation = presentation
+        self.onFinish = onFinish
+    }
+
+    private var isOnboarding: Bool { presentation == .onboarding }
+    private func close() { if let onFinish { onFinish() } else { dismiss() } }
+
+    /// Free-plan limits as the server reports them. nil until loaded (or if the call fails).
+    @State private var freePlan: MembershipPlanInfo?
 
     @State private var selectedPlan: String = "danglingmind.convotrack.membership.yearly"
     @State private var showSuccess = false
@@ -23,6 +46,7 @@ struct MembershipView: View {
                         VStack(spacing: 22) {
                             heroSection
                             benefitsGrid
+                            freePlanLine
                             plansSection
                             ctaStack
                         }
@@ -39,6 +63,11 @@ struct MembershipView: View {
             // where Storefront.updates is not guaranteed to have been delivered.
             await store.refreshIfStorefrontChanged()
         }
+        .task {
+            if let me = try? await APIClient.shared.fetchMe(), !me.plan.isPremium {
+                freePlan = me.plan
+            }
+        }
     }
 
     // MARK: - Background
@@ -46,6 +75,16 @@ struct MembershipView: View {
     private var atmosphericBackground: some View {
         ZStack {
             Color.surfaceDim.ignoresSafeArea()
+            if isOnboarding {
+                // The product, not a crown: the same live-map artwork as the intro screens,
+                // dimmed so the plan cards and legal text stay legible.
+                RouteBackdrop(variant: .tracking,
+                              isAnimating: OnboardingPlaybackPolicy.allowsMotion(reduceMotion: reduceMotion))
+                    .blur(radius: 6)
+                    .opacity(0.35)
+                    .ignoresSafeArea()
+                    .accessibilityHidden(true)
+            }
             RadialGradient(
                 colors: [Color.primaryFixed.opacity(0.16), Color.clear],
                 center: UnitPoint(x: 0.5, y: 0),
@@ -61,17 +100,17 @@ struct MembershipView: View {
     private var closeRow: some View {
         HStack {
             Spacer()
-            Button { dismiss() } label: {
+            Button { close() } label: {
                 Image(systemName: "xmark")
                     .font(.iconXS)
-                    .foregroundColor(Color.onSurfaceVariant)
-                    .frame(width: 32, height: 32)
+                    .foregroundColor(Color.onSurface)
+                    .frame(width: 44, height: 44)
                     .background(Color.surfaceContainerHigh.opacity(0.8))
                     .clipShape(Circle())
             }
             .accessibilityLabel(Text("Close"))
-            .padding(.trailing, 20)
-            .padding(.top, 16)
+            .padding(.trailing, 16)
+            .padding(.top, 8)
         }
     }
 
@@ -99,10 +138,21 @@ struct MembershipView: View {
                 .foregroundColor(Color.onSurface)
                 .tracking(3)
 
-            Text("Your rides. No limits.")
-                .font(.bodyMd)
+            Text(heroSubtitle)
+                .font(.body)
                 .foregroundColor(Color.onSurfaceVariant)
+                .multilineTextAlignment(.center)
         }
+    }
+
+    /// Only talks about the rider cap when the rider told us their pack is bigger than it.
+    private var heroSubtitle: LocalizedStringKey {
+        guard isOnboarding else { return "Your rides. No limits." }
+        let cap = freePlan?.maxRidersPerRide ?? 5
+        if let pack = OnboardingState.packSize, pack.exceedsFreeCap(cap) {
+            return pack == .large ? "Up to 25 riders on one map." : "Your pack is bigger than \(cap)."
+        }
+        return "Ride bigger. Keep every ride."
     }
 
     // MARK: - Benefits Grid
@@ -141,6 +191,27 @@ struct MembershipView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.outlineVariant.opacity(0.2), lineWidth: 1))
             }
+        }
+    }
+
+    // MARK: - Free plan
+
+    /// What the free plan actually includes, from the server — never hardcoded, never omitted.
+    @ViewBuilder private var freePlanLine: some View {
+        if !store.isPremium {
+            Group {
+                if let plan = freePlan, let monthly = plan.monthlyLimit {
+                    Text("Free plan: \(monthly) rides a month, up to \(plan.maxRidersPerRide) riders per ride.")
+                } else if let plan = freePlan {
+                    Text("Free plan: up to \(plan.maxRidersPerRide) riders per ride.")
+                } else {
+                    Text("The free plan has monthly ride and rider limits.")
+                }
+            }
+            .font(.footnote)
+            .foregroundColor(Color.onSurfaceVariant)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -320,6 +391,7 @@ struct MembershipView: View {
                     // rather than accommodated. Drop the price before letting that happen —
                     // it is still shown dominantly on the card and in the disclosure.
                     ViewThatFits(in: .horizontal) {
+                        if let trial = ctaLabelTrial { trial }
                         ctaLabelWithPrice
                         ctaLabelShort
                         ctaLabelWithPrice
@@ -336,13 +408,23 @@ struct MembershipView: View {
             .modifier(LimePrimaryButton())
             .opacity(isPurchasing || store.products.isEmpty ? 0.6 : 1)
 
+            if isOnboarding {
+                Button { close() } label: {
+                    Text("Continue with Free")
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(Color.onSurface)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .padding(.top, 8)
+            }
+
             // Trust strip
             HStack(spacing: 6) {
                 Image(systemName: "lock.shield.fill").font(.iconXS)
                 Text("Secured by Apple  ·  Cancel anytime")
             }
-            .font(.captionMd)
-            .foregroundColor(Color.onSurfaceVariant.opacity(0.45))
+            .font(.caption)
+            .foregroundColor(Color.onSurfaceVariant)
             .padding(.top, 12)
 
             // Auto-renewal disclosure — required by App Store Guideline 3.1.2
@@ -353,8 +435,8 @@ struct MembershipView: View {
             and your account is charged for renewal within 24 hours prior to the end \
             of the period. Manage or cancel anytime in App Store account settings.
             """)
-            .font(.captionMd)
-            .foregroundColor(Color.onSurfaceVariant.opacity(0.42))
+            .font(.caption)
+            .foregroundColor(Color.onSurfaceVariant)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 4)
@@ -375,8 +457,8 @@ struct MembershipView: View {
                 Text(verbatim: "·")
                 Link("Privacy", destination: URL(string: AppURLs.privacyPolicy)!)
             }
-            .font(.captionMd)
-            .foregroundColor(Color.onSurfaceVariant.opacity(0.38))
+            .font(.caption)
+            .foregroundColor(Color.onSurfaceVariant)
             .padding(.top, 8)
         }
     }
@@ -447,7 +529,7 @@ struct MembershipView: View {
 
             Spacer()
 
-            Button("LET'S RIDE") { dismiss() }
+            Button("LET'S RIDE") { close() }
                 .font(.bodyLg)
                 .modifier(LimePrimaryButton())
                 .padding(.horizontal, 20)
@@ -508,6 +590,15 @@ struct MembershipView: View {
         return Text("GET PRO  ·  \(price) / \(period.shortLabel)")
     }
 
+    /// "START 3 DAYS FREE" when the selected plan has a free-trial introductory offer this
+    /// account is eligible for. nil otherwise — fails closed, never implies a trial.
+    private var ctaLabelTrial: Text? {
+        guard let product = selectedProduct,
+              let offer = store.introductoryOffer(for: product),
+              offer.paymentMode == .freeTrial else { return nil }
+        return Text("START \(PlanPeriod(offer.period).longLabel.uppercased()) FREE")
+    }
+
     private var ctaLabelShort: Text {
         selectedProduct == nil ? Text("GET CONVOTRACK PRO") : Text("GET PRO")
     }
@@ -548,8 +639,8 @@ struct MembershipView: View {
     }
 
     /// Empty unless an introductory offer is both configured and this account is
-    /// eligible. No offer exists today — the trial is the in-app free-ride allowance —
-    /// so this is defensive and must fail closed rather than imply a trial.
+    /// eligible (the 3-day free trial is configured as an introductory offer in App Store
+    /// Connect). Must fail closed rather than imply a trial when no offer applies.
     private func introOfferSentence(for product: Product) -> String {
         guard let offer = store.introductoryOffer(for: product) else { return "" }
         let length = PlanPeriod(offer.period).longLabel

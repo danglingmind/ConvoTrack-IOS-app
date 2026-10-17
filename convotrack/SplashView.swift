@@ -29,10 +29,14 @@ private struct RoutePath: Shape {
 }
 
 struct SplashView: View {
+    /// Shown once, at the start of onboarding (HIG: launching.md). Kept short.
+    var duration: Double = 1.8
+    var onFinished: () -> Void = {}
+
     @State private var loadingText = "INITIALIZING GPS..."
     @State private var glowPulse = false
     @State private var trimProgress: CGFloat = 0
-    @State private var navigateToAuth = false
+    @State private var finished = false
 
     private let stages = ["INITIALIZING GPS...", "SYNCING SQUAD...", "CACHING MAPS...", "PREPARING HUD..."]
 
@@ -80,12 +84,10 @@ struct SplashView: View {
                 trimProgress = 1
             }
             startLoadingCycle()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-                navigateToAuth = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+                finished = true
+                onFinished()
             }
-        }
-        .fullScreenCover(isPresented: $navigateToAuth) {
-            AuthView()
         }
     }
 
@@ -157,10 +159,10 @@ struct SplashView: View {
 
     private func startLoadingCycle() {
         var index = 0
-        Timer.scheduledTimer(withTimeInterval: 1.8, repeats: true) { timer in
+        Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { timer in
             index = (index + 1) % stages.count
             loadingText = stages[index]
-            if navigateToAuth { timer.invalidate() }
+            if finished { timer.invalidate() }
         }
     }
 }

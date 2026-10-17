@@ -327,6 +327,10 @@ struct CreateRideView: View {
             }
             .onAppear {
                 // Clamp to plan limit in case default exceeds it (e.g. free tier = 5)
+                // First ride only: start from the group size the rider told us during onboarding.
+                if let suggested = OnboardingState.consumeSuggestedMaxRiders() {
+                    maxRiders = max(2, suggested)
+                }
                 maxRiders = min(maxRiders, riderCap)
             }
         }

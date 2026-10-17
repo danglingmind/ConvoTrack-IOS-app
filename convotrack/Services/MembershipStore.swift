@@ -184,9 +184,8 @@ final class MembershipStore: ObservableObject {
 
     // MARK: - Introductory Offers
 
-    /// Defensive only: no introductory offer is configured today (the trial is the
-    /// in-app free-ride allowance). This exists so that if one is ever added in App
-    /// Store Connect the paywall discloses it correctly instead of showing bare price.
+    /// Eligibility for the introductory offer (the 3-day free trial, configured in App Store
+    /// Connect). Eligibility is per subscription group, and false once the account has used one.
     private func refreshIntroEligibility() async {
         var eligible: Set<String> = []
         for product in products {
