@@ -12,8 +12,8 @@ RT=com.apple.CoreSimulator.SimRuntime.iOS-26-2
 APP="$SKD/.build/Build/Products/Debug-iphonesimulator/convotrack.app"
 
 # All devices are iPhone 17-class => identical 402x874 pt geometry => ONE coordinate table.
-ROSTER_KEY=(L R2 R3); ROSTER_NAME=("iPhone 17 Pro" "iPhone 17" "Rider3")
-ROSTER_MATCH=("iPhone 17 Pro" "iPhone 17 –" "Rider3")
+ROSTER_KEY=(L R2 R3 R4); ROSTER_NAME=("iPhone 17 Pro" "iPhone 17" "Rider3" "Rider4")
+ROSTER_MATCH=("iPhone 17 Pro" "iPhone 17 –" "Rider3" "Rider4")
 
 if [ ! -d "$APP" ]; then
   echo "building app (first run only)…"

@@ -8,7 +8,7 @@
 # move the wrong window. Menu items act on the frontmost window (needs raising),
 # so raise+menu first, then position by title in a second pass.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-XS=(15 425 835)
+XS=(15 425 835 1245)
 
 for K in $(keys); do
   T="$(title_for "$K")"

@@ -3,7 +3,7 @@
 #   Fetch the SAME route the app will draw, so generated GPS tracks can't diverge from it.
 KEY="${GOOGLE_MAPS_KEY:-$(grep -o 'AIza[A-Za-z0-9_-]*' "$(dirname "${BASH_SOURCE[0]}")/../../../../convotrack/Services/GoogleMapsConfig.swift" | head -1)}"
 O=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$1")
-D=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[2]))" "$2")
+D=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$2")
 curl -s "https://maps.googleapis.com/maps/api/directions/json?origin=$O&destination=$D&mode=driving&key=$KEY" -o "$3"
 python3 - "$3" <<'PY'
 import json,sys,math
