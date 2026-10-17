@@ -23,6 +23,19 @@ struct MembershipView: View {
     }
 
     private var isOnboarding: Bool { presentation == .onboarding }
+
+    /// The free-trial introductory offer this account can actually redeem, if any. Nothing about a
+    /// trial is shown unless this is non-nil — never advertise an offer the purchase sheet won't give.
+    private var trialOffer: Product.SubscriptionOffer? {
+        store.products
+            .compactMap { store.introductoryOffer(for: $0) }
+            .first { $0.paymentMode == .freeTrial }
+    }
+
+    /// "3 days" — derived from the offer, never hardcoded.
+    private var trialLength: String? {
+        trialOffer.map { PlanPeriod($0.period).longLabel }
+    }
     private func close() { if let onFinish { onFinish() } else { dismiss() } }
 
     /// Free-plan limits as the server reports them. nil until loaded (or if the call fails).
@@ -46,7 +59,6 @@ struct MembershipView: View {
                         VStack(spacing: 22) {
                             heroSection
                             benefitsGrid
-                            freePlanLine
                             plansSection
                             ctaStack
                         }
@@ -138,6 +150,17 @@ struct MembershipView: View {
                 .foregroundColor(Color.onSurface)
                 .tracking(3)
 
+            if let length = trialLength {
+                Text("\(length.uppercased()) FREE")
+                    .font(.labelCaps)
+                    .foregroundColor(Color.onPrimaryFixed)
+                    .tracking(1.5)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.primaryFixed, in: Capsule())
+                    .accessibilityLabel(Text("\(length) free trial"))
+            }
+
             Text(heroSubtitle)
                 .font(.body)
                 .foregroundColor(Color.onSurfaceVariant)
@@ -194,16 +217,23 @@ struct MembershipView: View {
         }
     }
 
-    // MARK: - Free plan
+    // MARK: - Free plan terms
 
-    /// What the free plan actually includes, from the server — never hardcoded, never omitted.
-    @ViewBuilder private var freePlanLine: some View {
+    /// What the free plan includes, from the server — never hardcoded, never omitted. When a trial
+    /// is on offer it is framed as what applies after the trial.
+    @ViewBuilder private var freePlanTerms: some View {
         if !store.isPremium {
             Group {
                 if let plan = freePlan, let monthly = plan.monthlyLimit {
-                    Text("Free plan: \(monthly) rides a month, up to \(plan.maxRidersPerRide) riders per ride.")
+                    if trialLength != nil {
+                        Text("After the trial, the free plan includes \(monthly) rides a month and up to \(plan.maxRidersPerRide) riders per ride.")
+                    } else {
+                        Text("Free plan: \(monthly) rides a month, up to \(plan.maxRidersPerRide) riders per ride.")
+                    }
                 } else if let plan = freePlan {
                     Text("Free plan: up to \(plan.maxRidersPerRide) riders per ride.")
+                } else if trialLength != nil {
+                    Text("After the trial, the free plan has monthly ride and rider limits.")
                 } else {
                     Text("The free plan has monthly ride and rider limits.")
                 }
@@ -212,6 +242,7 @@ struct MembershipView: View {
             .foregroundColor(Color.onSurfaceVariant)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
+            .padding(.top, 6)
         }
     }
 
@@ -276,7 +307,13 @@ struct MembershipView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
 
-                    if let period {
+                    if let period, let length = trialLength {
+                        Text("\(length) free, then billed every \(period.longLabel)")
+                            .font(.captionMd)
+                            .foregroundColor(Color.primaryFixed)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else if let period {
                         Text(period.billingCadenceLabel)
                             .font(.captionMd)
                             .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
@@ -417,6 +454,8 @@ struct MembershipView: View {
                 }
                 .padding(.top, 8)
             }
+
+            freePlanTerms
 
             // Trust strip
             HStack(spacing: 6) {

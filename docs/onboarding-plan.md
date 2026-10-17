@@ -5,17 +5,25 @@ migration written but **not yet applied**; App Store Connect trial **not yet con
 
 ## 0. Plan changes (v3)
 
-| | Before | After |
-|---|---|---|
-| Free plan rides | 10 / month | **3 / month** (`migrations/014_reduce_free_plan_monthly_rides.sql`) |
-| Free plan riders per ride | 5 | 5 (unchanged) |
-| Pro free trial | none | **3 days**, as an introductory offer in App Store Connect |
+The free offering is three terms that apply together, in this order:
+
+1. **3-day free trial of Pro** (App Store introductory offer, free, 3 days)
+2. then the free plan: **3 rides a month** (was 10; `migrations/014_reduce_free_plan_monthly_rides.sql`, applied)
+3. and **up to 5 riders per ride** (unchanged)
+
+Paywall presentation: the trial leads (a "3 DAYS FREE" badge under the title, "3 days free, then
+billed every …" on each plan card, and a "START 3 DAYS FREE" CTA). The price stays the dominant
+element on each card (Guideline 3.1.2). Terms 2 and 3 sit as a footnote under the CTA: *"After the
+trial, the free plan includes 3 rides a month and up to 5 riders per ride."* — numbers read from the
+server plan, not hardcoded. Nothing about a trial is shown unless the account is actually
+eligible for the offer; ineligible accounts see "Free plan: …" instead.
 
 Rollout notes:
 - The migration changes the limit for every existing free user at once. Anyone who has already
   taken part in 3+ rides this calendar month is locked out immediately (`quotaService.ts` counts
   the current month). Decide whether to ship it at the start of a month or grandfather existing users.
-- The trial needs **no client code**: `MembershipStore` / `MembershipView` already read the
+- The trial is live in App Store Connect on both subscriptions (3 days, free, all 175 territories)
+  and mirrored in `convotrack.storekit` for local testing. It needs **no client code**: `MembershipStore` / `MembershipView` already read the
   introductory offer and the CTA becomes "START 3 DAYS FREE" and the disclosure gains
   "Includes a free 3 days trial, then …" only when the account is eligible. Configure it in App
   Store Connect on both subscriptions (Pricing → Introductory Offers → Free, 3 days).

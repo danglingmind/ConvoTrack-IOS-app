@@ -25,7 +25,12 @@
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "convotrack-membership-monthly",
-          "introductoryOffer" : null,
+          "introductoryOffer" : {
+            "internalID" : "82629A5B-DAE2-49F4-A230-31346E419057",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P3D"
+          },
           "localizations" : [
             {
               "description" : "Unlimited convotrack size, full ride history, and advanced analytics.",
@@ -46,7 +51,12 @@
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "convotrack-membership-yearly",
-          "introductoryOffer" : null,
+          "introductoryOffer" : {
+            "internalID" : "0008F8EF-F334-4FB2-9C24-8795A8903098",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P3D"
+          },
           "localizations" : [
             {
               "description" : "Unlimited convotrack size, full ride history, and advanced analytics. Save 33% vs monthly.",
