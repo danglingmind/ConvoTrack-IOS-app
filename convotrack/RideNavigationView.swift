@@ -1986,6 +1986,8 @@ struct RideNavigationView: View {
                 }
             }
             .ignoresSafeArea(edges: isLandscape ? .horizontal : [])
+            // The map stays visible: HUD text is capped at AX2 (plan §4.5).
+            .dsHUDTypeSize()
             if isLandscape {
                 // Only before navigation starts. Once it is live, leaving happens through the
                 // end-ride confirmation's Exit option — same rule as portrait, so the two
@@ -2001,14 +2003,13 @@ struct RideNavigationView: View {
         // measure from the same physical edges. No-op in portrait.
         .ignoresSafeArea(edges: isLandscape ? .horizontal : [])
         .navigationBarHidden(true)
+        .toolbar(.hidden, for: .tabBar)
         .preferredColorScheme(.dark)
         .onAppear {
-            appState.isRideActive = true
             UIApplication.shared.isIdleTimerDisabled = true
             ConvoTrackAppDelegate.landscapeAllowed = true
         }
         .onDisappear {
-            appState.isRideActive = false
             UIApplication.shared.isIdleTimerDisabled = false
             ConvoTrackAppDelegate.landscapeAllowed = false
             vm.teardown()
@@ -2366,24 +2367,10 @@ struct RideNavigationView: View {
             Spacer()
 
             if isFreeLooking && isNavigationActive {
-                Button(action: resumeNavigation) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "location.fill")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("RESUME")
-                            .font(.system(size: 10, weight: .black, design: .monospaced))
-                            .tracking(1.2)
-                    }
-                    .foregroundColor(Color.onPrimaryFixed)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
-                    .background(Color.primaryFixed)
-                    .clipShape(Capsule())
-                    .shadow(color: Color.primaryFixed.opacity(0.55), radius: 10)
-                }
-                .transition(.scale.combined(with: .opacity))
-                .animation(.spring(response: 0.35), value: isFreeLooking)
-                .padding(.bottom, 8)
+                DSResumePill(action: resumeNavigation)
+                    .transition(.scale.combined(with: .opacity))
+                    .animation(.spring(response: 0.35), value: isFreeLooking)
+                    .padding(.bottom, 8)
             }
 
             if vm.activeRegroup != nil && isNavigationActive {
@@ -2444,17 +2431,7 @@ struct RideNavigationView: View {
     /// where a rider looks for it after panning. Centring is over the map only, so the trailing
     /// padding is the panel's width.
     private var landscapeResumeButton: some View {
-        Button(action: resumeNavigation) {
-            HStack(spacing: 6) {
-                Image(systemName: "location.fill").font(.system(size: 11, weight: .bold))
-                Text("RESUME").font(.system(size: 10, weight: .black, design: .monospaced)).tracking(1.2)
-            }
-            .foregroundColor(Color.onPrimaryFixed)
-            .padding(.horizontal, 16).padding(.vertical, 9)
-            .background(Color.primaryFixed)
-            .clipShape(Capsule())
-            .shadow(color: Color.primaryFixed.opacity(0.55), radius: 10)
-        }
+        DSResumePill(action: resumeNavigation)
         .padding(.trailing, measuredPanelWidth)
         .padding(.bottom, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -2518,14 +2495,11 @@ struct RideNavigationView: View {
         .padding(.bottom, safeArea.bottom + 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                Color.surfaceDim.opacity(0.55)
-            }
-            .ignoresSafeArea()
+            Rectangle().fill(.clear).dsGlass(in: Rectangle())
+                .ignoresSafeArea()
         )
         .overlay(alignment: .leading) {
-            Rectangle().fill(Color.outlineVariant.opacity(0.25)).frame(width: 1)
+            Rectangle().fill(DS.Border.divider).frame(width: DS.BorderWidth.hairline)
         }
     }
 
@@ -2533,35 +2507,37 @@ struct RideNavigationView: View {
     /// here the panel is the only chrome, so the actions get the full width of it.
     private var landscapeButtonsRow: some View {
         HStack(spacing: 10) {
-            Button(action: { showRegroup = true }) {
+            Button { showRegroup = true } label: {
                 Image(systemName: "person.3.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(Color.onSurface)
+                    .dsIcon(DS.IconSize.default, weight: .medium)
+                    .foregroundStyle(DS.Text.primary)
                     .frame(maxWidth: .infinity)
                     .frame(height: buttonSize)
-                    .background(Color.surfaceContainerHigh.opacity(0.9))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
+                    .background(DS.Surface.card, in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).stroke(DS.Border.default, lineWidth: DS.BorderWidth.default))
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel(Text("Regroup"))
             Button(action: {
                 // Same rule as portrait: the leader confirms, everyone else just leaves the screen.
                 if vm.amILeader { showEndConfirm = true } else { dismiss() }
             }) {
                 Group {
                     if vm.isEnding {
-                        ProgressView().tint(Color.errorColor).scaleEffect(0.8)
+                        ProgressView().controlSize(.small).tint(DS.Status.danger)
                     } else {
-                        Image(systemName: "stop.fill").font(.system(size: 18))
+                        Image(systemName: "stop.fill").dsIcon(DS.IconSize.default, weight: .medium)
                     }
                 }
-                .foregroundColor(Color.errorColor)
+                .foregroundStyle(DS.Status.danger)
                 .frame(maxWidth: .infinity)
                 .frame(height: buttonSize)
-                .background(Color.errorContainer.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.35), lineWidth: 1))
+                .background(DS.Status.dangerTint, in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).stroke(DS.Status.dangerBorder, lineWidth: DS.BorderWidth.default))
+                .contentShape(Rectangle())
             }
             .disabled(vm.isEnding)
+            .accessibilityLabel(Text("End ride"))
         }
     }
 
@@ -2615,85 +2591,52 @@ struct RideNavigationView: View {
 
     private var navigationPreviewBar: some View {
         VStack(spacing: 0) {
-            Divider()
-                .overlay(Color.outlineVariant.opacity(0.25))
-
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(destinationName.uppercased())
-                        .font(.system(size: 12, weight: .black, design: .monospaced))
-                        .foregroundColor(Color.onSurface)
+                    Text("Destination").dsText(.fieldLabel).foregroundStyle(DS.Text.muted)
+                    Text(destinationName)
+                        .dsText(.cardTitle)
+                        .foregroundStyle(DS.Text.primary)
                         .lineLimit(1)
-                        .tracking(0.3)
                     Text(vm.myDistanceToGoalKm > 0
                          ? String(format: "%.1f km away", vm.myDistanceToGoalKm)
-                         : "Calculating route...")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color.onSurfaceVariant)
+                         : String(localized: "Calculating route…"))
+                        .dsText(.bodySmall)
+                        .foregroundStyle(DS.Text.muted)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(vm.etaString)
-                        .font(.system(size: 22, weight: .black, design: .monospaced))
-                        .foregroundColor(Color.onSurface)
-                    Text("ETA")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color.onSurfaceVariant)
-                        .tracking(1.5)
+                    Text(vm.etaString).dsText(.hudEta).foregroundStyle(DS.Text.primary)
+                    Text("ETA").dsText(.hudStatLabel).foregroundStyle(DS.Text.muted)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
+            .padding(.horizontal, DS.Space.p5)
+            .padding(.top, 18)
             .padding(.bottom, 14)
 
-            Button(action: beginNavigation) {
-                HStack(spacing: 12) {
-                    Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
-                        .font(.system(size: 20, weight: .bold))
-                    Text("START NAVIGATION")
-                        .font(.headlineMd)
-                        .tracking(-0.5)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(Color.primaryFixed)
-                .foregroundColor(Color.onPrimaryFixed)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: Color.primaryFixed.opacity(0.4), radius: 16, y: 4)
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, isLandscape ? 8 : 44)
+            DSPrimaryButton(title: "Start navigation", systemImage: "arrow.triangle.turn.up.right.diamond.fill", action: beginNavigation)
+                .padding(.horizontal, DS.Space.p5)
+                .padding(.bottom, isLandscape ? 8 : 44)
         }
-        .background(Color.surfaceDim)
+        .background(
+            UnevenRoundedRectangle(topLeadingRadius: DS.Radius.xl, topTrailingRadius: DS.Radius.xl, style: .continuous)
+                .fill(DS.Surface.glassStrong)
+                .ignoresSafeArea(edges: .bottom)
+        )
+        .overlay(alignment: .top) {
+            Rectangle().fill(DS.Border.divider).frame(height: DS.BorderWidth.hairline)
+        }
     }
 
     // MARK: - Top Bar
 
     /// Shared by portrait's top bar and the landscape side panel, so the two can't drift.
     private var backButton: some View {
-        Button(action: { dismiss() }) {
-            Image(systemName: "arrow.left")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(Color.onSurface)
-                .frame(width: 44, height: 44)
-                .background(.ultraThinMaterial)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
-        }
+        DSFloatingButton(systemImage: "chevron.backward", label: "Back") { dismiss() }
     }
 
     private var liveRiderCountPill: some View {
-        HStack(spacing: 6) {
-            Circle().fill(Color.primaryFixed).frame(width: 6, height: 6)
-                .shadow(color: Color.primaryFixed, radius: 4)
-            Text(vm.liveRiderCount > 0 ? "\(vm.liveRiderCount)" : "--")
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .foregroundColor(Color.primaryFixed)
-        }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(.ultraThinMaterial)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.25), lineWidth: 1))
+        DSLiveRiderCountPill(count: vm.liveRiderCount > 0 ? vm.liveRiderCount : nil)
     }
 
     /// Portrait top chrome. (Landscape never renders this — `coreView` swaps in `landscapeHud`,
@@ -2713,16 +2656,7 @@ struct RideNavigationView: View {
                 // it only exists once navigation is live — so it stays put here.
                 HStack(alignment: .center, spacing: 10) {
                     backButton
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("TO")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.onSurfaceVariant)
-                            .tracking(1.5)
-                        Text(destinationName)
-                            .font(.bodyLg)
-                            .foregroundColor(Color.onSurface)
-                            .lineLimit(1)
-                    }
+                    DSDestinationPill(name: destinationName)
                     Spacer()
                 }
                 .padding(.horizontal, 20)   // matches the banners below and the bottom bar
@@ -2750,22 +2684,18 @@ struct RideNavigationView: View {
     /// and the whole HUD has to fit in ~390pt of height, so the same numbers would crowd the
     /// leaderboard and stats out of the panel.
     private func turnInstructionCard(expand: Bool) -> some View {
-        let tile:     CGFloat = isLandscape ? 46 : 52
-        let glyph:    CGFloat = isLandscape ? 21 : 24
-        let distance: CGFloat = isLandscape ? 22 : 26
-        let street:   CGFloat = isLandscape ? 15 : 17
+        let tile:  CGFloat = isLandscape ? 48 : 56
+        let glyph: CGFloat = isLandscape ? 24 : 28
 
-        return HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.primaryFixed)
-                    .frame(width: tile, height: tile)
-                Image(systemName: vm.currentInstruction.isEmpty
-                      ? "arrow.up"
-                      : maneuverIcon(for: vm.currentManeuver, instruction: vm.currentInstruction))
-                    .font(.system(size: glyph, weight: .bold))
-                    .foregroundColor(Color.onPrimaryFixed)
-            }
+        return HStack(spacing: DS.Space.p3) {
+            Image(systemName: vm.currentInstruction.isEmpty
+                  ? "arrow.up"
+                  : maneuverIcon(for: vm.currentManeuver, instruction: vm.currentInstruction))
+                .dsIcon(glyph, weight: .bold)
+                .foregroundStyle(DS.Text.onAccent)
+                .frame(width: tile, height: tile)
+                .background(DS.Accent.base, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                .accessibilityHidden(true)
 
             // No Spacer here on purpose: the icon is fixed-width, so the HStack hands ALL the
             // remaining width to this column, which is what lets the street name wrap instead of
@@ -2774,27 +2704,26 @@ struct RideNavigationView: View {
                 let distText = Self.turnDistanceText(vm.distanceToNextTurnMeters)
                 if !distText.isEmpty {
                     Text(distText)
-                        .font(.system(size: distance, weight: .black, design: .monospaced))
-                        .foregroundColor(Color.primaryFixed)
+                        .dsText(isLandscape ? .hudEta : .hudTurnDistance)
+                        .foregroundStyle(DS.Accent.base)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
                 }
-                // Two lines now rather than one. At 17pt a long road name no longer fits on a
-                // single line, and a truncated name is worth less than a wrapped one.
-                Text(vm.currentInstruction.isEmpty ? "Follow route" : vm.currentInstruction)
-                    .font(.system(size: street, weight: .semibold))
-                    .foregroundColor(Color.onSurface)
+                // Two lines rather than one: a truncated road name is worth less than a wrapped one.
+                Text(vm.currentInstruction.isEmpty ? String(localized: "Follow route") : vm.currentInstruction)
+                    .dsText(isLandscape ? .bodyStrong : .hudTurnInstruction)
+                    .foregroundStyle(DS.Text.primary)
                     .lineLimit(2)
                     .truncationMode(.tail)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, DS.Space.p3)
         .padding(.vertical, 10)
         .frame(maxWidth: expand ? .infinity : nil, alignment: .leading)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primaryFixed.opacity(0.3), lineWidth: 1))
+        .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).stroke(DS.Accent.border, lineWidth: DS.BorderWidth.default))
+        .dsShadow(DS.Shadow.floating)
+        .accessibilityElement(children: .combine)
     }
 
     /// Distance-to-maneuver, rounded the way Google Maps rounds it.
@@ -2863,9 +2792,9 @@ struct RideNavigationView: View {
                     HStack(spacing: 10) {
                         if vm.leaderboardRows.isEmpty {
                             ForEach(0..<3, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.surfaceContainerHigh.opacity(0.5))
-                                    .frame(width: 140, height: 56)
+                                RoundedRectangle(cornerRadius: DS.Radius.md)
+                                    .fill(DS.Surface.glassSubtle)
+                                    .frame(width: 140, height: DS.Target.hud)
                                     .redacted(reason: .placeholder)
                             }
                         } else {
@@ -2901,8 +2830,8 @@ struct RideNavigationView: View {
                     HStack(spacing: 6) {
                         if vm.leaderboardRows.isEmpty {
                             ForEach(0..<3, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.surfaceContainerHigh.opacity(0.5))
+                                RoundedRectangle(cornerRadius: DS.Radius.xs)
+                                    .fill(DS.Surface.glassSubtle)
                                     .frame(width: 100, height: 44)
                                     .redacted(reason: .placeholder)
                             }
@@ -2927,21 +2856,7 @@ struct RideNavigationView: View {
         }
     }
 
-    private var offRouteBanner: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 9, weight: .bold))
-            Text("OFF ROUTE")
-                .font(.system(size: 9, weight: .black, design: .monospaced))
-                .tracking(1)
-        }
-        .foregroundColor(Color.errorColor)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
-        .background(Color.errorContainer.opacity(0.9))
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.errorColor.opacity(0.4), lineWidth: 1))
-    }
+    private var offRouteBanner: some View { DSOffRouteChip() }
 
     // MARK: - Bottom Controls
 
@@ -2971,17 +2886,13 @@ struct RideNavigationView: View {
         // home-button devices where the inset is 0.
         .padding(.bottom, max(barMinBottomPad, bottomInset - barBottomTrim))
         .background(
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                Color.surfaceDim.opacity(0.55)
-            }
-            // Covers the bottom edge even if a future layout hands the HUD an inset frame.
-            .ignoresSafeArea(edges: .bottom)
+            // Glass on the functional layer; the map is content. Covers the bottom edge even if a
+            // future layout hands the HUD an inset frame.
+            Rectangle().fill(.clear).dsGlass(in: Rectangle())
+                .ignoresSafeArea(edges: .bottom)
         )
         .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Color.outlineVariant.opacity(0.25))
-                .frame(height: 1)
+            Rectangle().fill(DS.Border.divider).frame(height: DS.BorderWidth.hairline)
         }
     }
 
@@ -3017,122 +2928,73 @@ struct RideNavigationView: View {
 
     /// 48pt portrait — comfortably above the 44pt minimum touch target, and it stops
     /// the buttons from setting a row height 21pt taller than the stats beside them.
-    private var buttonSize: CGFloat { isLandscape ? 44 : 48 }
+    private var buttonSize: CGFloat { isLandscape ? DS.Target.hud : DS.Target.hud }
 
     // A single stat written directly on the bar — no card/pill. `lineLimit(1)` keeps multi-digit
     // values (e.g. 3-digit speed) on one line; `minimumScaleFactor` lets them give up a little
     // size when the row is full rather than forcing the HStack wider than the screen. Do NOT use
     // `fixedSize` here: three stats plus both buttons need ~438pt at worst-case values, so on a
     // 393pt screen a fixed-width row bleeds past both edges and clips the outermost glyphs.
-    private func barStat(label: String, value: String, unit: String?) -> some View {
+    private func barStat(label: LocalizedStringKey, value: String, unit: String?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(.statLabel)
-                .foregroundColor(Color.onSurfaceVariant)
-                .tracking(1)
+                .dsText(.hudStatLabel)
+                .foregroundStyle(DS.Text.muted)
+                .lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
-                    .font(isLandscape ? .statValueCompact : .statValue)
-                    .foregroundColor(Color.onSurface)
-                    .monospacedDigit()
+                    .dsText(isLandscape ? .hudEta : .hudStatValue)
+                    .foregroundStyle(DS.Text.primary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
                 if let unit {
                     Text(unit)
-                        .font(.statUnit)
-                        .foregroundColor(Color.onSurfaceVariant)
+                        .dsText(.hudStatLabel)
+                        .foregroundStyle(DS.Text.muted)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(label))
+        .accessibilityValue(Text(unit.map { "\(value) \($0)" } ?? value))
     }
 
     private var barDivider: some View {
         Rectangle()
-            .fill(Color.outlineVariant.opacity(0.25))
-            .frame(width: 1, height: isLandscape ? 26 : 30)
+            .fill(DS.Border.divider)
+            .frame(width: DS.BorderWidth.hairline, height: isLandscape ? 26 : 30)
     }
 
     private var regroupButton: some View {
-        Button(action: { showRegroup = true }) {
-            Image(systemName: "person.3.fill")
-                .font(.system(size: isLandscape ? 16 : 20))
-                .foregroundColor(Color.onSurface)
-                .frame(width: buttonSize, height: buttonSize)
-                .background(Color.surfaceContainerHigh.opacity(0.9))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
-        }
+        DSSquareIconButton(systemImage: "person.3.fill", label: "Regroup",
+                           size: isLandscape ? .hudLandscape : .hud) { showRegroup = true }
     }
 
     private var endRideButton: some View {
-        Button(action: {
+        DSSquareIconButton(systemImage: "stop.fill", label: "End ride", variant: .danger,
+                           size: isLandscape ? .hudLandscape : .hud, isBusy: vm.isEnding) {
             if vm.amILeader {
                 // Ending is irreversible and ends it for every rider in the convoy, so the leader
-                // confirms first. A mis-tap here used to end the ride outright — and this button
-                // sits next to regroup, on a phone being tapped at a set of lights. The same
-                // confirmation now also carries Exit, since the back button is gone while
-                // navigating.
+                // confirms first. The same confirmation also carries Exit, since the back button
+                // is gone while navigating.
                 showEndConfirm = true
             } else {
-                // Not the leader: they cannot end anything, so this is purely the exit and there
-                // is nothing to confirm.
+                // Not the leader: they cannot end anything, so this is purely the exit.
                 dismiss()
             }
-        }) {
-            Group {
-                if vm.isEnding {
-                    ProgressView().tint(Color.errorColor).scaleEffect(0.8)
-                } else {
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: isLandscape ? 16 : 20))
-                }
-            }
-            .foregroundColor(Color.errorColor)
-            .frame(width: buttonSize, height: buttonSize)
-            .background(Color.errorContainer.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.35), lineWidth: 1))
         }
-        .disabled(vm.isEnding)
     }
 
     // MARK: - Arrived Button
 
     private var arrivedButton: some View {
-        Button(action: { vm.markArrivedAtRegroup() }) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                Text("MARK AS ARRIVED")
-                    .font(.labelCaps)
-                    .tracking(0.5)
-            }
-            .foregroundColor(Color.onPrimaryFixed)
-            .padding(.horizontal, 20)
-            .frame(height: 44)
-            .background(Color.primaryFixed, in: Capsule())
-            .shadow(color: Color.primaryFixed.opacity(0.5), radius: 12, y: 2)
-        }
+        DSRegroupArrivalControl(hasArrived: false) { vm.markArrivedAtRegroup() }
     }
 
-    // Subtle, out-of-focus indicator shown after this rider has marked arrived,
-    // while we wait for the regroup to be resolved. Deliberately small so it
-    // doesn't compete with the map or the primary bottom controls.
+    // Subtle indicator shown after this rider has marked arrived, while we wait for the regroup to
+    // be resolved. Not interactive.
     private var waitingForOthersPill: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "clock.fill")
-                .font(.system(size: 10, weight: .semibold))
-            Text("WAITING FOR OTHERS")
-                .font(.labelCaps)
-                .tracking(0.5)
-        }
-        .foregroundColor(Color.onSurfaceVariant)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
+        DSRegroupArrivalControl(hasArrived: true) {}
     }
 
 }
@@ -3146,7 +3008,7 @@ struct LiveRiderPin: View {
     private var size: CGFloat { isSelected ? 54 : 46 }
     private var firstName: String { rider.name.components(separatedBy: " ").first ?? rider.name }
     private var borderColor: Color {
-        isSelected ? Color.primaryFixed : (rider.isMe ? Color.primaryFixed : Color.white.opacity(0.9))
+        isSelected ? DS.Accent.base : (rider.isMe ? DS.Accent.base : Color.white.opacity(0.9))
     }
 
     var body: some View {
@@ -3181,15 +3043,15 @@ struct LiveRiderPin: View {
                 // Rank badge
                 Text("#\(rider.rank)")
                     .font(.system(size: 7, weight: .black, design: .monospaced))
-                    .foregroundColor(rider.rank == 1 ? Color.onPrimaryFixed : Color.onSurface)
+                    .foregroundColor(rider.rank == 1 ? DS.Text.onAccent : DS.Text.primary.base)
                     .padding(.horizontal, 3).padding(.vertical, 1.5)
-                    .background(rider.rank == 1 ? Color.primaryFixed : Color.surfaceContainerHighest.opacity(0.95))
+                    .background(rider.rank == 1 ? DS.Accent.base : DS.Surface.neutralBadge.opacity(0.95))
                     .clipShape(Capsule())
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .offset(x: 4, y: 4)
                     .frame(width: size, height: size)
             }
-            .shadow(color: isSelected ? Color.primaryFixed.opacity(0.55) : Color.black.opacity(0.3),
+            .shadow(color: isSelected ? DS.Accent.base.opacity(0.55) : Color.black.opacity(0.3),
                     radius: isSelected ? 12 : 5, y: 2)
 
             Triangle()
@@ -3201,7 +3063,7 @@ struct LiveRiderPin: View {
             // Name label always visible — first name only unless selected
             Text(isSelected ? rider.name.uppercased() : firstName.uppercased())
                 .font(.system(size: isSelected ? 9 : 8, weight: .black, design: .monospaced))
-                .foregroundColor(Color.onSurface)
+                .foregroundColor(DS.Text.primary.base)
                 .tracking(0.5)
                 .lineLimit(1)
                 .padding(.horizontal, isSelected ? 8 : 6)
@@ -3209,7 +3071,7 @@ struct LiveRiderPin: View {
                 .background(.ultraThinMaterial)
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(
-                    isSelected ? Color.primaryFixed.opacity(0.6) : Color.outlineVariant.opacity(0.3),
+                    isSelected ? DS.Accent.base.opacity(0.6) : DS.Border.strongColor.opacity(0.3),
                     lineWidth: 1
                 ))
         }
@@ -3218,11 +3080,11 @@ struct LiveRiderPin: View {
 
     private var letterFallback: some View {
         Circle()
-            .fill(Color.surfaceContainerHigh)
+            .fill(DS.Surface.raised)
             .overlay(
                 Text(String(rider.name.prefix(1)).uppercased())
                     .font(.system(size: size * 0.32, weight: .bold))
-                    .foregroundColor(rider.isMe ? Color.primaryFixed : Color.onSurface)
+                    .foregroundColor(rider.isMe ? DS.Accent.base : DS.Text.primary.base)
             )
     }
 }
@@ -3233,6 +3095,7 @@ struct LiveLeaderboardCard: View {
     let row: NavLeaderboardRow
     var isSelected: Bool = false
     var isOffline: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isHighlighted: Bool { row.rank == 1 || isSelected || row.isMe }
     private var firstName: String { row.name.components(separatedBy: " ").first ?? row.name }
@@ -3242,70 +3105,50 @@ struct LiveLeaderboardCard: View {
     }
 
     var body: some View {
-        // No rank number: the strip is already ordered by position, so printing it again spent
-        // 18pt of a narrow pill on information the sequence carries. `row.rank` still drives the
+        // No rank number: the strip is already ordered by position. `row.rank` still drives the
         // leader highlight below.
         HStack(spacing: 7) {
-            Group {
-                if let url = row.avatarUrl.flatMap(URL.init) {
-                    AsyncImage(url: url) { img in img.resizable().scaledToFill() }
-                    placeholder: { Circle().fill(Color.surfaceVariant) }
-                } else {
-                    Circle().fill(Color.surfaceVariant)
-                        .overlay(
-                            Text(String(row.name.prefix(1)).uppercased())
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(isHighlighted ? Color.primaryFixed : Color.onSurface)
-                        )
-                }
-            }
-            .frame(width: 26, height: 26)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(
-                isHighlighted ? Color.primaryFixed : Color.outlineVariant.opacity(0.4),
-                lineWidth: isHighlighted ? 2 : 1
-            ))
-            .overlay(alignment: .bottomTrailing) {
-                // Grey dot = this rider's heartbeats lapsed (backgrounded / lost connection).
-                if isOffline {
-                    Circle().fill(Color.onSurfaceVariant)
-                        .frame(width: 8, height: 8)
-                        .overlay(Circle().stroke(Color.surfaceContainerHigh, lineWidth: 1.5))
-                }
-            }
+            DSAvatar(
+                name: row.name, id: row.id,
+                imageURL: row.avatarUrl.flatMap(URL.init(string:)),
+                size: DS.AvatarSize.stack,
+                isOnline: isOffline ? false : nil,   // grey dot = heartbeats lapsed
+                highlightRing: isHighlighted ? DS.Accent.base : nil
+            )
 
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
                     Text(firstName)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Color.onSurface)
+                        .dsText(.navLabel)
+                        .fontWeight(.bold)
+                        .foregroundStyle(DS.Text.primary)
                         .lineLimit(1)
                     if row.isMe {
-                        Text("YOU")
-                            .font(.system(size: 6, weight: .black, design: .monospaced))
-                            .foregroundColor(Color.onPrimaryFixed)
-                            .padding(.horizontal, 3).padding(.vertical, 1)
-                            .background(Color.primaryFixed).clipShape(Capsule())
+                        Text("You")
+                            .dsText(.badgeSmall)
+                            .foregroundStyle(DS.Text.onAccent)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(DS.Accent.base, in: Capsule())
                     }
                 }
                 if !lastName.isEmpty {
                     Text(lastName)
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(Color.onSurfaceVariant)
+                        .dsText(.micro)
+                        .foregroundStyle(DS.Text.secondary)
                         .lineLimit(1)
                 }
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(isHighlighted ? Color.primaryFixed.opacity(0.12) : Color.surfaceContainerHigh.opacity(0.88))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(
-            isHighlighted ? Color.primaryFixed : Color.outlineVariant.opacity(0.3),
-            lineWidth: isHighlighted ? 1.5 : 1
-        ))
-        .opacity(isOffline ? 0.5 : 1)
-        .animation(.spring(response: 0.3), value: isSelected)
-        .animation(.easeInOut(duration: 0.3), value: isOffline)
+        .padding(.horizontal, 10)
+        .frame(minHeight: DS.Target.hud)
+        .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .stroke(isHighlighted ? DS.Accent.base : .clear, lineWidth: isHighlighted ? DS.BorderWidth.emphasis : 0))
+        .opacity(isOffline ? DS.Opacity.offline : 1)
+        .animation(reduceMotion ? nil : .spring(response: 0.3), value: isSelected)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: isOffline)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(row.name)\(row.isMe ? ", you" : "")\(isOffline ? ", offline" : "")"))
     }
 }
 
@@ -3319,16 +3162,16 @@ struct ConvoTrackLocationPin: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(Color.primaryFixed.opacity(0.22))
+                .fill(DS.Accent.base.opacity(0.22))
                 .frame(width: 46, height: 46)
             Circle()
-                .fill(Color.primaryFixed)
+                .fill(DS.Accent.base)
                 .frame(width: 24, height: 24)
                 .overlay(Circle().stroke(Color.white, lineWidth: 3))
-                .shadow(color: Color.primaryFixed.opacity(0.9), radius: 10)
+                .shadow(color: DS.Accent.base.opacity(0.9), radius: 10)
             Image(systemName: "arrowtriangle.up.fill")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(Color.onPrimaryFixed)
+                .foregroundColor(DS.Text.onAccent)
                 .offset(y: -1)
         }
         .rotationEffect(.degrees(heading))
@@ -3344,24 +3187,24 @@ struct WaypointPin: View {
         VStack(spacing: 2) {
             ZStack {
                 Circle()
-                    .fill(Color.surfaceContainerHighest)
+                    .fill(DS.Surface.neutralBadge)
                     .frame(width: 32, height: 32)
-                    .overlay(Circle().stroke(Color.tertiaryFixed, lineWidth: 2))
+                    .overlay(Circle().stroke(DS.Status.success, lineWidth: 2))
                 Image(systemName: "mappin")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(Color.tertiaryFixed)
+                    .foregroundColor(DS.Status.success)
             }
-            Triangle().fill(Color.tertiaryFixed).frame(width: 8, height: 5).offset(y: -1)
+            Triangle().fill(DS.Status.success).frame(width: 8, height: 5).offset(y: -1)
             Text(name.uppercased())
                 .font(.system(size: 7, weight: .black, design: .monospaced))
-                .foregroundColor(Color.onSurface)
+                .foregroundColor(DS.Text.primary.base)
                 .tracking(0.5)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 104)
                 .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(Color.surfaceContainerHigh.opacity(0.92))
+                .background(DS.Surface.raised.opacity(0.92))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
@@ -3375,22 +3218,22 @@ struct DestinationPin: View {
     var body: some View {
         VStack(spacing: 2) {
             ZStack {
-                Circle().fill(Color.primaryFixed).frame(width: 44, height: 44)
+                Circle().fill(DS.Accent.base).frame(width: 44, height: 44)
                 Image(systemName: "flag.checkered")
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(Color.onPrimaryFixed)
+                    .foregroundColor(DS.Text.onAccent)
             }
-            Triangle().fill(Color.primaryFixed).frame(width: 10, height: 6).offset(y: -1)
+            Triangle().fill(DS.Accent.base).frame(width: 10, height: 6).offset(y: -1)
             Text(name.uppercased())
                 .font(.system(size: 8, weight: .black, design: .monospaced))
-                .foregroundColor(Color.onSurface)
+                .foregroundColor(DS.Text.primary.base)
                 .tracking(0.5)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 112)
                 .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(Color.surfaceContainerHigh.opacity(0.92))
+                .background(DS.Surface.raised.opacity(0.92))
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
     }
@@ -3402,13 +3245,13 @@ struct StartPin: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(Color.surfaceContainerHighest)
+                .fill(DS.Surface.neutralBadge)
                 .frame(width: 36, height: 36)
-                .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
-                .shadow(color: Color.primaryFixed.opacity(0.3), radius: 8)
+                .overlay(Circle().stroke(DS.Accent.base, lineWidth: 2))
+                .shadow(color: DS.Accent.base.opacity(0.3), radius: 8)
             Image(systemName: "location.fill")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(Color.primaryFixed)
+                .foregroundColor(DS.Accent.base)
         }
     }
 }
@@ -3430,10 +3273,10 @@ struct RegroupPin: View {
 
     private var accentColor: Color {
         switch type {
-        case "FUEL":      return Color(red: 1.0, green: 0.63, blue: 0.0)   // amber
-        case "FOOD":      return Color(red: 1.0, green: 0.43, blue: 0.0)   // orange
-        case "SCENIC":    return Color(red: 0.01, green: 0.61, blue: 0.9)  // sky blue
-        default:          return Color(red: 0.48, green: 0.11, blue: 0.64) // purple
+        case "FUEL":      return DS.Category.fuel
+        case "FOOD":      return DS.Category.food
+        case "SCENIC":    return DS.Category.scenic
+        default:          return DS.Category.other
         }
     }
 
@@ -3450,7 +3293,7 @@ struct RegroupPin: View {
         VStack(spacing: 2) {
             ZStack {
                 Circle()
-                    .fill(Color.surfaceDim)
+                    .fill(DS.Background.base)
                     .frame(width: 40, height: 40)
                     .overlay(Circle().stroke(accentColor, lineWidth: 2.5))
                 Image(systemName: icon)
@@ -3460,10 +3303,10 @@ struct RegroupPin: View {
             Triangle().fill(accentColor).frame(width: 8, height: 5).offset(y: -1)
             Text(label)
                 .font(.system(size: 7, weight: .black, design: .monospaced))
-                .foregroundColor(Color.onSurface)
+                .foregroundColor(DS.Text.primary.base)
                 .tracking(0.5)
                 .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(Color.surfaceContainerHigh.opacity(0.92))
+                .background(DS.Surface.raised.opacity(0.92))
                 .clipShape(Capsule())
         }
     }
@@ -3477,19 +3320,19 @@ struct EmergencyPin: View {
         VStack(spacing: 2) {
             ZStack {
                 Circle()
-                    .fill(Color.errorColor)
+                    .fill(DS.Status.danger)
                     .frame(width: 40, height: 40)
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
             }
-            Triangle().fill(Color.errorColor).frame(width: 8, height: 5).offset(y: -1)
+            Triangle().fill(DS.Status.danger).frame(width: 8, height: 5).offset(y: -1)
             Text("EMERGENCY")
                 .font(.system(size: 7, weight: .black, design: .monospaced))
                 .foregroundColor(.white)
                 .tracking(0.5)
                 .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(Color.errorColor.opacity(0.92))
+                .background(DS.Status.danger.opacity(0.92))
                 .clipShape(Capsule())
         }
     }
@@ -3497,60 +3340,58 @@ struct EmergencyPin: View {
 
 // MARK: - Regroup Toast Banner
 
+private extension String {
+    var regroupColor: Color {
+        switch self {
+        case "FUEL":   return DS.Category.fuel
+        case "FOOD":   return DS.Category.food
+        case "SCENIC": return DS.Category.scenic
+        default:       return DS.Category.other
+        }
+    }
+}
+
 struct RegroupToastBanner: View {
     let type: String
 
     private var icon: String {
         switch type {
-        case "FUEL":   return "fuelpump.fill"
+        case "FUEL":   return "fuelpump"
         case "FOOD":   return "fork.knife"
-        case "SCENIC": return "camera.fill"
+        case "SCENIC": return "camera"
         default:       return "hand.raised.fill"
-        }
-    }
-
-    private var accentColor: Color {
-        switch type {
-        case "FUEL":   return Color(red: 1.0, green: 0.63, blue: 0.0)
-        case "FOOD":   return Color(red: 1.0, green: 0.43, blue: 0.0)
-        case "SCENIC": return Color(red: 0.01, green: 0.61, blue: 0.9)
-        default:       return Color(red: 0.48, green: 0.11, blue: 0.64)
         }
     }
 
     private var label: String {
         switch type {
-        case "FUEL":   return "Fuel Stop"
-        case "FOOD":   return "Food Stop"
-        case "SCENIC": return "Scenic Stop"
-        default:       return "Stop"
+        case "FUEL":   return String(localized: "Fuel stop")
+        case "FOOD":   return String(localized: "Food stop")
+        case "SCENIC": return String(localized: "Scenic stop")
+        default:       return String(localized: "Stop")
         }
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        let accent = type.regroupColor
+        HStack(spacing: DS.Space.p3) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(accentColor)
+                .dsIcon(DS.IconSize.md, weight: .semibold)
+                .foregroundStyle(accent)
                 .frame(width: 36, height: 36)
-                .background(accentColor.opacity(0.15))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .background(accent.opacity(0.16), in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text("REGROUP CALLED")
-                    .font(.system(size: 10, weight: .black, design: .monospaced))
-                    .foregroundColor(accentColor)
-                    .tracking(1)
-                Text("Head to the \(label)")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color.onSurface)
+                Text("Regroup called").dsText(.badge).foregroundStyle(accent)
+                Text("Head to the \(label)").dsText(.bodySmall).fontWeight(.semibold).foregroundStyle(DS.Text.primary)
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(accentColor.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(accentColor.opacity(0.5), lineWidth: 1.5))
+        .padding(.vertical, DS.Space.p3)
+        .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).stroke(accent.opacity(0.5), lineWidth: DS.BorderWidth.emphasis))
+        .accessibilityElement(children: .combine)
+        .onAppear { AccessibilityNotification.Announcement(String(localized: "Regroup called. Head to the \(label)")).post() }
     }
 }
 
@@ -3558,23 +3399,24 @@ struct RegroupToastBanner: View {
 
 struct RegroupResolvedBanner: View {
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: DS.Space.p3) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(Color.tertiaryFixed)
+                .dsIcon(DS.IconSize.md, weight: .semibold)
+                .foregroundStyle(DS.Status.success)
                 .frame(width: 36, height: 36)
-                .background(Color.tertiaryFixed.opacity(0.15))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            Text("Regroup complete · Everyone arrived")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color.tertiaryFixed)
-            Spacer()
+                .background(DS.Status.success.opacity(0.16), in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Regroup complete").dsText(.badge).foregroundStyle(DS.Status.success)
+                Text("Everyone arrived").dsText(.bodySmall).fontWeight(.semibold).foregroundStyle(DS.Text.primary)
+            }
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.tertiaryFixed.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.tertiaryFixed.opacity(0.5), lineWidth: 1.5))
+        .padding(.vertical, DS.Space.p3)
+        .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).stroke(DS.Status.successBorder, lineWidth: DS.BorderWidth.emphasis))
+        .accessibilityElement(children: .combine)
+        .onAppear { AccessibilityNotification.Announcement(String(localized: "Regroup complete. Everyone arrived")).post() }
     }
 }
 
@@ -3588,41 +3430,45 @@ struct EmergencyAlertBanner: View {
     let onDismiss: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: DS.Space.p3) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(Color.errorColor)
+                .dsIcon(DS.IconSize.md, weight: .bold)
+                .foregroundStyle(DS.Status.danger)
                 .frame(width: 36, height: 36)
-                .background(Color.errorColor.opacity(0.18))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .background(DS.Status.danger.opacity(0.18), in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text("EMERGENCY")
-                    .font(.system(size: 10, weight: .black, design: .monospaced))
-                    .foregroundColor(Color.errorColor)
-                    .tracking(1.5)
+                Text("Emergency").dsText(.badge).foregroundStyle(DS.Status.danger)
                 Text("\(reporterName) needs help — head to their location")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color.onSurface)
+                    .dsText(.bodySmall).fontWeight(.semibold)
+                    .foregroundStyle(DS.Text.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
             if let onDismiss {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(Color.onSurfaceVariant)
+                        .dsIcon(DS.IconSize.xs, weight: .bold)
+                        .foregroundStyle(DS.Text.secondary)
                         .frame(width: 28, height: 28)
-                        .background(Color.surfaceContainerHigh.opacity(0.6))
-                        .clipShape(Circle())
+                        .background(DS.Surface.raised, in: Circle())
+                        .frame(width: DS.Target.minimum, height: DS.Target.minimum)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel(Text("Dismiss emergency"))
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.errorContainer.opacity(0.22))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.6), lineWidth: 1.5))
-        .shadow(color: Color.errorColor.opacity(0.3), radius: 10, y: 3)
+        .padding(.vertical, DS.Space.p3)
+        .background(DS.Surface.dangerContainer, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).stroke(DS.Status.danger, lineWidth: DS.BorderWidth.emphasis))
+        .accessibilityElement(children: .contain)
+        .onAppear {
+            // Emergency is announced at high priority and warns by haptic.
+            var text = AttributedString(String(localized: "Emergency. \(reporterName) needs help"))
+            text.accessibilitySpeechAnnouncementPriority = .high
+            AccessibilityNotification.Announcement(text).post()
+            DSHaptic.alert()
+        }
     }
 }
 

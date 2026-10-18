@@ -292,21 +292,5 @@ final class RideRealtimeSession: ObservableObject {
 struct ConnectionBanner: View {
     let state: RideRealtimeSession.ConnectionState
 
-    var body: some View {
-        HStack(spacing: 8) {
-            ProgressView()
-                .controlSize(.small)
-                .tint(Color.errorColor)
-            Text("RECONNECTING…")
-                .font(.labelCaps)
-                .foregroundColor(Color.errorColor)
-                .tracking(1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.errorContainer.opacity(0.95))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
-    }
+    var body: some View { DSReconnectingBanner() }
 }

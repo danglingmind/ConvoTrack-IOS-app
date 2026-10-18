@@ -148,8 +148,8 @@ struct EdgeChip: View {
         VStack(spacing: 3) {
             avatar
             Text(formatEdgeDistance(model.distanceMeters))
-                .font(.dataMono)
-                .foregroundColor(Color.onSurface)
+                .dsText(.dataMono)
+                .foregroundColor(DS.Text.primary.base)
                 .lineLimit(1)
                 // Shadow instead of a plate: legible over any map tile, hides nothing.
                 .shadow(color: .black.opacity(0.85), radius: 3)
@@ -162,19 +162,19 @@ struct EdgeChip: View {
         Group {
             if let url = model.avatarUrl.flatMap(URL.init) {
                 AsyncImage(url: url) { img in img.resizable().scaledToFill() }
-                placeholder: { Circle().fill(Color.surfaceVariant) }
+                placeholder: { Circle().fill(DS.Surface.avatar) }
             } else {
-                Circle().fill(Color.surfaceVariant)
+                Circle().fill(DS.Surface.avatar)
                     .overlay(
                         Text(String(model.name.prefix(1)).uppercased())
                             .font(.system(size: size * 0.4, weight: .bold))
-                            .foregroundColor(Color.onSurface)
+                            .foregroundColor(DS.Text.primary.base)
                     )
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().stroke(Color.tertiaryFixed, lineWidth: 2))
+        .overlay(Circle().stroke(DS.Status.success, lineWidth: 2))
         .shadow(color: .black.opacity(0.55), radius: 4, y: 1)
     }
 }
@@ -191,15 +191,15 @@ struct ClusterChip: View {
         VStack(spacing: 3) {
             Text("\(count)")
                 .font(.system(size: 15, weight: .black, design: .monospaced))
-                .foregroundColor(Color.onSurface)
+                .foregroundColor(DS.Text.primary.base)
                 .frame(width: size, height: size)
-                .background(Color.surfaceVariant)
+                .background(DS.Surface.avatar)
                 .clipShape(Circle())
-                .overlay(Circle().stroke(Color.tertiaryFixed, lineWidth: 2))
+                .overlay(Circle().stroke(DS.Status.success, lineWidth: 2))
                 .shadow(color: .black.opacity(0.55), radius: 4, y: 1)
             Text(formatEdgeDistance(distanceMeters))
-                .font(.dataMono)
-                .foregroundColor(Color.onSurface)
+                .dsText(.dataMono)
+                .foregroundColor(DS.Text.primary.base)
                 .lineLimit(1)
                 .shadow(color: .black.opacity(0.85), radius: 3)
                 .shadow(color: .black.opacity(0.6), radius: 1)

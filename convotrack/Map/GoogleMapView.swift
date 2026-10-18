@@ -207,9 +207,9 @@ struct GoogleMapView: UIViewRepresentable {
 
         // Dim, tappable alternatives sit below the bright selected route.
         c.applyAlternatives(alternativeRoutes, selectedIndex: selectedRouteIndex, to: mapView)
-        c.applyRoute(originalRouteCoords, to: mapView, key: &c.originalRouteVersion, line: &c.originalRouteLine, color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 0.28), width: 3, dashed: false, zIndex: 98)
-        c.applyRoute(routeCoords,         to: mapView, key: &c.casingVersion,        line: &c.casingLine,        color: UIColor(red: 0.353, green: 0.424, blue: 0, alpha: 1),    width: Coordinator.casingWidth,    dashed: false, zIndex: 99)
-        c.applyRoute(routeCoords,         to: mapView, key: &c.routeVersion,         line: &c.routeLine,         color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1),    width: Coordinator.routeFaceWidth, dashed: false, zIndex: 100)
+        c.applyRoute(originalRouteCoords, to: mapView, key: &c.originalRouteVersion, line: &c.originalRouteLine, color: UIColor(DS.Map.routePlanned), width: 3, dashed: false, zIndex: 98)
+        c.applyRoute(routeCoords,         to: mapView, key: &c.casingVersion,        line: &c.casingLine,        color: UIColor(DS.Map.routeGlow),    width: Coordinator.casingWidth,    dashed: false, zIndex: 99)
+        c.applyRoute(routeCoords,         to: mapView, key: &c.routeVersion,         line: &c.routeLine,         color: UIColor(DS.Map.routeCore),    width: Coordinator.routeFaceWidth, dashed: false, zIndex: 100)
         c.applyRouteDecorations(routeCoords: routeCoords, originalCoords: originalRouteCoords, stopCoords: stopCoords, isNavigating: isNavigating, to: mapView)
         c.applyPins(pins, to: mapView)
 
@@ -232,17 +232,27 @@ struct GoogleMapView: UIViewRepresentable {
     // MARK: - Dark style
 
     private func applyDarkStyle(to mapView: GMSMapView) {
+        // Google dark style in the design-system palette (`map.styleRules`): blue-black base,
+        // muted green parks, soft roads, route shields kept on highways.
+        func hex(_ c: Color) -> String {
+            let u = UIColor(c)
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            u.getRed(&r, green: &g, blue: &b, alpha: &a)
+            return String(format: "#%02X%02X%02X", Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
+        }
         let json = """
-        [{"elementType":"geometry","stylers":[{"color":"#131313"}]},
-         {"elementType":"labels.text.fill","stylers":[{"color":"#616161"}]},
-         {"elementType":"labels.text.stroke","stylers":[{"color":"#1a1a1a"}]},
-         {"featureType":"road","elementType":"geometry","stylers":[{"color":"#2c2c2c"}]},
-         {"featureType":"road.arterial","elementType":"geometry","stylers":[{"color":"#333333"}]},
-         {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#3c3c3c"}]},
-         {"featureType":"road.highway","elementType":"labels.text.fill","stylers":[{"color":"#555555"}]},
-         {"featureType":"water","elementType":"geometry","stylers":[{"color":"#050505"}]},
-         {"featureType":"poi","stylers":[{"visibility":"off"}]},
-         {"featureType":"transit","stylers":[{"visibility":"off"}]}]
+        [{"elementType":"geometry","stylers":[{"color":"\(hex(DS.Map.background))"}]},
+         {"elementType":"labels.text.fill","stylers":[{"color":"\(hex(DS.Map.label))"}]},
+         {"elementType":"labels.text.stroke","stylers":[{"color":"\(hex(DS.Map.labelHalo))"}]},
+         {"featureType":"poi","elementType":"labels","stylers":[{"visibility":"off"}]},
+         {"featureType":"poi.park","elementType":"geometry","stylers":[{"color":"\(hex(DS.Map.park))"}]},
+         {"featureType":"landscape.natural","elementType":"geometry","stylers":[{"color":"\(hex(DS.Map.park))"}]},
+         {"featureType":"road","elementType":"geometry","stylers":[{"color":"\(hex(DS.Map.roadMinor))"}]},
+         {"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"\(hex(DS.Map.roadStroke))"}]},
+         {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"\(hex(DS.Map.roadMajor))"}]},
+         {"featureType":"road.highway","elementType":"labels.icon","stylers":[{"visibility":"on"}]},
+         {"featureType":"transit","stylers":[{"visibility":"off"}]},
+         {"featureType":"water","elementType":"geometry","stylers":[{"color":"\(hex(DS.Map.water))"}]}]
         """
         if let style = try? GMSMapStyle(jsonString: json) {
             mapView.mapStyle = style
@@ -542,7 +552,7 @@ extension GoogleMapView {
                 let f = UIGraphicsImageRendererFormat(); f.scale = scale; return f
             }())
             let image = renderer.image { ctx in
-                let lime = UIColor(red: 0.792, green: 0.953, blue: 0, alpha: opacity)
+                let lime = UIColor(DS.Accent.base).withAlphaComponent(opacity)
                 lime.setFill()
                 ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
                 UIColor.white.withAlphaComponent(opacity * 0.9).setStroke()
@@ -588,7 +598,7 @@ extension GoogleMapView {
             let polyline         = GMSPolyline(path: path)
             polyline.strokeWidth = 2
             polyline.zIndex      = 96
-            let limeConnector    = UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 0.75)
+            let limeConnector    = UIColor(DS.Map.routeConnector)
             let solidSpan        = GMSStyleSpan(style: .solidColor(limeConnector), segments: 2)
             let gapSpan          = GMSStyleSpan(style: .solidColor(.clear),        segments: 2)
             polyline.spans       = [solidSpan, gapSpan]
@@ -851,7 +861,7 @@ extension GoogleMapView {
                 return f
             }())
             let path = Self.userChevronPath(size: Self.userChevronSize)
-            let lime = UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1)
+            let lime = UIColor(DS.Map.riderRing)
 
             return renderer.image { ctx in
                 let cg = ctx.cgContext
@@ -904,7 +914,7 @@ extension GoogleMapView {
         /// from the current user below. Border uses the route lime.
         private func renderRiderIcon(name: String, avatar: UIImage?, isMe: Bool, isSelected: Bool, isOffline: Bool, distanceText: String?) -> UIImage? {
             let size = Self.riderCircleSize(isSelected)
-            let lime = UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1)
+            let lime = UIColor(DS.Map.riderRing)
 
             // Name (above) — first name, uppercased.
             let name0 = (name.components(separatedBy: " ").first?.uppercased() ?? "") as NSString
@@ -949,7 +959,7 @@ extension GoogleMapView {
                     cg.restoreGState()
                 } else {
                     // Letter fallback while the photo loads or when there's no avatar URL.
-                    UIColor(red: 0.12, green: 0.12, blue: 0.12, alpha: 1).setFill()
+                    UIColor(DS.Surface.avatar).setFill()
                     cg.fillEllipse(in: circleRect)
                     let initial = String(name.prefix(1)).uppercased() as NSString
                     let attrs: [NSAttributedString.Key: Any] = [
