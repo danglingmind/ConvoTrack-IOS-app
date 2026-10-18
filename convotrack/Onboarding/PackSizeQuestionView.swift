@@ -11,17 +11,17 @@ struct PackSizeQuestionView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("YOUR PACK")
-                        .font(.caption.weight(.bold).monospaced())
-                        .tracking(2)
-                        .foregroundStyle(Color.onSurfaceVariant)
+                    Text("Your pack")
+                        .dsText(.eyebrow)
+                        .foregroundStyle(DS.Text.secondary)
                     Text("How big is your usual group?")
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(Color.onSurface)
+                        .dsText(.heroTitle)
+                        .foregroundStyle(DS.Text.primary)
                         .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
                     Text("So we can set up your first ride.")
-                        .font(.body)
-                        .foregroundStyle(Color.onSurfaceVariant)
+                        .dsText(.heroSubtitle)
+                        .foregroundStyle(DS.Text.secondary)
 
                     VStack(spacing: 10) {
                         ForEach(PackSize.allCases) { size in
@@ -36,15 +36,9 @@ struct PackSizeQuestionView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
 
-            Button(action: {
+            DSPrimaryButton(title: "Continue") {
                 OnboardingState.packSize = selection
                 onContinue()
-            }) {
-                Text("Continue")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 56)
-                    .background(Color.primaryFixed, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundStyle(Color.onPrimaryFixed)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
@@ -63,28 +57,27 @@ struct PackSizeQuestionView: View {
 
     private func optionRow(_ size: PackSize) -> some View {
         let selected = selection == size
-        return Button { selection = size } label: {
+        return Button {
+            DSHaptic.selection()
+            selection = size
+        } label: {
             HStack {
                 Text(title(size))
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(Color.onSurface)
+                    .dsText(.bodyStrong)
+                    .foregroundStyle(DS.Text.primary)
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 12)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(selected ? Color.primaryFixed : Color.onSurfaceVariant)
+                    .dsIcon(DS.IconSize.lg)
+                    .foregroundStyle(selected ? DS.Accent.base : DS.Text.secondary.base)
             }
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-            .background(selected ? Color.primaryFixed.opacity(0.10) : Color.surfaceContainerHigh.opacity(0.5),
-                        in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14)
-                .stroke(selected ? Color.primaryFixed.opacity(0.8) : Color.outlineVariant.opacity(0.3),
-                        lineWidth: selected ? 1.5 : 1))
+            .padding(.horizontal, DS.Space.p4)
+            .frame(maxWidth: .infinity, minHeight: DS.Target.button, alignment: .leading)
+            .dsSurfaceCard(.card, radius: DS.Radius.md, border: selected ? DS.Accent.border : nil)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
-#Preview { PackSizeQuestionView(onContinue: {}).background(Color.surfaceDim).preferredColorScheme(.dark) }
+#Preview { PackSizeQuestionView(onContinue: {}).background(DS.Background.base).preferredColorScheme(.dark) }

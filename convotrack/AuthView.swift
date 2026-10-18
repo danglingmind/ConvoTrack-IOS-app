@@ -1,5 +1,6 @@
 import SwiftUI
 import ClerkKit
+import AuthenticationServices
 
 /// Whether the next Google sign-in must run in a fresh, cookie-free web session.
 ///
@@ -23,6 +24,36 @@ enum WebSignInSession {
     }
 }
 
+/// The system "Continue with Apple" button (`ASAuthorizationAppleIDButton`), so its logo, label and
+/// proportions follow Apple's guidelines. Authorisation itself still runs through Clerk, so this
+/// only reports the tap.
+private struct AppleContinueButton: UIViewRepresentable {
+    var isEnabled: Bool
+    var action: () -> Void
+
+    func makeUIView(context: Context) -> ASAuthorizationAppleIDButton {
+        // White on a dark background; 18 pt corners to match the Google button.
+        let button = ASAuthorizationAppleIDButton(authorizationButtonType: .continue, authorizationButtonStyle: .white)
+        button.cornerRadius = DS.Radius.button
+        button.addTarget(context.coordinator, action: #selector(Coordinator.tapped), for: .touchUpInside)
+        return button
+    }
+
+    func updateUIView(_ uiView: ASAuthorizationAppleIDButton, context: Context) {
+        context.coordinator.action = action
+        uiView.isEnabled = isEnabled
+        uiView.alpha = isEnabled ? 1 : 0.6
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+
+    final class Coordinator: NSObject {
+        var action: () -> Void
+        init(action: @escaping () -> Void) { self.action = action }
+        @objc func tapped() { action() }
+    }
+}
+
 struct AuthView: View {
     /// When set, the host (ContentView) owns what comes next. When nil, AuthView presents
     /// MainTabView itself — the previous behaviour, kept for previews.
@@ -35,7 +66,6 @@ struct AuthView: View {
     @State private var appeared = false
     @State private var signingInProvider: AuthProvider?
     @State private var errorMessage: String?
-    @State private var showError = false
 
     private enum AuthProvider {
         case google, apple
@@ -45,181 +75,135 @@ struct AuthView: View {
         ZStack {
             heroBackground
 
-            // All content within a single padded column — mirrors `main px-margin-mobile`
+            // Two equal halves: brand centred in the top, sign-in centred in the bottom.
             VStack(spacing: 0) {
-                brandHeader.padding(.top, 24)
-                Spacer()
-                authButtons
-                Spacer()
-                footerSection.padding(.bottom, 28)
+                brandHeader
+                    .frame(maxHeight: .infinity)
+                VStack(spacing: DS.Space.p8) {
+                    authButtons
+                    footerSection
+                }
+                .frame(maxHeight: .infinity)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, DS.Space.screenInset)
+            .padding(.vertical, DS.Space.p6)
         }
         .preferredColorScheme(.dark)
         .opacity(appeared ? 1 : 0)
         .onAppear {
+            #if DEBUG
+            // `-authHold YES` keeps this screen up for design review even when signed in.
+            if clerk.user != nil, !UserDefaults.standard.bool(forKey: "authHold") { finishAuth() }
+            #else
             if clerk.user != nil { finishAuth() }
-            withAnimation(.easeIn(duration: 0.8)) { appeared = true }
+            #endif
+            withAnimation(DS.Motion.emphasized) { appeared = true }
         }
         .fullScreenCover(isPresented: $navigateToMain) {
             MainTabView()
                 .environmentObject(membershipStore)
         }
-        .alert("Sign In Failed", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage ?? "An unknown error occurred.")
-        }
     }
 
     // MARK: - Hero Background
 
+    /// Bundled road photo fading into the base (was a remote URL).
     private var heroBackground: some View {
         ZStack {
-            AsyncImage(url: URL(string: "https://lh3.googleusercontent.com/aida-public/AB6AXuDFAix39kXUcp78oqWlesjF3LCKq1VTeD9el_pMmGyuukwkTDIarfnJS3dQ3CcZCX7npcCHxySC-YVsFOIUbePy1AQi6sYoO2w737m_KxJ3O0zPw-IC7ZDFXWYUn_l2eCr4iNZJw7wGkbPSX0lmqTBeVn7sorLf3Xb9bUc9VAeXshZ8-OmWKRQ5R4XO8USOX6-7EDLmuel4-BeYuZyjw9e_oaLbpJmT1FqNidwmswNbqkLGzKVNClsQIyUjkhuP3dMCvOjMnUloytQ")) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Color.surfaceContainerLow
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-            .grayscale(0.3)
-            .opacity(0.4)
-            .ignoresSafeArea()
-
-            // hero-gradient: transparent → 80% at 60% → opaque at 100%
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: Color(hex: "131313").opacity(0.8), location: 0.6),
-                    .init(color: Color(hex: "131313"), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            DSScreenBackground()
+            DSHeroPhoto(imageName: "hero_road_sunset", height: nil)
+                .ignoresSafeArea()
+            // Sunset photos are bright: dim them so the tagline and sign-in copy stay legible.
+            DS.Surface.scrim.ignoresSafeArea().allowsHitTesting(false)
         }
     }
 
     // MARK: - Brand Header
 
     private var brandHeader: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: DS.Space.p3) {
             Image("AppLogo")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 100, height: 100)
-                .padding(.bottom, 16)
+                .accessibilityHidden(true)
 
-            // font-display-metrics 48px tracking-[0.2em]
-            Text("CONVOTRACK")
-                .font(.norwester(size: 42))
-                .foregroundColor(Color.primaryFixed)
-                .tracking(9.6)
+            Text("ConvoTrack")
+                .dsText(.brandWordmark)
+                .foregroundStyle(DS.Text.primary)
+                .lineLimit(1)
+                .dsShadow(DS.Shadow.textOnPhoto)
+                .accessibilityAddTraits(.isHeader)
 
-            // border-t border-outline-variant/30 pt-2 w-max tracking-[0.3em]
-            // `w-max` = content-hugging width → no frame(maxWidth:) needed
-            Text("RIDE TOGETHER IN REAL TIME")
-                .font(.labelCaps)
-                .foregroundColor(Color.onSurfaceVariant)
-                .tracking(3.6)
-                .padding(.top, 8)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.outlineVariant.opacity(0.3))
-                        .frame(height: 1)
-                }
+            Text("Ride together in real time")
+                .dsText(.eyebrow)
+                .foregroundStyle(DS.Text.secondary)
+                .dsShadow(DS.Shadow.textOnPhoto)
         }
         .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Auth Buttons
 
+    /// Apple first (white, system button), Google below at the same size (dark with an outline).
+    /// No lime: neither provider is "the next action".
     private var authButtons: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: DS.Space.p3) {
             Text("Sign in to keep your rides and ride with others.")
-                .font(.subheadline)
-                .foregroundStyle(Color.onSurfaceVariant)
+                .dsText(.bodySmall)
+                .foregroundStyle(DS.Text.primary)
+                .dsShadow(DS.Shadow.textOnPhoto)
                 .multilineTextAlignment(.center)
-                .padding(.bottom, 4)
+                .padding(.bottom, DS.Space.p1)
 
-            // Google — bg-primary-fixed, border-2 border-primary-fixed, btn-glow
-            signInButton(
-                label: "Continue with Google",
-                icon: AnyView(GoogleGIcon()),
-                foreground: Color.onPrimaryFixed,
-                background: Color.primaryFixed,
-                border: Color.primaryFixed,
-                borderWidth: 2,
-                glowColor: Color.primaryFixed.opacity(0.35),
-                isLoading: signingInProvider == .google,
-                action: signInWithGoogle
-            )
+            ZStack {
+                AppleContinueButton(isEnabled: signingInProvider == nil, action: signInWithApple)
+                    .frame(height: DS.Target.button)
+                if signingInProvider == .apple { ProgressView().tint(.black) }
+            }
+            .frame(maxWidth: 400)
 
-            // Apple — bg-surface-container-highest, text-primary (#fff), border-outline/30
-            signInButton(
-                label: "Continue with Apple",
-                icon: AnyView(
-                    Image(systemName: "apple.logo")
-                        .font(.system(size: 20, weight: .medium))
-                ),
-                foreground: .white,
-                background: Color.surfaceContainerHighest,
-                border: Color.outline.opacity(0.3),
-                borderWidth: 1,
-                glowColor: .clear,
-                isLoading: signingInProvider == .apple,
-                action: signInWithApple
-            )
+            googleButton
+                .frame(maxWidth: 400)
 
+            if let errorMessage {
+                DSInlineError(message: LocalizedStringKey(errorMessage))
+                    .padding(.top, DS.Space.p1)
+            }
         }
     }
 
-    // Icon pinned to left-4, label centered — matches Stitch `absolute left-4` + flex justify-center
-    private func signInButton(
-        label: String,
-        icon: AnyView,
-        foreground: Color,
-        background: Color,
-        border: Color,
-        borderWidth: CGFloat,
-        glowColor: Color,
-        isLoading: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
+    private var googleButton: some View {
+        Button(action: signInWithGoogle) {
             ZStack {
-                if isLoading {
-                    ProgressView()
-                        .tint(foreground)
+                if signingInProvider == .google {
+                    ProgressView().tint(DS.Text.primary.base)
                 } else {
-                    // Text centered across the full width
-                    Text(label)
-                        .font(.system(size: 15, weight: .bold))
-                        .textCase(.uppercase)
-                        .tracking(-0.5)
-                        .foregroundColor(foreground)
-
-                    // Icon pinned to leading edge at 16pt
-                    HStack(spacing: 0) {
-                        icon
-                            .frame(width: 24, height: 24)
-                            .foregroundColor(foreground)
+                    Text("Continue with Google")
+                        .dsText(.rowTitle)
+                        .foregroundStyle(DS.Text.primary)
+                    // The G sits on a 32 pt white disc, 16 pt from the leading edge.
+                    HStack {
+                        GoogleGIcon()
+                            .frame(width: 32, height: 32)
+                            .background(Color.white, in: Circle())
+                            .padding(.leading, DS.Space.p4)
                         Spacer()
                     }
-                    .padding(.leading, 16)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .background(background)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .overlay(RoundedRectangle(cornerRadius: 4).stroke(border, lineWidth: borderWidth))
-            .shadow(color: glowColor, radius: 16)
+            .frame(maxWidth: .infinity, minHeight: DS.Target.button)
+            .background(DS.Surface.card, in: RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous)
+                    .stroke(DS.Border.strong, lineWidth: DS.BorderWidth.default)
+            )
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSPressStyle())
         .disabled(signingInProvider != nil)
-        .frame(width: 350)
+        .accessibilityLabel(Text("Continue with Google"))
     }
 
     private func finishAuth() {
@@ -230,6 +214,7 @@ struct AuthView: View {
 
     private func signInWithGoogle() {
         signingInProvider = .google
+        errorMessage = nil
         Task {
             do {
                 try await clerk.auth.signInWithOAuth(
@@ -242,7 +227,6 @@ struct AuthView: View {
                 finishAuth()
             } catch {
                 errorMessage = error.riderMessage
-                showError = true
             }
             signingInProvider = nil
         }
@@ -250,13 +234,13 @@ struct AuthView: View {
 
     private func signInWithApple() {
         signingInProvider = .apple
+        errorMessage = nil
         Task {
             do {
                 try await clerk.auth.signInWithApple()
                 finishAuth()
             } catch {
                 errorMessage = error.riderMessage
-                showError = true
             }
             signingInProvider = nil
         }
@@ -265,29 +249,13 @@ struct AuthView: View {
     // MARK: - Footer
 
     private var footerSection: some View {
-        VStack(spacing: 20) {
-            // TERMS • PRIVACY — naturally centered, no Spacers
-            HStack(spacing: 24) {
-                Button("TERMS") {
-                    openURL(URL(string: AppURLs.termsOfService)!)
-                }
-                    .font(.labelCaps)
-                    .foregroundColor(Color.onSurfaceVariant)
-                    .tracking(4)
-                Circle()
-                    .fill(Color.primaryFixed.opacity(0.5))
-                    .frame(width: 5, height: 5)
-                Button("PRIVACY") {
-                    openURL(URL(string: AppURLs.privacyPolicy)!)
-                }
-                    .font(.labelCaps)
-                    .foregroundColor(Color.onSurfaceVariant)
-                    .tracking(4)
+        HStack(spacing: DS.Space.p1) {
+            DSTextButton(title: "Terms", role: .dismiss) {
+                openURL(URL(string: AppURLs.termsOfService)!)
             }
-
-            HStack(spacing: 8) {
-                StatusPill(dotColor: Color.tertiaryFixedDim, label: "SERVER ONLINE")
-                StatusPill(icon: "lock.shield", label: "SSL ENCRYPTED")
+            Circle().fill(DS.Accent.soft).frame(width: 5, height: 5).accessibilityHidden(true)
+            DSTextButton(title: "Privacy", role: .dismiss) {
+                openURL(URL(string: AppURLs.privacyPolicy)!)
             }
         }
     }
@@ -400,41 +368,6 @@ struct GoogleGIcon: View {
             context.fill(red, with: .color(Color(hex: "EA4335")))
         }
         .frame(width: 24, height: 24)
-    }
-}
-
-// MARK: - Status Pill
-
-struct StatusPill: View {
-    var icon: String? = nil
-    var dotColor: Color? = nil
-    let label: String
-    @State private var pulsing = false
-
-    var body: some View {
-        HStack(spacing: 6) {
-            if let dotColor {
-                Circle()
-                    .fill(dotColor)
-                    .frame(width: 8, height: 8)
-                    .opacity(pulsing ? 0.35 : 1.0)
-                    .animation(.easeInOut(duration: 1).repeatForever(autoreverses: true), value: pulsing)
-                    .onAppear { pulsing = true }
-            }
-            if let icon {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-            }
-            Text(label)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .tracking(1)
-        }
-        .foregroundColor(Color.onSurfaceVariant)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.surfaceContainerLow)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.outlineVariant.opacity(0.2), lineWidth: 1))
     }
 }
 

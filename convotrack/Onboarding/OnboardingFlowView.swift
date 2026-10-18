@@ -56,7 +56,7 @@ struct OnboardingFlowView: View {
 
     var body: some View {
         ZStack {
-            Color.surfaceDim.ignoresSafeArea()
+            DS.Background.base.ignoresSafeArea()
 
             Group {
                 if onQuestion {
@@ -91,21 +91,21 @@ struct OnboardingFlowView: View {
             if !onQuestion && OnboardingPlaybackPolicy.allowsMotion(reduceMotion: reduceMotion) {
                 Button { userPaused.toggle() } label: {
                     Image(systemName: userPaused ? "play.fill" : "pause.fill")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Color.onSurface)
-                        .frame(width: 44, height: 44)
-                        .background(Color.surfaceContainerHigh.opacity(0.7), in: Circle())
+                        .dsIcon(DS.IconSize.md, weight: .semibold)
+                        .foregroundStyle(DS.Text.primary)
+                        .frame(width: DS.Target.minimum, height: DS.Target.minimum)
+                        .dsGlass(in: Circle(), clear: true, interactive: true)
                 }
                 .accessibilityLabel(userPaused ? Text("Play background animation") : Text("Pause background animation"))
             }
             Spacer()
             Button(action: finish) {
                 Text("Skip")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Color.onSurface)
-                    .padding(.horizontal, 16)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .background(Color.surfaceContainerHigh.opacity(0.7), in: Capsule())
+                    .dsText(.bodyStrong)
+                    .foregroundStyle(DS.Text.primary)
+                    .padding(.horizontal, DS.Space.p4)
+                    .frame(minWidth: DS.Target.minimum, minHeight: DS.Target.minimum)
+                    .dsGlass(clear: true, interactive: true)
             }
         }
         .padding(.horizontal, 16)
@@ -120,16 +120,16 @@ struct OnboardingFlowView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(page.eyebrow)
-                        .font(.caption.weight(.bold).monospaced())
-                        .tracking(2)
-                        .foregroundStyle(Color.onSurfaceVariant)
+                        .dsText(.eyebrow)
+                        .foregroundStyle(DS.Text.secondary)
                     Text(page.headline)
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(Color.onSurface)
+                        .dsText(.heroTitle)
+                        .foregroundStyle(DS.Text.primary)
                         .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
                     Text(page.body)
-                        .font(.body)
-                        .foregroundStyle(Color.onSurfaceVariant)
+                        .dsText(.heroSubtitle)
+                        .foregroundStyle(DS.Text.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -152,7 +152,7 @@ struct OnboardingFlowView: View {
         .background(alignment: .bottom) { copyScrim }
         .background(alignment: .top) {
             // Just enough fade for the clock, pause and Skip to read over the video.
-            LinearGradient(colors: [Color.surfaceDim.opacity(0.7), .clear], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [DS.Background.base.opacity(0.7), .clear], startPoint: .top, endPoint: .bottom)
                 .frame(height: 96)
                 .ignoresSafeArea(edges: .top)
                 .allowsHitTesting(false)
@@ -172,7 +172,7 @@ struct OnboardingFlowView: View {
                 // so the edges recede and the riders in the middle hold the eye.
                 Self.videoTint.opacity(0.55)
                 RadialGradient(
-                    colors: [.clear, Color.surfaceDim.opacity(0.55)],
+                    colors: [.clear, DS.Background.base.opacity(0.55)],
                     center: UnitPoint(x: 0.5, y: 0.38),
                     startRadius: 140, endRadius: 560
                 )
@@ -200,19 +200,19 @@ struct OnboardingFlowView: View {
         let gradient = LinearGradient(
             stops: [
                 .init(color: .clear, location: 0),
-                .init(color: Color.surfaceDim.opacity(peak * 0.15), location: a * 0.5),
-                .init(color: Color.surfaceDim.opacity(peak * 0.5), location: a),
-                .init(color: Color.surfaceDim.opacity(peak * 0.8), location: (lead + text * 0.35) / total),
-                .init(color: Color.surfaceDim.opacity(peak * 0.95), location: (lead + text * 0.7) / total),
-                .init(color: Color.surfaceDim.opacity(peak), location: (lead + text) / total),
-                .init(color: Color.surfaceDim.opacity(peak), location: 1),
+                .init(color: DS.Background.base.opacity(peak * 0.15), location: a * 0.5),
+                .init(color: DS.Background.base.opacity(peak * 0.5), location: a),
+                .init(color: DS.Background.base.opacity(peak * 0.8), location: (lead + text * 0.35) / total),
+                .init(color: DS.Background.base.opacity(peak * 0.95), location: (lead + text * 0.7) / total),
+                .init(color: DS.Background.base.opacity(peak), location: (lead + text) / total),
+                .init(color: DS.Background.base.opacity(peak), location: 1),
             ],
             startPoint: .top, endPoint: .bottom
         )
         // The tail runs on under the home indicator; backgrounds aren't clipped.
         return VStack(spacing: 0) {
             gradient.frame(height: total)
-            Color.surfaceDim.opacity(peak).frame(height: 60)
+            DS.Background.base.opacity(peak).frame(height: 60)
         }
         .padding(.bottom, -60)
         .allowsHitTesting(false)
@@ -221,13 +221,7 @@ struct OnboardingFlowView: View {
     private var footer: some View {
         VStack(spacing: 18) {
             pageDots
-            Button(action: advance) {
-                Text("Continue")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 56)
-                    .background(Color.primaryFixed, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundStyle(Color.onPrimaryFixed)
-            }
+            DSPrimaryButton(title: "Continue", action: advance)
         }
         .padding(.horizontal, 24)
         .padding(.top, 20)
@@ -238,7 +232,7 @@ struct OnboardingFlowView: View {
         HStack(spacing: 8) {
             ForEach(0..<pageCount, id: \.self) { i in
                 Capsule()
-                    .fill(i == index ? Color.onSurface : Color.onSurfaceVariant.opacity(0.45))
+                    .fill(i == index ? DS.Text.primary.base : DS.Text.secondary.base.opacity(0.45))
                     .frame(width: i == index ? 22 : 8, height: 8)
             }
         }
@@ -250,12 +244,12 @@ struct OnboardingFlowView: View {
 
     private func advance() {
         guard index < pageCount - 1 else { finish(); return }
-        withAnimation(.easeInOut(duration: 0.25)) { index += 1 }
+        withAnimation(reduceMotion ? nil : DS.Motion.standard) { index += 1 }
     }
 
     private func goBack() {
         guard index > 0 else { return }
-        withAnimation(.easeInOut(duration: 0.25)) { index -= 1 }
+        withAnimation(reduceMotion ? nil : DS.Motion.standard) { index -= 1 }
     }
 
     private func finish() { onFinish() }

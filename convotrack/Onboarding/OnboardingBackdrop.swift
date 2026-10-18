@@ -33,7 +33,7 @@ struct OnboardingBackdrop: View {
 
     var body: some View {
         ZStack {
-            Color.surfaceContainerLowest
+            DS.Background.deep
 
             if allowsMotion, let url = Bundle.main.url(forResource: videoName, withExtension: "mp4") {
                 poster
@@ -178,16 +178,16 @@ struct RouteBackdrop: View {
         stride(from: CGFloat(0), through: size.height, by: step).forEach {
             grid.move(to: CGPoint(x: 0, y: $0)); grid.addLine(to: CGPoint(x: size.width, y: $0))
         }
-        ctx.stroke(grid, with: .color(Color.outlineVariant.opacity(0.18)), lineWidth: 1)
+        ctx.stroke(grid, with: .color(DS.Border.strongColor.opacity(0.18)), lineWidth: 1)
 
         // Route
         let pts = routePoints(in: size)
         var route = Path()
         route.move(to: pts[0])
         pts.dropFirst().forEach { route.addLine(to: $0) }
-        ctx.stroke(route, with: .color(Color.primaryFixed.opacity(0.25)),
+        ctx.stroke(route, with: .color(DS.Accent.base.opacity(0.25)),
                    style: StrokeStyle(lineWidth: 14, lineCap: .round, lineJoin: .round))
-        ctx.stroke(route, with: .color(Color.primaryFixed),
+        ctx.stroke(route, with: .color(DS.Accent.base),
                    style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
 
         // Riders. Loop progress so the clip is seamless.
@@ -202,7 +202,7 @@ struct RouteBackdrop: View {
             let pulse = CGFloat((time * 0.7).truncatingRemainder(dividingBy: 1))
             let r = 22 + 70 * pulse
             ctx.stroke(Path(ellipseIn: CGRect(x: gather.x - r, y: gather.y - r, width: r * 2, height: r * 2)),
-                       with: .color(Color.errorColor.opacity(0.6 * (1 - pulse))), lineWidth: 3)
+                       with: .color(DS.Status.danger.opacity(0.6 * (1 - pulse))), lineWidth: 3)
         }
 
         for (idx, gap) in gaps.enumerated() {
@@ -210,9 +210,9 @@ struct RouteBackdrop: View {
             let isLeader = idx == 0
             let radius: CGFloat = isLeader ? 12 : 9
             ctx.fill(Path(ellipseIn: CGRect(x: p.x - radius - 5, y: p.y - radius - 5, width: (radius + 5) * 2, height: (radius + 5) * 2)),
-                     with: .color(Color.surfaceDim.opacity(0.85)))
+                     with: .color(DS.Background.base.opacity(0.85)))
             ctx.fill(Path(ellipseIn: CGRect(x: p.x - radius, y: p.y - radius, width: radius * 2, height: radius * 2)),
-                     with: .color(isLeader ? Color.primaryFixed : Color.tertiaryFixed))
+                     with: .color(isLeader ? DS.Accent.base : DS.Status.success))
         }
 
         // Invite variant: a join "ping" travelling to a new rider
@@ -221,9 +221,9 @@ struct RouteBackdrop: View {
             let pulse = CGFloat((time * 0.5).truncatingRemainder(dividingBy: 1))
             let r = 10 + 40 * pulse
             ctx.stroke(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)),
-                       with: .color(Color.tertiaryFixed.opacity(0.7 * (1 - pulse))), lineWidth: 3)
+                       with: .color(DS.Status.success.opacity(0.7 * (1 - pulse))), lineWidth: 3)
             ctx.fill(Path(ellipseIn: CGRect(x: p.x - 9, y: p.y - 9, width: 18, height: 18)),
-                     with: .color(Color.tertiaryFixed))
+                     with: .color(DS.Status.success))
         }
     }
 }
