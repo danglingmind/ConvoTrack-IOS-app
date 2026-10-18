@@ -12,6 +12,7 @@ struct MembershipView: View {
     @EnvironmentObject private var store: MembershipStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private let presentation: MembershipPresentation
     private let onFinish: (() -> Void)?
@@ -56,19 +57,22 @@ struct MembershipView: View {
                 VStack(spacing: 0) {
                     closeRow
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: 22) {
+                        VStack(spacing: DS.Space.p6) {
                             heroSection
                             benefitsGrid
                             plansSection
                             ctaStack
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 4)
-                        .padding(.bottom, 28)
+                        .padding(.horizontal, DS.Space.screenInset)
+                        .padding(.top, DS.Space.p1)
+                        .padding(.bottom, DS.Space.p7)
+                        .frame(maxWidth: DS.Space.contentMaxWidth)
+                        .frame(maxWidth: .infinity)
                     }
                 }
             }
         }
+        .preferredColorScheme(.dark)
         .task {
             await store.loadProducts()
             // Catches a country change that happened while the app was suspended,
@@ -85,8 +89,8 @@ struct MembershipView: View {
     // MARK: - Background
 
     private var atmosphericBackground: some View {
-        ZStack {
-            Color.surfaceDim.ignoresSafeArea()
+        ZStack(alignment: .top) {
+            DSScreenBackground()
             if isOnboarding {
                 // The product, not a crown: the same live-map artwork as the intro screens,
                 // dimmed so the plan cards and legal text stay legible.
@@ -97,13 +101,7 @@ struct MembershipView: View {
                     .ignoresSafeArea()
                     .accessibilityHidden(true)
             }
-            RadialGradient(
-                colors: [Color.primaryFixed.opacity(0.16), Color.clear],
-                center: UnitPoint(x: 0.5, y: 0),
-                startRadius: 0,
-                endRadius: 340
-            )
-            .ignoresSafeArea()
+            DS.Gradient.accentAura(endRadius: 340).ignoresSafeArea()
         }
     }
 
@@ -112,60 +110,35 @@ struct MembershipView: View {
     private var closeRow: some View {
         HStack {
             Spacer()
-            Button { close() } label: {
-                Image(systemName: "xmark")
-                    .font(.iconXS)
-                    .foregroundColor(Color.onSurface)
-                    .frame(width: 44, height: 44)
-                    .background(Color.surfaceContainerHigh.opacity(0.8))
-                    .clipShape(Circle())
-            }
-            .accessibilityLabel(Text("Close"))
-            .padding(.trailing, 16)
-            .padding(.top, 8)
+            DSFloatingButton(systemImage: "xmark", label: "Close", variant: .onDark) { close() }
+                .padding(.trailing, DS.Space.p4)
+                .padding(.top, DS.Space.p2)
         }
     }
 
     // MARK: - Hero
 
     private var heroSection: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(Color.primaryFixed.opacity(0.18))
-                    .frame(width: 110, height: 110)
-                    .blur(radius: 22)
-                Circle()
-                    .fill(Color.primaryFixed.opacity(0.14))
-                    .frame(width: 72, height: 72)
-                Image(systemName: "crown.fill")
-                    .font(.iconXL)
-                    .foregroundColor(Color.primaryFixed)
-                    .shadow(color: Color.primaryFixed.opacity(0.7), radius: 10)
-            }
-            .padding(.top, 2)
+        VStack(spacing: DS.Space.p3) {
+            Image(systemName: "rosette")
+                .dsIcon(32, weight: .medium)
+                .foregroundStyle(DS.Accent.base)
+                .frame(width: 72, height: 72)
+                .background(DS.Accent.tint, in: Circle())
+                .accessibilityHidden(true)
 
-            Text("CONVOTRACK PRO")
-                .font(.headlineLg)
-                .foregroundColor(Color.onSurface)
-                .tracking(3)
-
-            if let length = trialLength {
-                Text("\(length.uppercased()) FREE")
-                    .font(.labelCaps)
-                    .foregroundColor(Color.onPrimaryFixed)
-                    .tracking(1.5)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.primaryFixed, in: Capsule())
-                    .accessibilityLabel(Text("\(length) free trial"))
-            }
+            Text("ConvoTrack Pro")
+                .dsText(.heroTitleCompact)
+                .foregroundStyle(DS.Text.primary)
+                .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isHeader)
 
             Text(heroSubtitle)
-                .font(.body)
-                .foregroundColor(Color.onSurfaceVariant)
+                .dsText(.body)
+                .foregroundStyle(DS.Text.secondary)
                 .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
     }
 
     /// Only talks about the rider cap when the rider told us their pack is bigger than it.
@@ -183,36 +156,22 @@ struct MembershipView: View {
     // LocalizedStringKey (not String) so the build-time extractor harvests these
     // into the String Catalog — Text(someString) would silently skip them.
     private let benefits: [(icon: String, title: LocalizedStringKey, detail: LocalizedStringKey)] = [
-        ("person.3.fill",  "BIGGER PACKS", "Bring your whole crew along"),
-        ("infinity",       "UNLIMITED",    "No monthly ride cap, ever"),
-        ("chart.bar.fill", "ANALYTICS",    "Live stats & sync scores"),
-        ("clock.fill",     "365 DAYS",     "Full ride history archive"),
+        ("person.3",  "BIGGER PACKS", "Bring your whole crew along"),
+        ("infinity",  "UNLIMITED",    "No monthly ride cap, ever"),
+        ("chart.bar", "ANALYTICS",    "Live stats & sync scores"),
+        ("calendar",  "365 DAYS",     "Full ride history archive"),
     ]
 
-    private var benefitsGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-            ForEach(benefits, id: \.icon) { b in
-                VStack(alignment: .leading, spacing: 10) {
-                    Image(systemName: b.icon)
-                        .font(.iconMd)
-                        .foregroundColor(Color.primaryFixed)
+    private var benefitColumns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.flexible(), spacing: 10), GridItem(.flexible())]
+    }
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(b.title)
-                            .font(.labelCaps)
-                            .foregroundColor(Color.onSurface)
-                            .tracking(1)
-                        Text(b.detail)
-                            .font(.captionMd)
-                            .foregroundColor(Color.onSurfaceVariant)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                .background(Color.surfaceContainerHigh.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.outlineVariant.opacity(0.2), lineWidth: 1))
+    private var benefitsGrid: some View {
+        LazyVGrid(columns: benefitColumns, spacing: 10) {
+            ForEach(benefits, id: \.icon) { b in
+                DSBenefitTile(systemImage: b.icon, title: b.title, detail: b.detail)
             }
         }
     }
@@ -238,8 +197,8 @@ struct MembershipView: View {
                     Text("The free plan has monthly ride and rider limits.")
                 }
             }
-            .font(.footnote)
-            .foregroundColor(Color.onSurfaceVariant)
+            .dsText(.helper)
+            .foregroundStyle(DS.Text.muted)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
@@ -249,7 +208,7 @@ struct MembershipView: View {
     // MARK: - Plans
 
     private var plansSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: DS.Space.p2) {
             if store.productsLoadFailed {
                 plansErrorState
             } else if store.products.isEmpty {
@@ -260,14 +219,12 @@ struct MembershipView: View {
                         planCard(product)
 
                         if product.id == store.bestValuePlan?.id, let pct = savingsPct(for: product) {
-                            Text("SAVE \(savingsText(pct))")
-                                .font(.labelCaps)
-                                .foregroundColor(Color.onPrimaryFixed)
-                                .tracking(0.5)
+                            Text("Save \(savingsText(pct))")
+                                .dsText(.badge)
+                                .foregroundStyle(DS.Text.onAccent)
                                 .padding(.horizontal, 9)
                                 .padding(.vertical, 5)
-                                .background(Color.primaryFixed)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .background(DS.Accent.base, in: RoundedRectangle(cornerRadius: DS.Radius.xs, style: .continuous))
                                 .offset(x: -14, y: -10)
                         }
                     }
@@ -282,43 +239,36 @@ struct MembershipView: View {
         let isBestValue = product.id == store.bestValuePlan?.id
 
         return Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+            DSHaptic.selection()
+            withAnimation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.8)) {
                 selectedPlan = product.id
             }
         } label: {
-            HStack(alignment: .center, spacing: 14) {
+            HStack(alignment: .center, spacing: DS.Space.p3) {
                 // Radio
                 ZStack {
                     Circle()
-                        .stroke(isSelected ? Color.primaryFixed : Color.outlineVariant.opacity(0.4),
-                                lineWidth: isSelected ? 2 : 1.5)
+                        .stroke(isSelected ? DS.Accent.base : DS.Border.strong.base,
+                                lineWidth: isSelected ? DS.BorderWidth.focus : DS.BorderWidth.emphasis)
                         .frame(width: 22, height: 22)
                     if isSelected {
-                        Circle().fill(Color.primaryFixed).frame(width: 11, height: 11)
+                        Circle().fill(DS.Accent.base).frame(width: 11, height: 11)
                     }
                 }
+                .accessibilityHidden(true)
 
                 // Label + subtitle
                 VStack(alignment: .leading, spacing: 3) {
                     Text(planTitle(for: period))
-                        .font(.labelCaps)
-                        .foregroundColor(isSelected ? Color.onSurface : Color.onSurfaceVariant)
-                        .tracking(1.5)
+                        .dsText(.fieldLabel)
+                        .foregroundStyle(isSelected ? DS.Text.primary.base : DS.Text.secondary.base)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
 
-                    if let period, let length = trialLength {
-                        Text("\(length) free, then billed every \(period.longLabel)")
-                            .font(.captionMd)
-                            .foregroundColor(Color.primaryFixed)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else if let period {
+                    if let period {
                         Text(period.billingCadenceLabel)
-                            .font(.captionMd)
-                            .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
+                            .dsText(.helper)
+                            .foregroundStyle(DS.Text.muted)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
                     }
                 }
 
@@ -333,33 +283,23 @@ struct MembershipView: View {
 
                     if let period, period.isLongerThanAMonth, let perMonth = perMonthLabel(product, period) {
                         Text("≈ \(perMonth) / \(monthShortLabel)")
-                            .font(.captionSm)
-                            .foregroundColor(Color.onSurfaceVariant.opacity(0.55))
+                            .dsText(.micro)
+                            .foregroundStyle(DS.Text.muted)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
                     }
                 }
                 // Load-bearing: without it the HStack lets the two text columns fight
                 // for width and the price loses as often as it wins.
                 .layoutPriority(1)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 18)
-            .background(
-                isSelected
-                    ? Color.primaryFixed.opacity(isBestValue ? 0.1 : 0.06)
-                    : Color.surfaceContainerHigh.opacity(0.4)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(
-                        isSelected ? Color.primaryFixed.opacity(0.7) : Color.outlineVariant.opacity(0.2),
-                        lineWidth: isSelected ? 1.5 : 1
-                    )
-            )
+            .padding(DS.Space.p4 + 2)
+            .background(isSelected ? DS.Accent.tint.opacity(isBestValue ? 1 : 0.6) : .clear,
+                        in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            .dsSurfaceCard(.card, radius: DS.Radius.lg, border: isSelected ? DS.Accent.border : nil)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
     }
 
     /// Price + period suffix. Falls back to a stacked layout before it ever shrinks
@@ -367,40 +307,35 @@ struct MembershipView: View {
     /// "Rp 210.000,00" would otherwise wrap or clip.
     @ViewBuilder
     private func priceBlock(_ product: Product, period: PlanPeriod?, isSelected: Bool, isBestValue: Bool) -> some View {
-        let color: Color = isSelected
-            ? (isBestValue ? Color.primaryFixed : Color.onSurface)
-            : Color.onSurface
+        let color: Color = isSelected && isBestValue ? DS.Accent.base : DS.Text.primary.base
         let price = Text(product.displayPrice)
 
         Group {
             if let period {
                 ViewThatFits(in: .horizontal) {
                     Text("\(price) / \(period.shortLabel)")
-                        .font(.headlineMd)
+                        .dsText(.metricValue)
 
                     VStack(alignment: .trailing, spacing: 0) {
-                        price.font(.headlineMd)
-                        Text("/ \(period.shortLabel)").font(.captionMd)
+                        price.dsText(.metricValue)
+                        Text("/ \(period.shortLabel)").dsText(.helper)
                     }
 
-                    // Guaranteed-render fallback. 24pt x 0.6 = 14.4pt, still above the
-                    // 12pt plan name, so the billed amount stays dominant.
+                    // Guaranteed-render fallback: the billed amount stays dominant.
                     Text("\(price) / \(period.shortLabel)")
-                        .font(.headlineMd)
+                        .dsText(.metricValue)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.6)
                         .allowsTightening(true)
                 }
             } else {
                 // No subscription descriptor: show the price, never guess a period.
                 price
-                    .font(.headlineMd)
+                    .dsText(.metricValue)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
                     .allowsTightening(true)
             }
         }
-        .foregroundColor(color)
+        .foregroundStyle(color)
     }
 
     // MARK: - CTA
@@ -408,27 +343,23 @@ struct MembershipView: View {
     private var ctaStack: some View {
         VStack(spacing: 0) {
             if let error = purchaseError {
-                Text(error)
-                    .font(.captionMd)
-                    .foregroundColor(Color.errorColor)
-                    .multilineTextAlignment(.center)
-                    .padding(.bottom, 10)
+                DSInlineError(message: LocalizedStringKey(error))
+                    .padding(.bottom, DS.Space.p3)
             }
 
             Button {
+                DSHaptic.primary()
                 Task { await doPurchase() }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: DS.Space.p2) {
                     if isPurchasing {
-                        ProgressView().tint(Color.onPrimaryFixed).scaleEffect(0.85)
+                        ProgressView().tint(DS.Text.onAccent)
                     } else {
-                        Image(systemName: "crown.fill").font(.iconSm)
+                        Image(systemName: "rosette").dsIcon(DS.IconSize.sm, weight: .semibold)
                     }
-                    // The button frame is a fixed 56pt, so a wrapped line is clipped
-                    // rather than accommodated. Drop the price before letting that happen —
-                    // it is still shown dominantly on the card and in the disclosure.
+                    // Drop the price before letting the label wrap: it is still shown dominantly
+                    // on the card and in the disclosure.
                     ViewThatFits(in: .horizontal) {
-                        if let trial = ctaLabelTrial { trial }
                         ctaLabelWithPrice
                         ctaLabelShort
                         ctaLabelWithPrice
@@ -436,35 +367,36 @@ struct MembershipView: View {
                             .minimumScaleFactor(0.75)
                             .allowsTightening(true)
                     }
-                    .font(.bodyLg)
+                    .dsText(.button)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 16)
             }
+            .buttonStyle(DSPrimaryButtonStyle())
             .disabled(isPurchasing || store.products.isEmpty)
-            .modifier(LimePrimaryButton())
-            .opacity(isPurchasing || store.products.isEmpty ? 0.6 : 1)
+
+            if let line = trialLine {
+                line
+                    .dsText(.helper)
+                    .foregroundStyle(DS.Text.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, DS.Space.p2)
+            }
 
             if isOnboarding {
-                Button { close() } label: {
-                    Text("Continue with Free")
-                        .font(.body.weight(.semibold))
-                        .foregroundColor(Color.onSurface)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .padding(.top, 8)
+                DSTextButton(title: "Continue with Free", role: .dismiss) { close() }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, DS.Space.p2)
             }
 
             freePlanTerms
 
             // Trust strip
             HStack(spacing: 6) {
-                Image(systemName: "lock.shield.fill").font(.iconXS)
-                Text("Secured by Apple  ·  Cancel anytime")
+                Image(systemName: "checkmark.shield").dsIcon(DS.IconSize.sm)
+                Text("Secured by the App Store · Cancel anytime")
             }
-            .font(.caption)
-            .foregroundColor(Color.onSurfaceVariant)
-            .padding(.top, 12)
+            .dsText(.helper)
+            .foregroundStyle(DS.Text.muted)
+            .padding(.top, DS.Space.p3)
 
             // Auto-renewal disclosure — required by App Store Guideline 3.1.2
             Text("""
@@ -474,59 +406,70 @@ struct MembershipView: View {
             and your account is charged for renewal within 24 hours prior to the end \
             of the period. Manage or cancel anytime in App Store account settings.
             """)
-            .font(.caption)
-            .foregroundColor(Color.onSurfaceVariant)
+            .dsText(.helper)
+            .foregroundStyle(DS.Text.muted)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 4)
+            .padding(.horizontal, DS.Space.p1)
             .padding(.top, 10)
 
-            // Restore / legal
-            HStack(spacing: 14) {
-                Button("Restore purchases") {
-                    Task {
-                        isPurchasing = true
-                        await store.restorePurchases()
-                        isPurchasing = false
-                        if store.isPremium { withAnimation { showSuccess = true } }
-                    }
+            // Restore / legal — text buttons, at least 44 pt tall.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: DS.Space.p1) {
+                    restoreButton
+                    Text(verbatim: "·").foregroundStyle(DS.Text.subtle)
+                    legalLink("Terms", AppURLs.termsOfService)
+                    Text(verbatim: "·").foregroundStyle(DS.Text.subtle)
+                    legalLink("Privacy", AppURLs.privacyPolicy)
                 }
-                Text(verbatim: "·")
-                Link("Terms", destination: URL(string: AppURLs.termsOfService)!)
-                Text(verbatim: "·")
-                Link("Privacy", destination: URL(string: AppURLs.privacyPolicy)!)
+                VStack(spacing: 0) {
+                    restoreButton
+                    legalLink("Terms", AppURLs.termsOfService)
+                    legalLink("Privacy", AppURLs.privacyPolicy)
+                }
             }
-            .font(.caption)
-            .foregroundColor(Color.onSurfaceVariant)
-            .padding(.top, 8)
+            .dsText(.link)
+            .foregroundStyle(DS.Text.secondary)
+            .padding(.top, DS.Space.p1)
         }
+    }
+
+    private var restoreButton: some View {
+        Button("Restore purchases") {
+            Task {
+                isPurchasing = true
+                await store.restorePurchases()
+                isPurchasing = false
+                if store.isPremium { withAnimation { showSuccess = true } }
+            }
+        }
+        .padding(.horizontal, DS.Space.p3)
+        .frame(minHeight: DS.Target.minimum)
+    }
+
+    private func legalLink(_ title: LocalizedStringKey, _ url: String) -> some View {
+        Link(title, destination: URL(string: url)!)
+            .padding(.horizontal, DS.Space.p3)
+            .frame(minHeight: DS.Target.minimum)
     }
 
     // MARK: - Loading / Error
 
     private var loadingPlaceholders: some View {
-        ForEach(0..<2, id: \.self) { _ in
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.surfaceContainerHigh.opacity(0.5))
-                .frame(height: 84)
-                .overlay(ProgressView().tint(Color.primaryFixed))
+        // Never a placeholder price: just a quiet loading card.
+        HStack(spacing: DS.Space.p3) {
+            ProgressView().tint(DS.Accent.base)
+            Text("Loading plans…").dsText(.body).foregroundStyle(DS.Text.muted)
         }
+        .frame(maxWidth: .infinity, minHeight: 96)
+        .dsSurfaceCard(.card, radius: DS.Radius.lg)
+        .accessibilityElement(children: .combine)
     }
 
     private var plansErrorState: some View {
-        VStack(spacing: 10) {
-            Text("Couldn't load plans")
-                .font(.bodyMd)
-                .foregroundColor(Color.onSurfaceVariant)
-            Button("Retry") {
-                Task { await store.loadProducts(force: true) }
-            }
-            .font(.labelCaps)
-            .foregroundColor(Color.primaryFixed)
-            .tracking(1)
+        DSErrorState(title: "Couldn't load plans") {
+            Task { await store.loadProducts(force: true) }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
     }
 
     // MARK: - Success
@@ -535,46 +478,39 @@ struct MembershipView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            ZStack {
-                Circle()
-                    .fill(Color.primaryFixed.opacity(0.14))
-                    .frame(width: 130, height: 130)
-                    .blur(radius: 24)
-                Circle()
-                    .fill(Color.primaryFixed.opacity(0.1))
-                    .frame(width: 88, height: 88)
-                Image(systemName: "checkmark")
-                    .font(.iconHero)
-                    .foregroundColor(Color.primaryFixed)
-                    .shadow(color: Color.primaryFixed.opacity(0.6), radius: 12)
-            }
+            Image(systemName: "checkmark")
+                .dsIcon(44, weight: .bold)
+                .foregroundStyle(DS.Status.success)
+                .frame(width: 88, height: 88)
+                .background(DS.Status.successTint, in: Circle())
+                .accessibilityHidden(true)
 
-            VStack(spacing: 6) {
-                Text("YOU'RE IN")
-                    .font(.headlineLg)
-                    .foregroundColor(Color.primaryFixed)
-                    .tracking(4)
-                    .padding(.top, 24)
+            VStack(spacing: DS.Space.p2) {
+                Text("You're in")
+                    .dsText(.heroTitle)
+                    .foregroundStyle(DS.Accent.base)
+                    .padding(.top, DS.Space.p6)
+                    .accessibilityAddTraits(.isHeader)
 
                 Text("Welcome to ConvoTrack Pro.")
-                    .font(.bodyLg)
-                    .foregroundColor(Color.onSurface)
+                    .dsText(.bodyStrong)
+                    .foregroundStyle(DS.Text.primary)
 
                 Text("Your rides, no limits.")
-                    .font(.bodyMd)
-                    .foregroundColor(Color.onSurfaceVariant)
-                    .padding(.top, 2)
+                    .dsText(.body)
+                    .foregroundStyle(DS.Text.secondary)
             }
+            .multilineTextAlignment(.center)
 
             Spacer()
 
-            Button("LET'S RIDE") { close() }
-                .font(.bodyLg)
-                .modifier(LimePrimaryButton())
-                .padding(.horizontal, 20)
-                .padding(.bottom, 48)
+            DSPrimaryButton(title: "Let's ride") { close() }
+                .padding(.horizontal, DS.Space.screenInset)
+                .padding(.bottom, DS.Space.p10)
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .frame(maxWidth: DS.Space.contentMaxWidth)
+        .frame(maxWidth: .infinity)
+        .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96)))
     }
 
     // MARK: - Actions
@@ -629,13 +565,18 @@ struct MembershipView: View {
         return Text("GET PRO  ·  \(price) / \(period.shortLabel)")
     }
 
-    /// "START 3 DAYS FREE" when the selected plan has a free-trial introductory offer this
-    /// account is eligible for. nil otherwise — fails closed, never implies a trial.
-    private var ctaLabelTrial: Text? {
+    /// "3 days free trial, then $39.99 / yr" for the selected plan. nil unless that plan has a
+    /// free-trial offer this account can redeem — fails closed, never implies a trial.
+    private var trialLine: Text? {
         guard let product = selectedProduct,
               let offer = store.introductoryOffer(for: product),
               offer.paymentMode == .freeTrial else { return nil }
-        return Text("START \(PlanPeriod(offer.period).longLabel.uppercased()) FREE")
+        let length = PlanPeriod(offer.period).longLabel
+        let price = Text(product.displayPrice)
+        guard let period = PlanPeriod(product) else {
+            return Text("\(length) free trial, then \(price)")
+        }
+        return Text("\(length) free trial, then \(price) / \(period.shortLabel)")
     }
 
     private var ctaLabelShort: Text {

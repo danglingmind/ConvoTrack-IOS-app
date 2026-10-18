@@ -10,12 +10,14 @@ struct RideSummaryView: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var summary: RideSummary? = nil
     @State private var isLoading = true
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var mapWaypoints: [Waypoint] = []
     @State private var cameraCommand: MapCameraCommand? = nil
+    @State private var destinationPhoto: DestinationPhoto? = nil
 
     @State private var isGeneratingShare = false
     @State private var shareSheetItems: [Any] = []
@@ -25,263 +27,170 @@ struct RideSummaryView: View {
         rideTitle ?? fallback?.title ?? "Ride Complete"
     }
 
+    /// Terminal screen: no back button (DONE leaves), a sticky DONE, and the share action.
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.surfaceDim.ignoresSafeArea()
+        GeometryReader { proxy in
+            ZStack(alignment: .top) {
+                DSScreenBackground()
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    heroSection
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        hero(topInset: proxy.safeAreaInsets.top)
 
-                    VStack(spacing: 16) {
-                        if isLoading {
-                            ProgressView()
-                                .tint(Color.primaryFixed)
-                                .padding(.vertical, 40)
-                        } else if let s = summary {
-                            metricsGrid(s)
-                            leaderboardSection(s)
-                        } else if let f = fallback {
-                            fallbackMetricsGrid(f)
-                        } else {
-                            Text("Summary unavailable")
-                                .font(.bodyMd)
-                                .foregroundColor(Color.onSurfaceVariant)
-                                .padding(.vertical, 40)
+                        VStack(alignment: .leading, spacing: DS.Space.sectionGap) {
+                            if isLoading {
+                                DSLoadingState()
+                            } else if let s = summary {
+                                metricsGrid(s)
+                                awardsSection(s)
+                            } else if let f = fallback {
+                                fallbackMetricsGrid(f)
+                            } else {
+                                DSErrorState(title: "Summary unavailable") {
+                                    isLoading = true
+                                    Task { await loadSummary() }
+                                }
+                            }
+
+                            DSSecondaryButton(
+                                title: "Share summary",
+                                systemImage: "square.and.arrow.up",
+                                isLoading: isGeneratingShare
+                            ) { Task { await generateAndShare() } }
+                            .disabled(isGeneratingShare || isLoading)
                         }
-
-                        actionButtons
-
-                        Color.clear.frame(height: 100)
+                        .padding(.horizontal, DS.Space.screenInset)
+                        .padding(.top, DS.Space.p5)
+                        .padding(.bottom, DS.Space.sectionGap)
                     }
-                    .padding(.top, 16)
+                    .frame(maxWidth: .infinity)
                 }
+                .ignoresSafeArea(edges: .top)
             }
-            .ignoresSafeArea(edges: .bottom)
         }
+        .dsStickyBottomAction {
+            DSPrimaryButton(title: "Done") { finishAndDismiss() }
+        }
+        .toolbar(.hidden, for: .tabBar)
         .navigationBarBackButtonHidden(true)
-        .navigationTitle("RIDE SUMMARY")
+        .navigationTitle("Ride Summary")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(action: { finishAndDismiss() }) {
-                    Image(systemName: "arrow.left").foregroundColor(Color.primaryFixed)
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Image(systemName: "antenna.radiowaves.left.and.right").foregroundColor(Color.primaryFixed)
-            }
-        }
+        .dsTransparentNavigationBar()
         .task { await loadSummary() }
         .task { await loadRoute() }
         .sheet(isPresented: $showShareSheet) {
             SummaryShareSheet(items: shareSheetItems)
         }
+        .preferredColorScheme(.dark)
     }
 
     // MARK: - Hero
 
-    private var heroSection: some View {
-        ZStack(alignment: .bottom) {
-            if routeCoordinates.isEmpty {
-                Color.surfaceContainerLow
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 360)
-                    .overlay(
-                        Image(systemName: "flag.checkered")
-                            .font(.system(size: 80))
-                            .foregroundColor(Color.primaryFixed.opacity(0.15))
-                    )
-            } else {
-                GoogleMapView(
-                    routeCoords:   routeCoordinates,
-                    pins:          summaryMapPins,
-                    cameraCommand: cameraCommand,
-                    isInteractive: false
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: 360)
+    /// Destination photo (else the road photo) fading into the base, with the centred headline.
+    private func hero(topInset: CGFloat) -> some View {
+        VStack(spacing: DS.Space.p2) {
+            Text("Ride complete").dsText(.eyebrow).foregroundStyle(DS.Accent.base)
+            Text(effectiveTitle)
+                .dsText(.heroTitle)
+                .foregroundStyle(DS.Text.onPhoto)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+                .dsShadow(DS.Shadow.textOnPhoto)
+                .accessibilityAddTraits(.isHeader)
+            if let s = summary {
+                Text("\(formatDistance(s.distanceMeters)) km · \(RideDuration.inline(s.durationSeconds))")
+                    .dsText(.body)
+                    .foregroundStyle(DS.Text.secondary)
+                    .dsShadow(DS.Shadow.textOnPhoto)
             }
-
-            LinearGradient(
-                colors: [.clear, Color.surfaceDim.opacity(0.9)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(height: 360)
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Image(systemName: "flag.checkered")
-                        .font(.system(size: 12))
-                    Text("RIDE COMPLETED")
-                        .font(.labelCaps)
-                        .tracking(2)
-                }
-                .foregroundColor(Color.tertiaryFixed)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.surfaceContainerHighest.opacity(0.6))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .padding(.leading, 20)
-                .padding(.bottom, 4)
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(effectiveTitle)
-                            .font(.headlineLg)
-                            .foregroundColor(.white)
-                            .fontWeight(.bold)
-                        if let s = summary {
-                            Text("\(formatDistance(s.distanceMeters)) km · \(RideDuration.inline(s.durationSeconds))")
-                                .font(.bodyMd)
-                                .foregroundColor(Color.onSurfaceVariant)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    Spacer()
-                }
+            if let photo = destinationPhoto, let attribution = photo.attribution {
+                Text("Photo: \(attribution) · Google")
+                    .dsText(.micro)
+                    .foregroundStyle(DS.Text.onPhotoMuted)
+                    .lineLimit(1)
+                    .padding(.horizontal, DS.Space.p3)
+                    .frame(minHeight: 28)
+                    .dsGlass(clear: true)
+                    .padding(.top, DS.Space.p2)
             }
-            .padding(.bottom, 20)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(height: 360)
+        .padding(.horizontal, DS.Space.screenInset)
+        .padding(.top, topInset + 24)
+        .padding(.bottom, DS.Space.p5)
+        .frame(maxWidth: .infinity, minHeight: topInset + 250, alignment: .bottom)
+        .background { heroMedia }
+    }
+
+    private var heroMedia: some View {
+        ZStack {
+            if let photo = destinationPhoto {
+                Color.clear
+                    .overlay(Image(uiImage: photo.image).resizable().scaledToFill())
+                    .clipped()
+                DS.Gradient.photoFade
+            } else {
+                DSHeroPhoto(imageName: "hero_road_sunset", height: nil)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .allowsHitTesting(false)
     }
 
     // MARK: - Metrics
 
+    private var metricColumns: [GridItem] {
+        // One column at accessibility sizes, otherwise 2×2.
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.flexible(), spacing: DS.Space.p3), GridItem(.flexible())]
+    }
+
     private func metricsGrid(_ s: RideSummary) -> some View {
         let duration = RideDuration.stat(s.durationSeconds)
-        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            MetricCard(
-                label: "TOTAL DISTANCE",
-                value: formatDistance(s.distanceMeters),
-                unit: "KM",
-                isPrimary: true
-            )
-            MetricCard(
-                label: "DURATION",
-                value: duration.value,
-                unit: duration.unit,
-                isPrimary: false
-            )
-            MetricCard(
-                label: "AVG SPEED",
-                value: s.avgSpeedKmh.map { String(format: "%.0f", $0) } ?? "--",
-                unit: "KM/H",
-                isPrimary: false
-            )
-            MetricCard(
-                label: "MAX GROUP SPLIT",
+        return LazyVGrid(columns: metricColumns, spacing: DS.Space.p3) {
+            DSSummaryMetricCard(label: "Total distance", value: formatDistance(s.distanceMeters), unit: "KM", variant: .primary)
+            DSSummaryMetricCard(label: "Duration", value: duration.value, unit: duration.unit)
+            DSSummaryMetricCard(label: "Avg speed", value: s.avgSpeedKmh.map { String(format: "%.0f", $0) } ?? "--", unit: "KM/H")
+            DSSummaryMetricCard(
+                label: "Max group split",
                 value: String(format: "%.1f", s.maxGroupSplitMeters / 1000),
                 unit: "KM",
-                isPrimary: false,
-                isError: s.maxGroupSplitMeters > 2000
+                variant: s.maxGroupSplitMeters > 2000 ? .alert : .standard
             )
         }
-        .padding(.horizontal, 20)
     }
 
     private func fallbackMetricsGrid(_ f: HistoryRide) -> some View {
         let duration = RideDuration.stat(f.durationSeconds)
-        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            MetricCard(
-                label: "TOTAL DISTANCE",
-                value: String(format: "%.1f", f.distanceMeters / 1000),
-                unit: "KM",
-                isPrimary: true
-            )
-            MetricCard(
-                label: "DURATION",
-                value: duration.value,
-                unit: duration.unit,
-                isPrimary: false
-            )
-            MetricCard(
-                label: "AVG SPEED",
-                value: f.avgSpeedKmh.map { String(format: "%.0f", $0) } ?? "--",
-                unit: "KM/H",
-                isPrimary: false
-            )
-            MetricCard(
-                label: "SYNC SCORE",
-                value: f.compactnessScore.map { "\(Int($0))%" } ?? "--",
-                unit: "",
-                isPrimary: false
-            )
+        return LazyVGrid(columns: metricColumns, spacing: DS.Space.p3) {
+            DSSummaryMetricCard(label: "Total distance", value: String(format: "%.1f", f.distanceMeters / 1000), unit: "KM", variant: .primary)
+            DSSummaryMetricCard(label: "Duration", value: duration.value, unit: duration.unit)
+            DSSummaryMetricCard(label: "Avg speed", value: f.avgSpeedKmh.map { String(format: "%.0f", $0) } ?? "--", unit: "KM/H")
+            DSSummaryMetricCard(label: "Sync score", value: f.compactnessScore.map { "\(Int($0))%" } ?? "--")
         }
-        .padding(.horizontal, 20)
     }
 
-    // MARK: - Leaderboard
+    // MARK: - Awards
 
-    private func leaderboardSection(_ s: RideSummary) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("FINAL ORDER")
-                    .font(.labelCaps)
-                    .foregroundColor(Color.primaryFixed)
-                    .tracking(4)
-                Spacer()
-                Text("SYNC RANKING")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color.onSurfaceVariant)
-                    .tracking(1)
-            }
-
-            let ranked = s.participants.sorted { ($0.syncScore ?? 0) > ($1.syncScore ?? 0) }
-            VStack(spacing: 12) {
-                ForEach(Array(ranked.enumerated()), id: \.element.userId) { index, p in
-                    LeaderboardRow(
-                        rank: String(format: "%02d", index + 1),
+    private func awardsSection(_ s: RideSummary) -> some View {
+        let ranked = s.participants.sorted { ($0.syncScore ?? 0) > ($1.syncScore ?? 0) }
+        return VStack(alignment: .leading, spacing: 0) {
+            DSSectionHeading("Awards")
+            VStack(spacing: DS.Space.p3) {
+                ForEach(ranked, id: \.userId) { p in
+                    DSAwardRow(
                         name: p.name,
-                        role: roleLabel(p),
-                        sync: p.syncScore.map { "\($0)%" } ?? "--",
-                        isFirst: index == 0
+                        id: p.userId,
+                        awardTitle: displayTitle(p.rideTitle),
+                        score: p.syncScore.map { "\($0)%" } ?? "--"
                     )
                 }
             }
         }
-        .padding(16)
-        .background(Color.surfaceContainer)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.2), lineWidth: 1))
-        .padding(.horizontal, 20)
-    }
-
-    // MARK: - Actions
-
-    private var actionButtons: some View {
-        VStack(spacing: 12) {
-            Button(action: { Task { await generateAndShare() } }) {
-                HStack(spacing: 8) {
-                    if isGeneratingShare {
-                        ProgressView()
-                            .tint(Color.onPrimaryContainer)
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "square.and.arrow.up")
-                    }
-                    Text(isGeneratingShare ? "GENERATING..." : "SHARE SUMMARY")
-                        .font(.bodyLg).fontWeight(.bold)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(Color.primaryContainer)
-                .foregroundColor(Color.onPrimaryContainer)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .disabled(isGeneratingShare || isLoading)
-            Button(action: { finishAndDismiss() }) {
-                Text("DONE")
-                    .font(.bodyLg)
-                    .foregroundColor(Color.onSurface)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outlineVariant.opacity(0.5), lineWidth: 1))
-            }
-        }
-        .padding(.horizontal, 20)
+        .padding(DS.Space.p4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dsSurfaceCard(.card, radius: DS.Radius.lg)
     }
 
     // MARK: - Map Pins
@@ -326,6 +235,13 @@ struct RideSummaryView: View {
         guard let id = rideId,
               let ride = try? await APIClient.shared.getRide(id) else { return }
         mapWaypoints = ride.waypoints
+        // Destination photo for the hero (cached, shared with the lobby and Home).
+        if !ride.destinationName.isEmpty {
+            destinationPhoto = await GooglePlacePhotoService.shared.photo(
+                destinationName: ride.destinationName,
+                coordinate: CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng)
+            )
+        }
         await calculateRoute(from: ride.waypoints, polyline: ride.routePolyline)
     }
 
@@ -463,102 +379,9 @@ struct RideSummaryView: View {
         return out.string(from: date)
     }
 
-    private func roleLabel(_ p: SummaryParticipant) -> String {
-        let title = displayTitle(p.rideTitle)
-        let sync = p.syncScore.map { " • \($0)% SYNC" } ?? ""
-        return title.isEmpty ? sync.trimmingCharacters(in: .init(charactersIn: " •")) : title + sync
-    }
 }
 
 // MARK: - Subviews
-
-struct MetricCard: View {
-    let label: String
-    let value: String
-    let unit: String
-    let isPrimary: Bool
-    var isError: Bool = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.labelCaps)
-                .foregroundColor(Color.onSurfaceVariant)
-                .tracking(1)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-            Spacer(minLength: 0)
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text(value)
-                    .font(.displayMetrics)
-                    .foregroundColor(isError ? Color.errorColor : (isPrimary ? Color.primaryFixed : Color.onSurface))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Text(unit).font(.labelCaps).foregroundColor(Color.onSurfaceVariant.opacity(isError ? 0.7 : 1))
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 110, maxHeight: 110, alignment: .leading)
-        .padding(16)
-        .background(Color.surfaceContainerLow)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
-        .shadow(color: isPrimary ? Color.primaryFixed.opacity(0.1) : .clear, radius: 8)
-    }
-}
-
-struct LeaderboardRow: View {
-    let rank: String
-    let name: String
-    let role: String
-    let sync: String
-    var isFirst: Bool = false
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Text(rank)
-                .font(.system(size: 24, weight: .bold))
-                .italic()
-                .foregroundColor(isFirst ? Color.primaryFixed : Color.onSurfaceVariant)
-                .frame(width: 32)
-
-            Circle()
-                .fill(Color.surfaceVariant)
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Text(String(name.prefix(1)).uppercased())
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(isFirst ? Color.primaryFixed : Color.onSurfaceVariant)
-                )
-                .overlay(Circle().stroke(isFirst ? Color.primaryFixed : Color.outlineVariant, lineWidth: 1))
-                .opacity(isFirst ? 1 : 0.8)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(.bodyLg).foregroundColor(Color.onSurface)
-                Text(role).font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(Color.onSurfaceVariant).tracking(1)
-            }
-
-            Spacer()
-
-            if isFirst {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(Color.primaryFixed)
-            }
-        }
-        .padding(12)
-        .background(isFirst ? Color.surfaceContainerHigh : Color.surfaceContainerLow)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            HStack {
-                Rectangle()
-                    .fill(isFirst ? Color.primaryFixed : Color.outlineVariant.opacity(0.5))
-                    .frame(width: 4)
-                Spacer()
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-        )
-    }
-}
 
 // MARK: - Share Sheet
 

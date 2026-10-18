@@ -1,6 +1,8 @@
 import SwiftUI
 import CoreLocation
 
+// Fixed-size poster: its type sizes are deliberately raw (an exported image must not follow
+// Dynamic Type); only colours come from the design tokens.
 // Poster-style ride recap card (Ten Thousand "10K" layout, ConvoTrack theme):
 // brand wordmark + hero distance up top, the route as a bold lime outline over a
 // label-free near-black basemap, a single inline stat row, and a bottom meta block
@@ -25,7 +27,7 @@ struct RideSummaryShareCard: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color(hex: "131313")
+            DS.Background.base
                 .frame(width: cardSize.width, height: cardSize.height)
             mapBackground
             vignette
@@ -48,12 +50,12 @@ struct RideSummaryShareCard: View {
                     .frame(width: mapSize.width, height: mapSize.height)
                     .clipped()
             } else {
-                Color(hex: "131313")
+                DS.Background.base
                     .frame(width: mapSize.width, height: mapSize.height)
                     .overlay(
                         Image(systemName: "map.fill")
                             .font(.system(size: 64))
-                            .foregroundColor(Color.primaryFixed.opacity(0.12))
+                            .foregroundColor(DS.Accent.base.opacity(0.12))
                     )
             }
         }
@@ -63,13 +65,13 @@ struct RideSummaryShareCard: View {
     private var vignette: some View {
         LinearGradient(
             stops: [
-                .init(color: Color(hex: "131313").opacity(0.92), location: 0.00),
-                .init(color: Color(hex: "131313").opacity(0.30), location: 0.22),
+                .init(color: DS.Background.base.opacity(0.92), location: 0.00),
+                .init(color: DS.Background.base.opacity(0.30), location: 0.22),
                 .init(color: .clear,                              location: 0.42),
                 .init(color: .clear,                              location: 0.52),
-                .init(color: Color(hex: "131313").opacity(0.55), location: 0.66),
-                .init(color: Color(hex: "131313").opacity(0.97), location: 0.82),
-                .init(color: Color(hex: "131313"),                location: 1.00)
+                .init(color: DS.Background.base.opacity(0.55), location: 0.66),
+                .init(color: DS.Background.base.opacity(0.97), location: 0.82),
+                .init(color: DS.Background.base,                location: 1.00)
             ],
             startPoint: .top, endPoint: .bottom
         )
@@ -99,13 +101,13 @@ struct RideSummaryShareCard: View {
                     .lineLimit(Self.maxLabelLines)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Text.onPhoto)
                     .frame(width: m.textWidth)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(
                         RoundedRectangle(cornerRadius: m.height / 2)
-                            .fill(Color(hex: "131313").opacity(0.82))
+                            .fill(DS.Background.base.opacity(0.82))
                             .overlay(
                                 RoundedRectangle(cornerRadius: m.height / 2)
                                     .stroke(m.color.opacity(0.7), lineWidth: 1)
@@ -118,7 +120,7 @@ struct RideSummaryShareCard: View {
                 Circle()
                     .fill(m.color)
                     .frame(width: 12, height: 12)
-                    .overlay(Circle().stroke(Color(hex: "131313"), lineWidth: 2.5))
+                    .overlay(Circle().stroke(DS.Background.base, lineWidth: 2.5))
                     .shadow(color: m.color.opacity(0.6), radius: 4)
                     .position(m.dot)
             }
@@ -148,9 +150,9 @@ struct RideSummaryShareCard: View {
 
     private func markerColor(_ type: String) -> Color {
         switch type {
-        case "START":       return Color.tertiaryFixed
-        case "DESTINATION": return Color.primaryFixed
-        default:            return .white
+        case "START":       return DS.Status.success
+        case "DESTINATION": return DS.Accent.base
+        default:            return DS.Text.onPhoto
         }
     }
 
@@ -243,7 +245,7 @@ struct RideSummaryShareCard: View {
             Text("CONVOTRACK")
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .tracking(4)
-                .foregroundColor(.white)
+                .foregroundColor(DS.Accent.base)
         }
     }
 
@@ -251,12 +253,12 @@ struct RideSummaryShareCard: View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(distanceKm)
                 .font(.system(size: 60, weight: .black))
-                .foregroundColor(Color.primaryFixed)
+                .foregroundColor(DS.Accent.base)
             Text("KM")
                 .font(.system(size: 24, weight: .black))
-                .foregroundColor(Color.primaryFixed)
+                .foregroundColor(DS.Accent.base)
         }
-        .shadow(color: Color.primaryFixed.opacity(0.35), radius: 16)
+        .shadow(color: DS.Accent.base.opacity(0.35), radius: 16)
     }
 
     // Single inline stat line — the poster's "25 LAPS   250 BURPESS   $5,000 PRIZE".
@@ -279,24 +281,24 @@ struct RideSummaryShareCard: View {
             HStack(alignment: .lastTextBaseline, spacing: 2) {
                 Text(value)
                     .font(.system(size: 22, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(DS.Text.onPhoto)
                 if !unit.isEmpty {
                     Text(unit)
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color.onSurfaceVariant)
+                        .foregroundColor(DS.Text.muted.base)
                 }
             }
             Text(label)
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
                 .tracking(1.5)
-                .foregroundColor(Color.onSurfaceVariant)
+                .foregroundColor(DS.Text.muted.base)
         }
         .frame(maxWidth: .infinity)
     }
 
     private var divider: some View {
         Rectangle()
-            .fill(Color.primaryFixed.opacity(0.35))
+            .fill(DS.Accent.base.opacity(0.35))
             .frame(width: 1, height: 26)
     }
 
@@ -315,12 +317,12 @@ struct RideSummaryShareCard: View {
                         .tracking(1)
                 }
             }
-            .foregroundColor(Color.tertiaryFixed)
+            .foregroundColor(DS.Status.success)
 
             Text(rideTitle.uppercased())
                 .font(.system(size: 30, weight: .black))
                 .tracking(1)
-                .foregroundColor(.white)
+                .foregroundColor(DS.Text.onPhoto)
                 .lineLimit(2)
                 .minimumScaleFactor(0.7)
 
@@ -328,7 +330,7 @@ struct RideSummaryShareCard: View {
                 Text(route)
                     .font(.system(size: 13, weight: .bold, design: .monospaced))
                     .tracking(1.5)
-                    .foregroundColor(Color.onSurfaceVariant)
+                    .foregroundColor(DS.Text.muted.base)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
             }
@@ -350,7 +352,7 @@ struct RideSummaryShareCard: View {
     private var footer: some View {
         HStack(alignment: .center, spacing: 10) {
             Rectangle()
-                .fill(Color.primaryFixed.opacity(0.5))
+                .fill(DS.Accent.base.opacity(0.5))
                 .frame(height: 1)
             if let qr = qrImage {
                 Image(uiImage: qr)
@@ -359,13 +361,13 @@ struct RideSummaryShareCard: View {
                     .scaledToFit()
                     .frame(width: 40, height: 40)
                     .padding(4)
-                    .background(Color.white)
+                    .background(DS.Surface.codeWhite)
                     .clipShape(RoundedRectangle(cornerRadius: 5))
             }
             Text("SCAN TO\nDOWNLOAD")
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
                 .tracking(1)
-                .foregroundColor(Color.onSurfaceVariant)
+                .foregroundColor(DS.Text.muted.base)
                 .fixedSize()
         }
         .padding(.horizontal, 24)
