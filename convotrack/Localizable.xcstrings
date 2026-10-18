@@ -4,10 +4,544 @@
     "" : {
 
     },
+    "%@ · %@ rides" : {
+
+    },
     "--" : {
 
     },
     "." : {
+
+    },
+    "25 riders" : {
+
+    },
+    "365 days" : {
+
+    },
+    "Active ride" : {
+
+    },
+    "Add start & destination" : {
+
+    },
+    "Add stop" : {
+
+    },
+    "Analytics" : {
+
+    },
+    "Avg speed" : {
+
+    },
+    "Awards" : {
+
+    },
+    "Back" : {
+
+    },
+    "Calculating route…" : {
+
+    },
+    "Cancel request" : {
+
+    },
+    "Check your connection and try again." : {
+
+    },
+    "Clear place" : {
+
+    },
+    "Code complete" : {
+
+    },
+    "Code incomplete" : {
+
+    },
+    "Code verified" : {
+
+    },
+    "Connection status" : {
+
+    },
+    "Continue with Free" : {
+
+    },
+    "Continue with Google" : {
+
+    },
+    "ConvoTrack" : {
+
+    },
+    "ConvoTrack Pro" : {
+
+    },
+    "convotrack.qr.session" : {
+
+    },
+    "Copy code" : {
+
+    },
+    "Couldn't load rides" : {
+
+    },
+    "Create ride" : {
+
+    },
+    "Delete" : {
+
+    },
+    "Delete ride" : {
+
+    },
+    "Delete This Ride?" : {
+
+    },
+    "Delete Your Account?" : {
+
+    },
+    "Deleting…" : {
+
+    },
+    "Destination" : {
+
+    },
+    "Discover new roads" : {
+
+    },
+    "Dismiss" : {
+
+    },
+    "Dismiss emergency" : {
+
+    },
+    "Dist" : {
+
+    },
+    "Dist (km)" : {
+
+    },
+    "Distance" : {
+
+    },
+    "Distance · last %lld" : {
+
+    },
+    "Done" : {
+
+    },
+    "Duration" : {
+
+    },
+    "Edit profile" : {
+
+    },
+    "Edit Ride" : {
+
+    },
+    "Edit ride" : {
+
+    },
+    "Emergency" : {
+
+    },
+    "Enable location to discover rides starting near you." : {
+
+    },
+    "End ride" : {
+
+    },
+    "Enter invite code" : {
+
+    },
+    "Est. time" : {
+
+    },
+    "Estimated time" : {
+
+    },
+    "Everyone arrived" : {
+
+    },
+    "Fastest" : {
+
+    },
+    "Follow route" : {
+
+    },
+    "Food stop" : {
+
+    },
+    "Food Stop" : {
+
+    },
+    "Formation rider" : {
+
+    },
+    "Free plan" : {
+
+    },
+    "Fuel stop" : {
+
+    },
+    "Fuel Stop" : {
+
+    },
+    "Group split" : {
+
+    },
+    "History" : {
+
+    },
+    "Home" : {
+
+    },
+    "In lobby" : {
+
+    },
+    "Invite code" : {
+
+    },
+    "Join ConvoTrack" : {
+
+    },
+    "Join ride" : {
+
+    },
+    "Joining code" : {
+
+    },
+    "km" : {
+
+    },
+    "km/h" : {
+
+    },
+    "Leader" : {
+
+    },
+    "Leave This Ride?" : {
+
+    },
+    "Led by" : {
+
+    },
+    "Let's ride" : {
+
+    },
+    "Live" : {
+
+    },
+    "Live · connected to ride" : {
+
+    },
+    "Loading" : {
+
+    },
+    "Loading plans…" : {
+
+    },
+    "Loading…" : {
+
+    },
+    "Location access needed" : {
+
+    },
+    "Mark as arrived" : {
+
+    },
+    "Mark as ready" : {
+
+    },
+    "Max group split" : {
+
+    },
+    "Max riders" : {
+
+    },
+    "Meet point" : {
+
+    },
+    "Membership & Billing" : {
+
+    },
+    "min" : {
+
+    },
+    "More" : {
+
+    },
+    "Multiplayer navigation" : {
+
+    },
+    "New Ride" : {
+
+    },
+    "No rides nearby" : {
+
+    },
+    "No rides starting within 20 km. Be the first to plan one!" : {
+
+    },
+    "Notifications" : {
+
+    },
+    "Off route" : {
+
+    },
+    "Offline" : {
+
+    },
+    "Open in Maps" : {
+
+    },
+    "Open lobby" : {
+
+    },
+    "Or" : {
+
+    },
+    "Plan, join and track rides with your tribe." : {
+
+    },
+    "Privacy Policy" : {
+
+    },
+    "Profile" : {
+
+    },
+    "Ready" : {
+
+    },
+    "Recent rides" : {
+
+    },
+    "Reconnecting…" : {
+
+    },
+    "Regroup called" : {
+
+    },
+    "Regroup complete" : {
+
+    },
+    "Remove from ride" : {
+
+    },
+    "Resume" : {
+
+    },
+    "Resume navigation" : {
+
+    },
+    "Ride" : {
+
+    },
+    "Ride Complete" : {
+
+    },
+    "Ride complete" : {
+
+    },
+    "Ride details" : {
+
+    },
+    "Ride distance" : {
+
+    },
+    "Ride history" : {
+
+    },
+    "Ride leader" : {
+
+    },
+    "Ride Summary" : {
+
+    },
+    "Ride title" : {
+
+    },
+    "Ride together" : {
+
+    },
+    "Ride together in real time" : {
+
+    },
+    "Riders" : {
+
+    },
+    "riders" : {
+
+    },
+    "Riders live" : {
+
+    },
+    "Rides" : {
+
+    },
+    "Rides led" : {
+
+    },
+    "Rides shown" : {
+
+    },
+    "Riding" : {
+
+    },
+    "Route" : {
+
+    },
+    "Route preview" : {
+
+    },
+    "Route preview map" : {
+
+    },
+    "Save ride" : {
+
+    },
+    "Scan QR code" : {
+
+    },
+    "Scenic stop" : {
+
+    },
+    "Scenic Stop" : {
+
+    },
+    "Search destination…" : {
+
+    },
+    "Search start point…" : {
+
+    },
+    "Search stop…" : {
+
+    },
+    "Secured by the App Store · Cancel anytime" : {
+
+    },
+    "See all" : {
+
+    },
+    "Share Invite" : {
+
+    },
+    "Share invite" : {
+
+    },
+    "Share summary" : {
+
+    },
+    "Show QR Code" : {
+
+    },
+    "Show QR code" : {
+
+    },
+    "Sign in to keep your rides and ride with others." : {
+
+    },
+    "Signing out…" : {
+
+    },
+    "Skip" : {
+
+    },
+    "Something went wrong" : {
+
+    },
+    "Speed" : {
+
+    },
+    "Speed (km/h)" : {
+
+    },
+    "Squad roster" : {
+
+    },
+    "Start location" : {
+
+    },
+    "Start navigation" : {
+
+    },
+    "Start point" : {
+
+    },
+    "Start ride" : {
+
+    },
+    "Starts" : {
+
+    },
+    "Stop" : {
+
+    },
+    "Sync" : {
+
+    },
+    "Sync score" : {
+
+    },
+    "System: Standby" : {
+
+    },
+    "Tap to scan" : {
+
+    },
+    "Terms of Service" : {
+
+    },
+    "Total distance" : {
+
+    },
+    "Total km" : {
+
+    },
+    "Unlimited" : {
+
+    },
+    "Upgrade" : {
+
+    },
+    "Verifying code…" : {
+
+    },
+    "Visible to other riders" : {
+
+    },
+    "Waiting" : {
+
+    },
+    "Waiting for others" : {
+
+    },
+    "Waiting for riders" : {
+
+    },
+    "Warning" : {
+
+    },
+    "You" : {
+
+    },
+    "You're in" : {
+
+    },
+    "You're ready" : {
+
+    },
+    "Your pack" : {
+
+    },
+    "Your ride" : {
+
+    },
+    "Your ride history will appear here after you create or join your first ride." : {
+
+    },
+    "Your rides will show up here once you create or join your first ride." : {
 
     },
     "·" : {
@@ -78,6 +612,9 @@
 
     },
     "+%lld MIN" : {
+
+    },
+    "…" : {
 
     },
     "≈ %@ / %@" : {
