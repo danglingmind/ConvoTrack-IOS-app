@@ -2,11 +2,14 @@ import SwiftUI
 
 struct RideHistoryView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var rideSession: RideRealtimeSession
     @State private var rides: [HistoryRide] = []
     @State private var isLoading = true
     @State private var selectedRide: HistoryRide? = nil
     @State private var showSummary = false
     @State private var showLobby = false
+    /// The inline "History" title only shows once the serif headline has scrolled away.
+    @State private var titleVisible = false
 
     /// The server is asked for COMPLETED only; this stays as a guard so a future caller or a
     /// looser server response can't put an in-progress ride into the history list.
@@ -21,71 +24,62 @@ struct RideHistoryView: View {
         return speeds.reduce(0, +) / Double(speeds.count)
     }
 
+    private var connectionState: DSConnectionState {
+        switch rideSession.connectionState {
+        case .connected: .connected
+        case .reconnecting: .reconnecting
+        case .disconnected: .offline
+        }
+    }
+
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.surfaceDim.ignoresSafeArea()
+        GeometryReader { proxy in
+            ZStack(alignment: .top) {
+                DSScreenBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        header(topInset: proxy.safeAreaInsets.top)
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    Color.clear.frame(height: 72)
-
-                    VStack(spacing: 24) {
-                        if isLoading {
-                            ProgressView()
-                                .tint(Color.primaryFixed)
-                                .padding(.top, 40)
-                        } else {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("LIFETIME STATS")
-                                    .font(.labelCaps)
-                                    .foregroundColor(Color.onSurfaceVariant)
-                                    .tracking(1)
-                                    .padding(.horizontal, 20)
-
-                                HStack(spacing: 8) {
-                                    FloatingStatPill(
-                                        label: "DISTANCE",
-                                        value: String(format: "%.0f", totalDistanceKm),
-                                        unit: "KM"
-                                    )
-                                    FloatingStatPill(
-                                        label: "TOTAL RIDES",
-                                        value: "\(completedRides.count)",
-                                        unit: nil
-                                    )
-                                    FloatingStatPill(
-                                        label: "AVG SPEED",
-                                        value: avgSpeedKmh > 0 ? String(format: "%.0f", avgSpeedKmh) : "--",
-                                        unit: "km/h"
-                                    )
-                                }
-                                .padding(.horizontal, 20)
-                            }
-
-                            if completedRides.isEmpty {
-                                emptyState
+                        VStack(alignment: .leading, spacing: DS.Space.sectionGap) {
+                            if isLoading {
+                                DSLoadingState()
                             } else {
-                                VStack(spacing: 16) {
-                                    ForEach(completedRides) { ride in
-                                        Button(action: { handleTap(ride) }) {
-                                            RideHistoryCard(ride: ride)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
+                                statStrip
+                                if completedRides.isEmpty {
+                                    DSEmptyState(
+                                        systemImage: "flag",
+                                        title: "No rides yet",
+                                        message: "Your ride history will appear here after you create or join your first ride."
+                                    )
+                                } else {
+                                    rideList
                                 }
-                                .padding(.horizontal, 20)
                             }
                         }
-
-                        Color.clear.frame(height: 120)
+                        .padding(.horizontal, DS.Space.screenInset)
+                        .padding(.top, DS.Space.p4)
+                        .padding(.bottom, DS.Space.sectionGap)
                     }
+                    .frame(maxWidth: .infinity)
+                }
+                .ignoresSafeArea(edges: .top)
+                .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > 70 } action: { _, scrolled in
+                    titleVisible = scrolled
+                }
+                .refreshable { await loadHistory() }
+            }
+        }
+        .navigationTitle(titleVisible ? String(localized: "History") : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .dsTransparentNavigationBar()
+        .toolbar {
+            // The connection indicator only means something while a ride session exists.
+            if appState.currentRideId != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    DSConnectionStatusButton(state: connectionState, isToolbarItem: true)
                 }
             }
-            .ignoresSafeArea(edges: .bottom)
-
-            ConvoTrackTopBar(title: "RIDE HISTORY", transparent: true)
         }
-        .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $showSummary) {
             if let ride = selectedRide {
                 RideSummaryView(rideId: ride.rideId, rideTitle: ride.title, fallback: ride)
@@ -100,21 +94,51 @@ struct RideHistoryView: View {
         .task { await loadHistory() }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "flag.slash")
-                .font(.system(size: 48))
-                .foregroundColor(Color.onSurfaceVariant.opacity(0.4))
-            Text("No rides yet")
-                .font(.headlineMd)
-                .foregroundColor(Color.onSurfaceVariant)
-            Text("Your ride history will appear here after you create or join your first convotrack.")
-                .font(.bodyMd)
-                .foregroundColor(Color.onSurfaceVariant.opacity(0.6))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+    // MARK: - Sections
+
+    /// Road photo (45%) fading into the base, with the serif headline in content.
+    private func header(topInset: CGFloat) -> some View {
+        DSHeroTitleBlock(title: "Ride history", compact: true)
+            .padding(.horizontal, DS.Space.screenInset)
+            .padding(.top, topInset + 8)
+            .padding(.bottom, DS.Space.p4)
+            .frame(maxWidth: .infinity, minHeight: topInset + 96, alignment: .bottomLeading)
+            .background { DSHeroPhoto(imageName: "hero_road_sunset", height: nil, imageOpacity: 0.45) }
+    }
+
+    /// Three tiles that stack to one column at accessibility sizes.
+    private var statStrip: some View {
+        DSAdaptiveStack(spacing: 8, verticalAlignment: .top) {
+            DSStatTile(
+                systemImage: "point.topleft.down.to.point.bottomright.curvepath",
+                label: "Distance · last \(completedRides.count)",
+                value: String(format: "%.0f km", totalDistanceKm),
+                fillsWidth: true, showsIcon: false
+            )
+            DSStatTile(
+                systemImage: "flag",
+                label: "Rides shown",
+                value: "\(completedRides.count)",
+                fillsWidth: true, showsIcon: false
+            )
+            DSStatTile(
+                systemImage: "speedometer",
+                label: "Avg speed",
+                value: avgSpeedKmh > 0 ? String(format: "%.0f km/h", avgSpeedKmh) : "--",
+                fillsWidth: true, showsIcon: false
+            )
         }
-        .padding(.top, 40)
+    }
+
+    private var rideList: some View {
+        VStack(spacing: 8) {
+            ForEach(completedRides) { ride in
+                Button { handleTap(ride) } label: { RideRow(ride: ride) }
+                    .buttonStyle(.plain)
+            }
+        }
+        // Rows break out to a 12 pt inset, as on Home, so name and facts fit on a 402 pt screen.
+        .padding(.horizontal, -(DS.Space.screenInset - DS.Space.p3))
     }
 
     private func handleTap(_ ride: HistoryRide) {
@@ -136,126 +160,8 @@ struct RideHistoryView: View {
     }
 }
 
-struct RideHistoryCard: View {
-    let ride: HistoryRide
-
-    var dateLabel: String {
-        let iso = ride.endedAt ?? ride.startedAt ?? ride.createdAt
-        guard let iso, let date = ISO8601DateFormatter().date(from: iso) else { return "--" }
-        let f = DateFormatter()
-        f.dateFormat = "dd MMM yyyy"
-        return f.string(from: date).uppercased()
-    }
-
-    var timeLabel: String {
-        let iso = ride.startedAt ?? ride.createdAt
-        guard let iso, let date = ISO8601DateFormatter().date(from: iso) else { return "" }
-        let f = DateFormatter()
-        f.dateFormat = "hh:mm a"
-        return f.string(from: date)
-    }
-
-    var distanceLabel: String {
-        guard ride.distanceMeters > 0 else { return "--" }
-        return String(format: "%.1f KM", ride.distanceMeters / 1000)
-    }
-
-    var durationLabel: String { RideDuration.inline(ride.durationSeconds) }
-
-    var speedLabel: String {
-        ride.avgSpeedKmh.map { String(format: "%.0f KM/H", $0) } ?? "--"
-    }
-
-    var statusColor: Color {
-        switch ride.status {
-        case "LOBBY":           return Color.primaryFixed
-        case "ACTIVE", "PAUSED": return Color.tertiaryFixed
-        default:                return Color.tertiaryFixedDim
-        }
-    }
-
-    var statusBgColor: Color {
-        switch ride.status {
-        case "LOBBY":           return Color.onPrimaryContainer
-        default:                return Color.onTertiaryContainer
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ZStack(alignment: .topTrailing) {
-                Color.surfaceContainerLow
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 80)
-                    .overlay(
-                        Image(systemName: "road.lanes")
-                            .font(.system(size: 40))
-                            .foregroundColor(Color.primaryFixed.opacity(0.08))
-                    )
-                    .overlay(LinearGradient(colors: [.clear, Color.surfaceDim], startPoint: .top, endPoint: .bottom))
-
-                Text(ride.status)
-                    .font(.labelCaps)
-                    .foregroundColor(statusColor)
-                    .tracking(1)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(statusBgColor.opacity(0.2))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(statusColor.opacity(0.3), lineWidth: 1))
-                    .padding(12)
-            }
-
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Text(dateLabel).font(.labelCaps).foregroundColor(Color.primaryFixedDim)
-                        if !timeLabel.isEmpty {
-                            Circle().fill(Color.outlineVariant).frame(width: 4, height: 4)
-                            Text(timeLabel).font(.labelCaps).foregroundColor(Color.onSurfaceVariant)
-                        }
-                        if ride.isLeader == true {
-                            Circle().fill(Color.outlineVariant).frame(width: 4, height: 4)
-                            Text("LEADER").font(.labelCaps).foregroundColor(Color.primaryFixed)
-                        }
-                    }
-                    Text(ride.title).font(.headlineMd).foregroundColor(Color.onSurface)
-                    HStack(spacing: 20) {
-                        MetricSmall(label: "DISTANCE", value: distanceLabel)
-                        if ride.status == "COMPLETED" {
-                            MetricSmall(label: "DURATION", value: durationLabel)
-                            MetricSmall(label: "AVG SPEED", value: speedLabel)
-                        }
-                    }
-                }
-                Spacer()
-                Image(systemName: ride.status == "COMPLETED" ? "chevron.right" : "arrow.right.circle")
-                    .foregroundColor(ride.status == "COMPLETED" ? Color.outline : statusColor)
-            }
-            .padding(16)
-        }
-        .background(Color.surfaceContainerHigh.opacity(0.7))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(
-            ride.status == "COMPLETED" ? Color.outlineVariant.opacity(0.4) : statusColor.opacity(0.25),
-            lineWidth: 1
-        ))
-    }
-}
-
-struct MetricSmall: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(1)
-            Text(value).font(.dataMono).foregroundColor(Color.onSurface)
-        }
-    }
-}
-
 #Preview {
     RideHistoryView()
         .environmentObject(AppState())
+        .environmentObject(RideRealtimeSession())
 }

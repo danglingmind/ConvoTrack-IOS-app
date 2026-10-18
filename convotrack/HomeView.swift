@@ -13,8 +13,9 @@ enum NearbyLoadState {
 
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var rideSession: RideRealtimeSession
     @Environment(Clerk.self) private var clerk
-    @Binding var activeTab: ConvoTrackBottomNav.Tab
+    @Binding var activeTab: AppTab
     @Binding var showJoinRide: Bool
     @State private var navPath = NavigationPath()
     @State private var nearbyRides: [NearbyRide] = []
@@ -51,97 +52,56 @@ struct HomeView: View {
     }
 
     private var homeRoot: some View {
-        ZStack(alignment: .top) {
-            Color.surfaceDim.ignoresSafeArea()
+        GeometryReader { proxy in
+            ZStack(alignment: .top) {
+                DSScreenBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        hero(topInset: proxy.safeAreaInsets.top)
 
-            VStack(spacing: 0) {
-                Color.clear.frame(height: 72)
-
-                // Fixed section
-                VStack(spacing: 32) {
-                    // Action buttons
-                    HStack(spacing: 12) {
-                        Button(action: { navPath.append(HomeRoute.createRide) }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill").font(.system(size: 20))
-                                Text("CREATE RIDE").font(.labelCaps).tracking(1)
+                        if showNearbyRides {
+                            // Hidden on the client for now (see `showNearbyRides`).
+                            VStack(spacing: DS.Space.listGap) {
+                                nearbyContent
                             }
-                            .frame(maxWidth: .infinity).frame(height: 56)
-                            .background(Color.primaryFixed)
-                            .foregroundColor(Color.onPrimaryFixed)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                        Button(action: { showJoinRide = true }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "person.badge.plus").font(.system(size: 20))
-                                Text("JOIN RIDE").font(.labelCaps).tracking(1)
+                            .padding(.horizontal, DS.Space.screenInset)
+                            .padding(.top, 28)
+                        } else {
+                            VStack(alignment: .leading, spacing: 0) {
+                                if appState.currentRideId != nil {
+                                    ActiveRideSection(
+                                        ride: appState.currentRide,
+                                        rideId: appState.currentRideId,
+                                        onTap: { navPath.append(HomeRoute.rideLobby) },
+                                        onRideLoaded: { appState.currentRide = $0 },
+                                        onRideClear:  { appState.currentRideId = nil }
+                                    )
+                                    .padding(.bottom, DS.Space.sectionGap)
+                                }
+                                recentRidesSection
                             }
-                            .frame(maxWidth: .infinity).frame(height: 56)
-                            .background(Color.surfaceContainerHighest)
-                            .foregroundColor(Color.onSurface)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant, lineWidth: 1))
+                            .padding(.horizontal, DS.Space.screenInset)
+                            .padding(.top, 28)
+                            .padding(.bottom, DS.Space.sectionGap)
                         }
                     }
-                    .padding(.horizontal, 20)
-
-                    // Active ride card
-                    if appState.currentRideId != nil {
-                        ActiveRideSection(
-                            ride: appState.currentRide,
-                            rideId: appState.currentRideId,
-                            onTap: { navPath.append(HomeRoute.rideLobby) },
-                            onRideLoaded: { appState.currentRide = $0 },
-                            onRideClear:  { appState.currentRideId = nil }
-                        )
-                    }
-
-                    // Nearby Rides header
-                    if showNearbyRides {
-                        HStack {
-                            Text("NEARBY RIDES").font(.headlineMd).foregroundColor(Color.onSurface)
-                            Spacer()
-                            Button(action: { Task { await loadNearby() } }) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(Color.primaryFixed)
-                                    .frame(width: 32, height: 32)
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.bottom, 16)
-
-                if showNearbyRides {
-                    // Scrollable nearby rides list
-                    ScrollView {
-                        VStack(spacing: 12) {
-                            nearbyContent
-                            Color.clear.frame(height: 100)
-                        }
-                        .padding(.horizontal, 20)
-                    }
-                    .refreshable { await loadNearby() }
-                    .ignoresSafeArea(edges: .bottom)
-                } else {
-                    recentRidesSection
-                }
+                // The hero photo runs under the status bar; its content is inset below the nav bar.
+                .ignoresSafeArea(edges: .top)
+                .refreshable { showNearbyRides ? await loadNearby() : await loadRecent() }
             }
-
-            // Floating top bar
-            HStack {
-                Image("AppLogo").resizable().scaledToFit().frame(width: 40, height: 40)
-                Spacer()
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 20))
-                    .foregroundColor(Color.primaryFixed)
-                    .frame(width: 44, height: 44)
-            }
-            .padding(.horizontal, 20)
-            .frame(height: 56)
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .dsTransparentNavigationBar()
+        .toolbar {
+            // The connection indicator only means something while a ride session exists.
+            if appState.currentRideId != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    DSConnectionStatusButton(state: connectionState, isToolbarItem: true)
+                }
+            }
+        }
         .navigationDestination(item: $selectedHistoryRide) { ride in
             RideSummaryView(rideId: ride.rideId, rideTitle: ride.title, fallback: ride)
         }
@@ -158,6 +118,37 @@ struct HomeView: View {
         }
     }
 
+    private var connectionState: DSConnectionState {
+        switch rideSession.connectionState {
+        case .connected: .connected
+        case .reconnecting: .reconnecting
+        case .disconnected: .offline
+        }
+    }
+
+    /// Riders photo, headline and the CREATE / JOIN pair. The photo fades into the base.
+    private func hero(topInset: CGFloat) -> some View {
+        // The photo is a background, so the hero grows with the text instead of clipping it at
+        // large Dynamic Type sizes.
+        VStack(alignment: .leading, spacing: 0) {
+            DSHeroTitleBlock(
+                eyebrow: "Ride together",
+                title: "Discover new roads",
+                subtitle: "Plan, join and track rides with your tribe."
+            )
+            DSActionButtonPair(
+                createAction: { navPath.append(HomeRoute.createRide) },
+                joinAction: { showJoinRide = true }
+            )
+            .padding(.top, 22)
+        }
+        .padding(.horizontal, DS.Space.screenInset)
+        .padding(.top, topInset + 24)
+        .padding(.bottom, DS.Space.p5)
+        .frame(maxWidth: .infinity, minHeight: topInset + 250, alignment: .bottomLeading)
+        .background { DSHeroPhoto(imageName: "hero_riders_sunset_mirrored", height: nil, sideFade: true) }
+    }
+
     // MARK: - Nearby content states
 
     @ViewBuilder
@@ -165,7 +156,7 @@ struct HomeView: View {
         switch nearbyState {
         case .loading:
             ProgressView()
-                .tint(Color.primaryFixed)
+                .tint(DS.Accent.base)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 32)
 
@@ -264,48 +255,33 @@ struct HomeView: View {
 
     @ViewBuilder
     private var recentRidesSection: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("RECENT RIDES").font(.headlineMd).foregroundColor(Color.onSurface)
-                Spacer()
+        VStack(alignment: .leading, spacing: 0) {
+            DSSectionHeading(title: "Recent rides") {
                 if !displayedRecentRides.isEmpty {
-                    Button(action: { activeTab = .flagged }) {
-                        Text("SEE ALL")
-                            .font(.labelCaps).tracking(1)
-                            .foregroundColor(Color.primaryFixed)
-                    }
+                    DSSectionAction(title: "See all") { activeTab = .history }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
-
-            ScrollView {
-                VStack(spacing: 12) {
-                    if recentLoading {
-                        ProgressView()
-                            .tint(Color.primaryFixed)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 32)
-                    } else if displayedRecentRides.isEmpty {
-                        NearbyEmptyCard(
-                            icon: "flag.checkered",
-                            title: "No rides yet",
-                            subtitle: "Your rides will show up here once you create or join your first convotrack.",
-                            action: { navPath.append(HomeRoute.createRide) },
-                            actionLabel: "Create Ride"
-                        )
-                    } else {
-                        ForEach(displayedRecentRides) { ride in
-                            RecentRideCard(ride: ride)
-                                .onTapGesture { handleRecentTap(ride) }
-                        }
+            if recentLoading {
+                DSLoadingState()
+            } else if displayedRecentRides.isEmpty {
+                DSEmptyState(
+                    systemImage: "flag.checkered",
+                    title: "No rides yet",
+                    message: "Your rides will show up here once you create or join your first ride.",
+                    actionTitle: "Create ride",
+                    action: { navPath.append(HomeRoute.createRide) }
+                )
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(displayedRecentRides) { ride in
+                        Button { handleRecentTap(ride) } label: { RideRow(ride: ride) }
+                            .buttonStyle(.plain)
                     }
-                    Color.clear.frame(height: 100)
                 }
-                .padding(.horizontal, 20)
+                // Rows break out to a 12 pt inset (headings stay at 20) so a ride name, its facts
+                // and RESUME all fit on a 402 pt screen.
+                .padding(.horizontal, -(DS.Space.screenInset - DS.Space.p3))
             }
-            .refreshable { await loadRecent() }
-            .ignoresSafeArea(edges: .bottom)
         }
     }
 
@@ -326,91 +302,6 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Recent Ride Card (compact home-screen row)
-
-struct RecentRideCard: View {
-    let ride: HistoryRide
-
-    private var isCompleted: Bool { ride.status == "COMPLETED" }
-
-    private var dateLabel: String {
-        let iso = ride.endedAt ?? ride.startedAt ?? ride.createdAt
-        guard let iso, let date = ISO8601DateFormatter().date(from: iso) else { return "" }
-        let f = DateFormatter()
-        f.dateFormat = "dd MMM"
-        return f.string(from: date).uppercased()
-    }
-
-    private var distanceLabel: String {
-        guard ride.distanceMeters > 0 else { return "--" }
-        return String(format: "%.1f KM", ride.distanceMeters / 1000)
-    }
-
-    var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isCompleted ? Color.surfaceContainerHigh : Color.primaryFixed.opacity(0.12))
-                    .frame(width: 52, height: 52)
-                Image(systemName: isCompleted ? "flag.checkered" : "location.fill.viewfinder")
-                    .font(.system(size: 22))
-                    .foregroundColor(isCompleted ? Color.onSurfaceVariant : Color.primaryFixed)
-            }
-
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 8) {
-                    Text(ride.title)
-                        .font(.bodyLg).fontWeight(.bold)
-                        .foregroundColor(Color.onSurface)
-                        .lineLimit(1)
-                    Spacer()
-                    if !isCompleted {
-                        Text("RESUME")
-                            .font(.labelCaps).tracking(1)
-                            .foregroundColor(Color.onPrimaryFixed)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(Color.primaryFixed)
-                            .clipShape(Capsule())
-                    }
-                }
-                HStack(spacing: 4) {
-                    if !dateLabel.isEmpty {
-                        Text(dateLabel)
-                            .font(.labelCaps)
-                            .foregroundColor(Color.onSurfaceVariant)
-                        Text("·")
-                            .foregroundColor(Color.onSurfaceVariant.opacity(0.5))
-                    }
-                    Image(systemName: "road.lanes")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.onSurfaceVariant.opacity(0.6))
-                    Text(distanceLabel)
-                        .font(.dataMono)
-                        .foregroundColor(Color.onSurfaceVariant)
-                    if ride.isLeader == true {
-                        Text("·")
-                            .foregroundColor(Color.onSurfaceVariant.opacity(0.5))
-                        Text("LEADER")
-                            .font(.labelCaps)
-                            .foregroundColor(Color.primaryFixed)
-                    }
-                }
-            }
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color.onSurfaceVariant.opacity(0.5))
-        }
-        .padding(14)
-        .background(Color.surfaceContainerLow)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(isCompleted ? Color.outlineVariant.opacity(0.3) : Color.primaryFixed.opacity(0.25), lineWidth: 1)
-        )
-    }
-}
-
 // MARK: - Nearby Ride Card
 
 struct NearbyRideCard: View {
@@ -421,26 +312,26 @@ struct NearbyRideCard: View {
             // Icon column
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(ride.isLive ? Color.primaryFixed.opacity(0.12) : Color.surfaceContainerHigh)
+                    .fill(ride.isLive ? DS.Accent.base.opacity(0.12) : DS.Surface.raised)
                     .frame(width: 52, height: 52)
                 Image(systemName: ride.isLive ? "location.fill.viewfinder" : "road.lanes")
                     .font(.system(size: 22))
-                    .foregroundColor(ride.isLive ? Color.primaryFixed : Color.onSurfaceVariant)
+                    .foregroundColor(ride.isLive ? DS.Accent.base : DS.Text.secondary.base)
             }
 
             // Text column
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     Text(ride.title)
-                        .font(.bodyLg)
+                        .dsText(.input)
                         .fontWeight(.bold)
-                        .foregroundColor(Color.onSurface)
+                        .foregroundColor(DS.Text.primary.base)
                         .lineLimit(1)
                     Spacer()
                     if ride.isMine {
-                        BadgeChip(text: "YOURS", fg: Color.onPrimaryFixed, bg: Color.primaryFixed)
+                        BadgeChip(text: "YOURS", fg: DS.Text.onAccent, bg: DS.Accent.base)
                     } else if ride.isJoined {
-                        BadgeChip(text: "JOINED", fg: Color.onPrimaryFixed, bg: Color.tertiaryFixed)
+                        BadgeChip(text: "JOINED", fg: DS.Text.onAccent, bg: DS.Status.success)
                     } else {
                         StatusBadge(isLive: ride.isLive)
                     }
@@ -448,47 +339,47 @@ struct NearbyRideCard: View {
                 HStack(spacing: 4) {
                     Image(systemName: "mappin.circle.fill")
                         .font(.system(size: 11))
-                        .foregroundColor(Color.primaryFixed)
+                        .foregroundColor(DS.Accent.base)
                     Text(ride.destinationName)
-                        .font(.labelCaps)
-                        .foregroundColor(Color.onSurfaceVariant)
+                        .dsText(.badge)
+                        .foregroundColor(DS.Text.secondary.base)
                         .lineLimit(1)
                     Text("·")
-                        .foregroundColor(Color.onSurfaceVariant.opacity(0.5))
+                        .foregroundColor(DS.Text.secondary.base.opacity(0.5))
                     Text(ride.formattedRideDistance)
-                        .font(.labelCaps)
-                        .foregroundColor(Color.onSurfaceVariant)
+                        .dsText(.badge)
+                        .foregroundColor(DS.Text.secondary.base)
                 }
                 HStack(spacing: 4) {
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 11))
-                        .foregroundColor(Color.onSurfaceVariant.opacity(0.6))
+                        .foregroundColor(DS.Text.secondary.base.opacity(0.6))
                     Text("\(ride.riderCount) rider\(ride.riderCount == 1 ? "" : "s")")
-                        .font(.dataMono)
-                        .foregroundColor(Color.onSurfaceVariant)
+                        .dsText(.dataMono)
+                        .foregroundColor(DS.Text.secondary.base)
                     Text("·")
-                        .foregroundColor(Color.onSurfaceVariant.opacity(0.5))
+                        .foregroundColor(DS.Text.secondary.base.opacity(0.5))
                     Text(ride.formattedUserDistance)
-                        .font(.dataMono)
-                        .foregroundColor(Color.onSurfaceVariant)
+                        .dsText(.dataMono)
+                        .foregroundColor(DS.Text.secondary.base)
                     if ride.isFull {
                         Text("· FULL")
-                            .font(.labelCaps)
-                            .foregroundColor(Color.errorColor.opacity(0.8))
+                            .dsText(.badge)
+                            .foregroundColor(DS.Status.danger.opacity(0.8))
                     }
                 }
             }
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color.onSurfaceVariant.opacity(0.5))
+                .foregroundColor(DS.Text.secondary.base.opacity(0.5))
         }
         .padding(14)
-        .background(Color.surfaceContainerLow)
+        .background(DS.Background.elevated)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(ride.isLive ? Color.primaryFixed.opacity(0.25) : Color.outlineVariant.opacity(0.3), lineWidth: 1)
+                .stroke(ride.isLive ? DS.Accent.base.opacity(0.25) : DS.Border.strongColor.opacity(0.3), lineWidth: 1)
         )
     }
 }
@@ -501,8 +392,8 @@ private struct StatusBadge: View {
     var body: some View {
         BadgeChip(
             text: isLive ? "LIVE" : "FORMING",
-            fg: isLive ? Color.onPrimaryFixed : Color(red: 0.15, green: 0.10, blue: 0),
-            bg: isLive ? Color.primaryFixed : Color(red: 1.0, green: 0.78, blue: 0.25)
+            fg: isLive ? DS.Text.onAccent : Color(red: 0.15, green: 0.10, blue: 0),
+            bg: isLive ? DS.Accent.base : Color(red: 1.0, green: 0.78, blue: 0.25)
         )
     }
 }
@@ -514,7 +405,7 @@ private struct BadgeChip: View {
 
     var body: some View {
         Text(text)
-            .font(.labelCaps)
+            .dsText(.badge)
             .tracking(1)
             .foregroundColor(fg)
             .padding(.horizontal, 8)
@@ -537,31 +428,31 @@ private struct NearbyEmptyCard: View {
         VStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.system(size: 36))
-                .foregroundColor(Color.onSurfaceVariant.opacity(0.5))
+                .foregroundColor(DS.Text.secondary.base.opacity(0.5))
             VStack(spacing: 6) {
                 Text(title)
-                    .font(.bodyLg).fontWeight(.semibold)
-                    .foregroundColor(Color.onSurface)
+                    .dsText(.input).fontWeight(.semibold)
+                    .foregroundColor(DS.Text.primary.base)
                 Text(subtitle)
-                    .font(.bodyMd)
-                    .foregroundColor(Color.onSurfaceVariant)
+                    .dsText(.body)
+                    .foregroundColor(DS.Text.secondary.base)
                     .multilineTextAlignment(.center)
             }
             Button(action: action) {
                 Text(actionLabel)
-                    .font(.labelCaps).tracking(1)
-                    .foregroundColor(Color.onPrimaryFixed)
+                    .dsText(.badge).tracking(1)
+                    .foregroundColor(DS.Text.onAccent)
                     .padding(.horizontal, 20).padding(.vertical, 10)
-                    .background(Color.primaryFixed)
+                    .background(DS.Accent.base)
                     .clipShape(Capsule())
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
         .padding(.horizontal, 20)
-        .background(Color.surfaceContainerLow)
+        .background(DS.Background.elevated)
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(DS.Border.strongColor.opacity(0.3), lineWidth: 1))
     }
 }
 
@@ -577,7 +468,7 @@ struct RidePreviewSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.surfaceDim.ignoresSafeArea()
+                DS.Background.base.ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -585,8 +476,8 @@ struct RidePreviewSheet: View {
                         VStack(alignment: .leading, spacing: 10) {
                             StatusBadge(isLive: ride.isLive)
                             Text(ride.title)
-                                .font(.headlineLg)
-                                .foregroundColor(Color.onSurface)
+                                .dsText(.heroTitleCompact)
+                                .foregroundColor(DS.Text.primary.base)
                         }
                         .padding(.horizontal, 24)
                         .padding(.top, 24)
@@ -604,16 +495,16 @@ struct RidePreviewSheet: View {
                             divider
                             infoRow(icon: "location.fill",         label: "Starts",         value: ride.formattedUserDistance)
                         }
-                        .background(Color.surfaceContainerLow)
+                        .background(DS.Background.elevated)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.outlineVariant.opacity(0.3), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(DS.Border.strongColor.opacity(0.3), lineWidth: 1))
                         .padding(.horizontal, 20)
 
                         // Error
                         if let err = joinError {
                             Text(err)
-                                .font(.bodyMd)
-                                .foregroundColor(Color.errorColor)
+                                .dsText(.body)
+                                .foregroundColor(DS.Status.danger)
                                 .padding(.horizontal, 24)
                                 .padding(.top, 20)
                         }
@@ -623,23 +514,23 @@ struct RidePreviewSheet: View {
                             Button(action: { Task { await join() } }) {
                                 Group {
                                     if isJoining {
-                                        ProgressView().tint(Color.onPrimaryFixed)
+                                        ProgressView().tint(DS.Text.onAccent)
                                     } else {
                                         Text(ride.isFull ? "RIDE IS FULL" : "JOIN RIDE")
-                                            .font(.labelCaps).tracking(1)
+                                            .dsText(.badge).tracking(1)
                                     }
                                 }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 56)
-                                .background(ride.isFull ? Color.surfaceContainerHighest : Color.primaryFixed)
-                                .foregroundColor(ride.isFull ? Color.onSurfaceVariant : Color.onPrimaryFixed)
+                                .background(ride.isFull ? DS.Surface.neutralBadge : DS.Accent.base)
+                                .foregroundColor(ride.isFull ? DS.Text.secondary.base : DS.Text.onAccent)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                             }
                             .disabled(isJoining || ride.isFull)
 
                             Text("You'll join as a Formation Rider")
-                                .font(.labelCaps)
-                                .foregroundColor(Color.onSurfaceVariant)
+                                .dsText(.badge)
+                                .foregroundColor(DS.Text.secondary.base)
                                 .tracking(1)
                         }
                         .padding(.horizontal, 20)
@@ -654,9 +545,9 @@ struct RidePreviewSheet: View {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(Color.onSurfaceVariant)
+                            .foregroundColor(DS.Text.secondary.base)
                             .frame(width: 30, height: 30)
-                            .background(Color.surfaceContainerHigh)
+                            .background(DS.Surface.raised)
                             .clipShape(Circle())
                     }
                 }
@@ -668,7 +559,7 @@ struct RidePreviewSheet: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(Color.outlineVariant.opacity(0.3))
+            .fill(DS.Border.strongColor.opacity(0.3))
             .frame(height: 0.5)
             .padding(.horizontal, 16)
     }
@@ -677,15 +568,15 @@ struct RidePreviewSheet: View {
         HStack(spacing: 14) {
             Image(systemName: icon)
                 .font(.system(size: 15))
-                .foregroundColor(Color.primaryFixed)
+                .foregroundColor(DS.Accent.base)
                 .frame(width: 22)
             Text(label)
-                .font(.bodyMd)
-                .foregroundColor(Color.onSurfaceVariant)
+                .dsText(.body)
+                .foregroundColor(DS.Text.secondary.base)
             Spacer()
             Text(value)
-                .font(.bodyMd).fontWeight(.medium)
-                .foregroundColor(Color.onSurface)
+                .dsText(.body).fontWeight(.medium)
+                .foregroundColor(DS.Text.primary.base)
                 .lineLimit(1)
         }
         .padding(.horizontal, 16)
@@ -728,28 +619,22 @@ struct ActiveRideSection: View {
     let onRideLoaded: (Ride) -> Void
     let onRideClear: () -> Void
 
-    private var statusLabel: String {
+    /// appVocabulary: IN LOBBY / RIDING (LIVE while the ride isn't loaded yet).
+    private var statusLabel: LocalizedStringKey {
         switch ride?.status {
-        case "ACTIVE": return "LIVE NOW"
-        case "LOBBY":  return "IN LOBBY"
-        default:       return "ACTIVE"
+        case "ACTIVE", "IN_PROGRESS": return "Riding"
+        case "LOBBY":  return "In lobby"
+        default:       return "Live"
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("ACTIVE RIDE").font(.headlineMd).foregroundColor(Color.onSurface)
-                Spacer()
-                HStack(spacing: 6) {
-                    Circle().fill(Color.primaryFixed).frame(width: 8, height: 8)
-                    Text(statusLabel).font(.labelCaps).foregroundColor(Color.primaryFixed).tracking(2)
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            DSSectionHeading(title: "Active ride") {
+                DSLiveIndicator(title: statusLabel)
             }
-            .padding(.horizontal, 20)
-
             Button(action: onTap) { ActiveRideCard(ride: ride) }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(.plain)
         }
         .task {
             guard ride == nil, let id = rideId else { return }
@@ -783,111 +668,66 @@ struct ActiveRideCard: View {
     @State private var cameraCommand: MapCameraCommand? = nil
     @State private var heroPhase: DestinationHeroPhase = .resolving
 
-    private var participantCount: Int { ride?.participants.count ?? 0 }
-    private var rideStatus: String {
-        guard let s = ride?.status else { return "LOBBY" }
-        return s == "IN_PROGRESS" ? "RIDING" : s
+    private var attribution: String? {
+        if case .photo(let photo) = heroPhase { return photo.attribution }
+        return nil
+    }
+
+    private var riders: [DSAvatarStack.Item] {
+        (ride?.participants ?? []).map {
+            DSAvatarStack.Item(id: $0.userId, name: $0.name, imageURL: $0.avatarUrl.flatMap(URL.init(string:)))
+        }
     }
 
     var body: some View {
-        ZStack {
-            switch heroPhase {
-            case .resolving:
-                // The card's existing gradient stands in while we don't yet know whether there's
-                // a photo — showing the map here would only be replaced a moment later.
-                LinearGradient(colors: [Color.surfaceContainerHigh, Color.surfaceDim], startPoint: .topLeading, endPoint: .bottomTrailing)
-
-            case .photo(let photo):
-                // Fixed-size container owns the layout; the photo is decoration inside it. Sizing
-                // the Image directly would let its aspect ratio set the card's WIDTH — a
-                // panorama at 200pt tall reports ~600pt — which widens the whole home feed.
-                // `.clipShape` on the card can't prevent that; clipping happens after layout.
-                //
-                // `scaledToFill` (not fit + blur as in the lobby) because this slot is a 353×200
-                // landscape banner, aspect 1.77 — near-identical to the 16:9 photos Places
-                // serves, so almost nothing is cropped, and it sits under a heavy dark gradient
-                // as texture rather than as the subject.
-                Color.clear
-                    .overlay(
-                        Image(uiImage: photo.image)
-                            .resizable()
-                            .scaledToFill()
-                    )
-                    .clipped()
-                    // Photographer credit. Google's Places policy requires it wherever a Place
-                    // Photo is displayed, so the lobby is not the only surface that owes it — this
-                    // card shows the same image and was the non-compliant half. Top-trailing keeps
-                    // it clear of the title and RESUME in the card's lower band.
-                    .overlay(alignment: .topTrailing) {
-                        if let attribution = photo.attribution {
-                            Text("Photo: \(attribution) · Google")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(.white.opacity(0.7))
-                                .shadow(color: .black.opacity(0.7), radius: 3)
-                                .lineLimit(1)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                        }
-                    }
-
-            case .unavailable:
-                if let ride, !ride.waypoints.isEmpty {
-                    let destPin = MapPin(
-                        id: "dest",
-                        coordinate: CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng),
-                        style: .simpleDot(color: UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1), size: 10),
-                        anchorBottom: false
-                    )
-                    // Route only computed in this branch, so a card showing a photo skips the
-                    // Directions work entirely.
-                    GoogleMapView(routeCoords: routeCoordinates, pins: [destPin], cameraCommand: cameraCommand, isInteractive: false)
-                        .task(id: ride.id) { await computeRoute(ride) }
-                } else {
-                    LinearGradient(colors: [Color.surfaceContainerHigh, Color.surfaceDim], startPoint: .topLeading, endPoint: .bottomTrailing)
-                }
-            }
-
-            LinearGradient(
-                colors: [Color.black.opacity(0.15), Color.black.opacity(0.55), Color.black.opacity(0.82)],
-                startPoint: .top, endPoint: .bottom
-            )
-
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: "mappin.circle.fill").font(.system(size: 13)).foregroundColor(Color.primaryFixed)
-                        Text(ride?.destinationName ?? "Loading…").font(.labelCaps).foregroundColor(.white).tracking(1).lineLimit(1)
-                    }
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(.ultraThinMaterial).clipShape(Capsule())
-                    Spacer()
-                }
-                Spacer()
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(ride?.title ?? "Loading…").font(.headlineMd).foregroundColor(.white)
-                        // Rider count only. The circles this replaced were empty grey
-                        // placeholders — never wired to participant avatarUrls — so they added
-                        // visual weight while carrying no information the count doesn't.
-                        Text("\(participantCount) Rider\(participantCount == 1 ? "" : "s") · \(rideStatus)")
-                            .font(.dataMono).foregroundColor(.white.opacity(0.7))
-                    }
-                    Spacer()
-                    Text("RESUME")
-                        .font(.labelCaps).foregroundColor(Color.onPrimaryFixed).tracking(1)
-                        .padding(.horizontal, 18).padding(.vertical, 10)
-                        .background(Color.primaryFixed).clipShape(Capsule())
-                        .shadow(color: Color.primaryFixed.opacity(0.5), radius: 10)
-                }
-            }
-            .padding(16)
+        DSActiveRideCard(
+            title: ride?.title ?? String(localized: "Loading…"),
+            destination: ride?.destinationName,
+            distance: ride.flatMap { $0.distanceMeters > 0 ? String(format: "%.1f km", $0.distanceMeters / 1000) : nil },
+            time: ride.flatMap { $0.estimatedDurationSeconds > 0 ? RideDuration.inline($0.estimatedDurationSeconds) : nil },
+            riders: riders,
+            attribution: attribution
+        ) {
+            heroLayer
         }
-        .frame(height: 200)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primaryFixed.opacity(0.3), lineWidth: 1))
-        .padding(.horizontal, 20)
         .task(id: destinationPhotoKey) { await loadDestinationPhoto() }
         .animation(.easeInOut(duration: 0.35), value: heroPhase)
+    }
+
+    /// Fixed-size container owns the layout; the photo is decoration inside it. Sizing the Image
+    /// directly would let its aspect ratio set the card's WIDTH (a panorama at 200pt tall reports
+    /// ~600pt), which widens the whole home feed. `scaledToFill` because this slot is a landscape
+    /// banner close to the 16:9 photos Places serves, under a dark scrim as texture.
+    @ViewBuilder
+    private var heroLayer: some View {
+        switch heroPhase {
+        case .resolving:
+            // We don't yet know whether there's a photo; showing the map here would only be
+            // replaced a moment later.
+            LinearGradient(colors: [DS.Surface.raised, DS.Background.base], startPoint: .topLeading, endPoint: .bottomTrailing)
+
+        case .photo(let photo):
+            Color.clear
+                .overlay(Image(uiImage: photo.image).resizable().scaledToFill())
+                .clipped()
+
+        case .unavailable:
+            if let ride, !ride.waypoints.isEmpty {
+                let destPin = MapPin(
+                    id: "dest",
+                    coordinate: CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng),
+                    style: .simpleDot(color: UIColor(DS.Accent.base), size: 10),
+                    anchorBottom: false
+                )
+                // Route only computed in this branch, so a card showing a photo skips the
+                // Directions work entirely.
+                GoogleMapView(routeCoords: routeCoordinates, pins: [destPin], cameraCommand: cameraCommand, isInteractive: false)
+                    .allowsHitTesting(false)
+                    .task(id: ride.id) { await computeRoute(ride) }
+            } else {
+                LinearGradient(colors: [DS.Surface.raised, DS.Background.base], startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
+        }
     }
 
     /// Identity of the destination whose photo this card wants. Empty until the ride is loaded,
@@ -939,6 +779,7 @@ struct ActiveRideCard: View {
 }
 
 #Preview {
-    HomeView(activeTab: .constant(.track), showJoinRide: .constant(false))
+    HomeView(activeTab: .constant(.home), showJoinRide: .constant(false))
         .environmentObject(AppState())
+        .environmentObject(RideRealtimeSession())
 }

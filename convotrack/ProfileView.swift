@@ -2,19 +2,19 @@ import SwiftUI
 import ClerkKit
 
 struct ProfileView: View {
-    @Binding var activeTab: ConvoTrackBottomNav.Tab
     @Environment(Clerk.self) private var clerk
+    @Environment(\.openURL) private var openURL
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var rideSession: RideRealtimeSession
     @EnvironmentObject private var store: MembershipStore
     @Environment(\.dismiss) private var dismiss
     @State private var userProfile: UserMeResponse? = nil
-    @State private var notifyNearbyRides: Bool = true
+    @State private var completedRides: [HistoryRide]? = nil
     @State private var isSigningOut = false
     @State private var showMembership = false
     @State private var showDeleteAccountConfirm = false
     @State private var isDeletingAccount = false
     @State private var deleteError: String?
-    @State private var showDeleteError = false
     @State private var showEditProfile = false
 
     private var displayName: String {
@@ -30,207 +30,166 @@ struct ProfileView: View {
         return URL(string: str)
     }
 
+    private var connectionState: DSConnectionState {
+        switch rideSession.connectionState {
+        case .connected: .connected
+        case .reconnecting: .reconnecting
+        case .disconnected: .offline
+        }
+    }
+
+    // Stats come from the completed-ride list (same call History makes).
+    private var rideCount: String { completedRides.map { String($0.count) } ?? "--" }
+    private var totalKm: String {
+        completedRides.map { String(format: "%.0f", $0.reduce(0) { $0 + $1.distanceMeters / 1000 }) } ?? "--"
+    }
+    private var ridesLed: String { completedRides.map { String($0.filter { $0.isLeader == true }.count) } ?? "--" }
+
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.surfaceDim.ignoresSafeArea()
-
-            Color.clear
-                .background(
-                    RadialGradient(
-                        gradient: Gradient(colors: [Color.primaryFixed.opacity(0.08), .clear]),
-                        center: .top,
-                        startRadius: 0,
-                        endRadius: 300
-                    )
-                )
-                .ignoresSafeArea()
-
+        ZStack {
+            DSScreenBackground()
             ScrollView {
-                VStack(spacing: 16) {
-                    Color.clear.frame(height: 72)
+                VStack(spacing: DS.Space.sectionGap) {
+                    identity
+                    stats
+                    DSPromoBanner(
+                        eyebrow: "ConvoTrack Pro",
+                        message: store.isPremium ? "Your membership is active" : "Unlimited rides & advanced telemetry",
+                        actionTitle: store.isPremium ? "Active" : "Upgrade",
+                        isSubscribed: store.isPremium
+                    ) { showMembership = true }
 
-                    // Membership Card
-                    membershipCard
-                        .padding(.horizontal, 20)
-
-                    // Preferences
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("PREFERENCES")
-                            .font(.labelCaps)
-                            .foregroundColor(Color.primaryFixed)
-                            .tracking(4)
-                            .padding(.horizontal, 4)
-
-                        HStack {
-                            Label("Notify nearby rides", systemImage: "bell.badge")
-                                .font(.bodyMd)
-                                .foregroundColor(Color.onSurface)
-                            Spacer()
-                            Toggle("", isOn: $notifyNearbyRides)
-                                .labelsHidden()
-                                .tint(Color.primaryFixed)
-                                .onChange(of: notifyNearbyRides) { _, newVal in
-                                    Task { try? await APIClient.shared.updateProfile(
-                                        UpdateProfileRequest(notifyNearbyRides: newVal)) }
-                                }
+                    DSSettingsGroup {
+                        DSSettingsRow(systemImage: "bell", title: "Notifications", trailing: .externalLink) {
+                            if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                         }
-                        .padding(16)
-                        .background(Color.surfaceContainerHigh.opacity(0.8))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
-                    }
-                    .padding(.horizontal, 20)
-
-                    // Logout
-                    Button(action: {
-                        Task {
-                            isSigningOut = true
-                            appState.currentRideId = nil
-                            appState.inviteCode = nil
-                            appState.currentRide = nil
-                            try? await Clerk.shared.auth.signOut()
-                            // Signing out is the one moment we know the rider may want a different
-                            // account next time; it arms the cookie-free web session that lets
-                            // Google ask which one. See `WebSignInSession`.
-                            WebSignInSession.needsAccountChoice = true
-                            dismiss()
+                        DSSettingsRow(systemImage: "creditcard", title: "Membership & Billing") { showMembership = true }
+                        DSSettingsRow(systemImage: "hand.raised", title: "Privacy Policy", trailing: .externalLink) {
+                            if let url = URL(string: AppURLs.privacyPolicy) { openURL(url) }
                         }
-                    }) {
-                        HStack(spacing: 8) {
-                            if isSigningOut {
-                                ProgressView().tint(Color.errorColor).scaleEffect(0.8)
-                            } else {
-                                Image(systemName: "rectangle.portrait.and.arrow.right")
-                            }
-                            Text(isSigningOut ? "SIGNING OUT..." : "LOGOUT").font(.bodyLg)
-                        }
-                        .foregroundColor(Color.errorColor)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Color.surfaceContainerHigh)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.3), lineWidth: 1))
-                    }
-                    .disabled(isSigningOut)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-
-                    // Delete Account — required by App Store Guideline 5.1.1
-                    Button(action: { showDeleteAccountConfirm = true }) {
-                        HStack(spacing: 8) {
-                            if isDeletingAccount {
-                                ProgressView().tint(Color.errorColor).scaleEffect(0.8)
-                            } else {
-                                Image(systemName: "person.crop.circle.badge.minus")
-                            }
-                            Text(isDeletingAccount ? "DELETING..." : "DELETE ACCOUNT").font(.bodyMd)
-                        }
-                        .foregroundColor(Color.errorColor.opacity(0.7))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(Color.errorContainer.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.2), lineWidth: 1))
-                    }
-                    .disabled(isDeletingAccount || isSigningOut)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
-
-                    Color.clear.frame(height: 120)
-                }
-            }
-            .ignoresSafeArea(edges: .bottom)
-            .task {
-                if let p = try? await APIClient.shared.fetchMe() {
-                    userProfile = p
-                    notifyNearbyRides = p.notifyNearbyRides
-                }
-            }
-            .sheet(isPresented: $showMembership) {
-                MembershipView().environmentObject(store)
-            }
-            .sheet(isPresented: $showEditProfile) {
-                EditProfileSheet(
-                    initialUsername:            userProfile?.username ?? "",
-                    initialPhone:               userProfile?.phone ?? "",
-                    initialPhoneVisible:        userProfile?.phoneVisible ?? false,
-                    initialEmailContact:        userProfile?.emailContact ?? "",
-                    initialEmailContactVisible: userProfile?.emailContactVisible ?? false,
-                    onSaved: { _ in
-                        Task {
-                            if let p = try? await APIClient.shared.fetchMe() {
-                                userProfile = p
-                                notifyNearbyRides = p.notifyNearbyRides
-                            }
+                        DSSettingsRow(systemImage: "doc.text", title: "Terms of Service", trailing: .externalLink, showsDivider: false) {
+                            if let url = URL(string: AppURLs.termsOfService) { openURL(url) }
                         }
                     }
-                )
-            }
-            .confirmationDialog(
-                "Delete Account",
-                isPresented: $showDeleteAccountConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("Delete Account", role: .destructive) {
-                    Task { await deleteAccount() }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This will permanently delete your account and all ride history. Active subscriptions must be cancelled separately in Settings > Apple ID > Subscriptions. This cannot be undone.")
-            }
-            .alert("Deletion Failed", isPresented: $showDeleteError) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(deleteError ?? "An error occurred. Please try again.")
-            }
 
-            // Floating top bar
-            HStack(alignment: .center, spacing: 12) {
-                ZStack(alignment: .bottomTrailing) {
-                    AsyncImage(url: avatarUrl) { img in
-                        img.resizable().scaledToFill()
-                            .frame(width: 40, height: 40)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
-                    } placeholder: {
-                        Circle()
-                            .fill(Color.surfaceVariant)
-                            .frame(width: 40, height: 40)
-                            .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2))
-                            .overlay(
-                                Text(String(displayName.prefix(1)).uppercased())
-                                    .font(.bodyMd).foregroundColor(Color.primaryFixed)
-                            )
-                    }
-                    ZStack {
-                        Circle().fill(Color.primaryFixed).frame(width: 11, height: 11)
-                        Circle().fill(Color.onPrimaryContainer).frame(width: 5, height: 5)
+                    VStack(spacing: DS.Space.p3) {
+                        DSSettingsGroup {
+                            DSSettingsRow(
+                                systemImage: "rectangle.portrait.and.arrow.right",
+                                title: isSigningOut ? "Signing out…" : "Sign Out",
+                                trailing: .none,
+                                isDestructive: true
+                            ) { signOut() }
+                            .disabled(isSigningOut || isDeletingAccount)
+                            // Delete Account — required by App Store Guideline 5.1.1
+                            DSSettingsRow(
+                                systemImage: "trash",
+                                title: isDeletingAccount ? "Deleting…" : "Delete Account",
+                                trailing: .none,
+                                isDestructive: true,
+                                showsDivider: false
+                            ) { showDeleteAccountConfirm = true }
+                            .disabled(isDeletingAccount || isSigningOut)
+                        }
+                        if let deleteError { DSInlineError(message: LocalizedStringKey(deleteError)) }
                     }
                 }
-
-                HStack(spacing: 6) {
-                    Text(displayName)
-                        .font(.headlineMd)
-                        .foregroundColor(Color.onSurface)
-                        .lineLimit(1)
-                    Button(action: { showEditProfile = true }) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(Color.onSurfaceVariant)
-                            .frame(width: 28, height: 28)
-                            .background(Color.surfaceContainerHigh)
-                            .clipShape(Circle())
+                .padding(.horizontal, DS.Space.screenInset)
+                .padding(.top, DS.Space.p2)
+                .padding(.bottom, DS.Space.sectionGap)
+            }
+        }
+        .navigationTitle("Profile")
+        .navigationBarTitleDisplayMode(.inline)
+        .dsTransparentNavigationBar()
+        .toolbar {
+            // The connection indicator only means something while a ride session exists.
+            if appState.currentRideId != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    DSConnectionStatusButton(state: connectionState, isToolbarItem: true)
+                }
+            }
+        }
+        .task {
+            async let me = try? await APIClient.shared.fetchMe()
+            async let history = try? await APIClient.shared.getMyRides(statuses: APIClient.RideStatusFilter.completed)
+            if let p = await me { userProfile = p }
+            if let h = await history { completedRides = h.filter { $0.status == "COMPLETED" } }
+        }
+        .sheet(isPresented: $showMembership) {
+            MembershipView().environmentObject(store)
+        }
+        .sheet(isPresented: $showEditProfile) {
+            EditProfileSheet(
+                initialUsername:            userProfile?.username ?? "",
+                initialPhone:               userProfile?.phone ?? "",
+                initialPhoneVisible:        userProfile?.phoneVisible ?? false,
+                initialEmailContact:        userProfile?.emailContact ?? "",
+                initialEmailContactVisible: userProfile?.emailContactVisible ?? false,
+                onSaved: { _ in
+                    Task {
+                        if let p = try? await APIClient.shared.fetchMe() { userProfile = p }
                     }
                 }
+            )
+        }
+        .alert("Delete Your Account?", isPresented: $showDeleteAccountConfirm) {
+            Button("Delete", role: .destructive) { Task { await deleteAccount() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently delete your account and all ride history. Active subscriptions must be cancelled separately in Settings > Apple ID > Subscriptions. This cannot be undone.")
+        }
+    }
 
-                Spacer()
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.iconNav)
-                    .foregroundColor(Color.primaryFixed)
-                    .frame(width: 44, height: 44)
+    // MARK: - Sections
+
+    private var identity: some View {
+        VStack(spacing: DS.Space.p3) {
+            DSAvatar(
+                name: displayName,
+                id: clerk.user?.id ?? displayName,
+                imageURL: avatarUrl,
+                size: DS.AvatarSize.xxl,
+                highlightRing: DS.Accent.base
+            )
+            HStack(spacing: DS.Space.p2) {
+                Text(displayName)
+                    .dsText(.titleLarge)
+                    .foregroundStyle(DS.Text.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
+                DSSquareIconButton(systemImage: "pencil", label: "Edit profile") { showEditProfile = true }
             }
-            .padding(.horizontal, 20)
-            .frame(minHeight: 56)
+            Text("\(store.isPremium ? String(localized: "ConvoTrack Pro") : String(localized: "Free plan")) · \(rideCount) rides")
+                .dsText(.statLabel)
+                .foregroundStyle(DS.Text.muted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Three equal columns; one per row at accessibility sizes.
+    private var stats: some View {
+        DSAdaptiveStack(spacing: DS.Space.p3, verticalAlignment: .top) {
+            DSStatTile(systemImage: "flag", label: "Rides", value: rideCount, fillsWidth: true, showsIcon: false)
+            DSStatTile(systemImage: "point.topleft.down.to.point.bottomright.curvepath", label: "Total km", value: totalKm, fillsWidth: true, showsIcon: false)
+            DSStatTile(systemImage: "person.fill", label: "Rides led", value: ridesLed, fillsWidth: true, showsIcon: false)
+        }
+    }
+
+    private func signOut() {
+        Task {
+            isSigningOut = true
+            appState.currentRideId = nil
+            appState.inviteCode = nil
+            appState.currentRide = nil
+            try? await Clerk.shared.auth.signOut()
+            // Signing out is the one moment we know the rider may want a different
+            // account next time; it arms the cookie-free web session that lets
+            // Google ask which one. See `WebSignInSession`.
+            WebSignInSession.needsAccountChoice = true
+            dismiss()
         }
     }
 }
@@ -240,6 +199,7 @@ struct ProfileView: View {
 extension ProfileView {
     func deleteAccount() async {
         isDeletingAccount = true
+        deleteError = nil
         do {
             try await clerk.user?.delete()
             appState.currentRideId = nil
@@ -247,101 +207,10 @@ extension ProfileView {
             appState.currentRide = nil
             dismiss()
         } catch {
+            // Shown inline under the Account group (spec: deleteAccountDialog showsInlineError).
             deleteError = error.riderMessage
-            showDeleteError = true
             isDeletingAccount = false
         }
-    }
-}
-
-// MARK: - Membership Card
-
-extension ProfileView {
-    @ViewBuilder
-    var membershipCard: some View {
-        if store.isPremium {
-            premiumStatusCard
-        } else {
-            upgradeCard
-        }
-    }
-
-    private var upgradeCard: some View {
-        Button { showMembership = true } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(Color.primaryFixed.opacity(0.15))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "crown.fill")
-                        .font(.iconMd)
-                        .foregroundColor(Color.primaryFixed)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("CONVOTRACK PRO")
-                        .font(.labelCaps)
-                        .foregroundColor(Color.primaryFixed)
-                        .tracking(2)
-                    Text("Bigger packs · Unlimited rides")
-                        .font(.captionMd)
-                        .foregroundColor(Color.onSurfaceVariant)
-                }
-
-                Spacer()
-
-                Text("UPGRADE")
-                    .font(.labelCaps)
-                    .foregroundColor(Color.onPrimaryFixed)
-                    .tracking(1)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(Color.primaryFixed)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .padding(16)
-            .background(Color.primaryFixed.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primaryFixed.opacity(0.25), lineWidth: 1))
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    private var premiumStatusCard: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(Color.tertiaryFixed.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(Color.tertiaryFixed)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text("PRO MEMBER")
-                        .font(.labelCaps)
-                        .foregroundColor(Color.tertiaryFixed)
-                        .tracking(2)
-                }
-                if let endsAt = store.premiumEndsAt {
-                    Text("Renews \(endsAt.formatted(.dateTime.month(.abbreviated).day().year()))")
-                        .font(.captionMd)
-                        .foregroundColor(Color.onSurfaceVariant)
-                }
-            }
-
-            Spacer()
-
-            Image(systemName: "checkmark.seal.fill")
-                .font(.iconLg)
-                .foregroundColor(Color.tertiaryFixed)
-        }
-        .padding(16)
-        .background(Color.tertiaryFixed.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.tertiaryFixed.opacity(0.25), lineWidth: 1))
     }
 }
 
@@ -388,7 +257,7 @@ struct EditProfileSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.surfaceDim.ignoresSafeArea()
+                DS.Background.base.ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 24) {
@@ -417,8 +286,8 @@ struct EditProfileSheet: View {
 
                         if let err = errorMessage {
                             Text(err)
-                                .font(.bodyMd)
-                                .foregroundColor(Color.errorColor)
+                                .dsText(.body)
+                                .foregroundColor(DS.Status.danger)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 4)
                         }
@@ -435,15 +304,15 @@ struct EditProfileSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundColor(Color.onSurfaceVariant)
+                        .foregroundColor(DS.Text.secondary.base)
                         .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving {
-                        ProgressView().tint(Color.primaryFixed)
+                        ProgressView().tint(DS.Accent.base)
                     } else {
                         Button("Save") { Task { await save() } }
-                            .foregroundColor(Color.primaryFixed)
+                            .foregroundColor(DS.Accent.base)
                             .fontWeight(.semibold)
                     }
                 }
@@ -461,17 +330,17 @@ struct EditProfileSheet: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(header)
-                .font(.labelCaps)
-                .foregroundColor(Color.primaryFixed)
+                .dsText(.badge)
+                .foregroundColor(DS.Accent.base)
                 .tracking(3)
             VStack(spacing: 0) { content() }
-                .background(Color.surfaceContainerHigh)
+                .background(DS.Surface.raised)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant.opacity(0.4), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(DS.Border.strongColor.opacity(0.4), lineWidth: 1))
             if let note {
                 Text(note)
-                    .font(.captionMd)
-                    .foregroundColor(Color.onSurfaceVariant)
+                    .dsText(.helper)
+                    .foregroundColor(DS.Text.secondary.base)
                     .padding(.horizontal, 4)
             }
         }
@@ -479,9 +348,9 @@ struct EditProfileSheet: View {
 
     private func styledTextField(_ placeholder: String, text: Binding<String>) -> some View {
         TextField(placeholder, text: text)
-            .font(.bodyMd)
-            .foregroundColor(Color.onSurface)
-            .tint(Color.primaryFixed)
+            .dsText(.body)
+            .foregroundColor(DS.Text.primary.base)
+            .tint(DS.Accent.base)
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
     }
@@ -489,17 +358,17 @@ struct EditProfileSheet: View {
     private func visibilityRow(label: String, isOn: Binding<Bool>) -> some View {
         VStack(spacing: 0) {
             Rectangle()
-                .fill(Color.outlineVariant.opacity(0.4))
+                .fill(DS.Border.strongColor.opacity(0.4))
                 .frame(height: 0.5)
                 .padding(.horizontal, 16)
             HStack {
                 Text(label)
-                    .font(.bodyMd)
-                    .foregroundColor(Color.onSurfaceVariant)
+                    .dsText(.body)
+                    .foregroundColor(DS.Text.secondary.base)
                 Spacer()
                 Toggle("", isOn: isOn)
                     .labelsHidden()
-                    .tint(Color.primaryFixed)
+                    .tint(DS.Accent.base)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -532,6 +401,7 @@ struct EditProfileSheet: View {
 }
 
 #Preview {
-    ProfileView(activeTab: .constant(.profile))
+    ProfileView()
         .environmentObject(AppState())
+        .environmentObject(RideRealtimeSession())
 }
