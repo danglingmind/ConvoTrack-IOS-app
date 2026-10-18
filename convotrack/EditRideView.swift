@@ -5,6 +5,7 @@ import ClerkKit
 struct EditRideView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var membershipStore: MembershipStore
+    @EnvironmentObject private var rideSession: RideRealtimeSession
     @Environment(Clerk.self) private var clerk
     @Environment(\.dismiss) private var dismiss
 
@@ -86,17 +87,6 @@ struct EditRideView: View {
         }
     }
 
-    private var distanceText: String {
-        guard routeDistance > 0 else { return "--" }
-        return String(format: "%.1f KM", routeDistance / 1000)
-    }
-
-    private var durationText: String {
-        guard routeDuration > 0 else { return "--" }
-        let minutes = Int(routeDuration / 60)
-        return minutes >= 60 ? "\(minutes / 60)h \(minutes % 60)m" : "\(minutes)m"
-    }
-
     private var canSave: Bool {
         !rideTitle.trimmingCharacters(in: .whitespaces).isEmpty
             && startStop.place != nil
@@ -113,104 +103,88 @@ struct EditRideView: View {
         return stops
     }
 
+    private var connectionState: DSConnectionState {
+        switch rideSession.connectionState {
+        case .connected: .connected
+        case .reconnecting: .reconnecting
+        case .disconnected: .offline
+        }
+    }
+
     var body: some View {
-        // The background is a `.background` on the ZStack, not a full-bleed child inside it. As a
-        // child, its `.ignoresSafeArea()` consumed the safe area for its sibling ScrollView — and
-        // the keyboard is reported through the safe area, so SwiftUI's keyboard avoidance had
-        // nothing to shrink and the focused field could sit under the keyboard. This form has five
-        // text fields (title plus every stop), so it was the worst affected screen.
-        ZStack(alignment: .bottom) {
-            ScrollView {
-                ScrollViewReader { proxy in
-                    VStack(spacing: 24) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("RIDE TITLE")
-                                .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
-                            ZStack(alignment: .trailing) {
-                                TextField("e.g., Midnight Canyon Run", text: $rideTitle)
-                                    .font(.bodyLg)
-                                    .foregroundColor(Color.onSurface)
-                                    .padding(.horizontal, 16)
-                                    .padding(.trailing, 48)
-                                    .frame(height: 56)
-                                    .background(Color.surfaceContainerHigh)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outline.opacity(0.3), lineWidth: 1))
-                                    .tint(Color.primaryFixed)
-                                Image(systemName: "pencil")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(Color.outline.opacity(0.5))
-                                    .padding(.trailing, 16)
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("ROUTE")
-                                .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
-                            routeStopsSection
-                        }
-
-                        routeMapSection
-
-                        maxRidersRow
-
-                        Button(action: { Task { await saveRide() } }) {
-                            HStack(spacing: 12) {
-                                if isSaving {
-                                    ProgressView().tint(Color.onPrimaryFixed)
-                                } else {
-                                    Text("SAVE CHANGES").font(.headlineMd).tracking(4)
-                                    Image(systemName: "checkmark.circle.fill").font(.system(size: 20))
-                                }
-                            }
-                            .modifier(LimePrimaryButton())
-                        }
-                        .disabled(!canSave)
-                        .opacity(canSave ? 1 : 0.5)
-
-                        Text("READY FOR DEPARTURE")
-                            .font(.labelCaps)
-                            .foregroundColor(Color.onSurfaceVariant.opacity(0.4))
-                            .tracking(8)
-
+        // Background is a `.background`, not a full-bleed child inside the stack. As a child, its
+        // `.ignoresSafeArea()` consumed the safe area for the ScrollView, and the keyboard is
+        // reported through the safe area, so keyboard avoidance had nothing to shrink and the
+        // focused field could sit under the keyboard. This form has five text fields (title plus
+        // every stop), so it was the worst affected screen.
+        GeometryReader { proxy in
+            ScrollViewReader { scroll in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DS.Space.sectionGap) {
+                        RideRouteForm(
+                            title: $rideTitle,
+                            startStop: $startStop,
+                            middleStops: $middleStops,
+                            endStop: $endStop,
+                            maxRiders: $maxRiders,
+                            scrollTarget: $scrollTarget,
+                            riderCap: riderCap,
+                            isPremium: membershipStore.isPremium,
+                            routeCoordinates: routeCoordinates,
+                            routeAlternatives: routeAlternatives,
+                            selectedRouteIndex: selectedRouteIndex,
+                            cameraCommand: cameraCommand,
+                            confirmedStops: confirmedStops,
+                            distanceMeters: routeDistance,
+                            durationSeconds: routeDuration,
+                            onStopsChanged: { Task { await recalculateRoute() } },
+                            onSelectRoute: { selectRoute($0) },
+                            onUpgrade: { showMembership = true }
+                        )
                         deleteRideButton
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 48)
+                    .padding(.horizontal, DS.Space.screenInset)
+                    .padding(.top, proxy.safeAreaInsets.top + DS.Space.p4)
+                    .padding(.bottom, DS.Space.p6)
                     .onChange(of: scrollTarget) { _, target in
                         guard let target else { return }
                         withAnimation(.easeOut(duration: 0.25)) {
-                            proxy.scrollTo(target, anchor: .bottom)
+                            scroll.scrollTo(target, anchor: .bottom)
                         }
                         scrollTarget = nil
                     }
                 }
+                .ignoresSafeArea(edges: .top)
+                .scrollDismissesKeyboard(.interactively)
             }
-            .scrollDismissesKeyboard(.interactively)
         }
-        .background(
-            Color.surfaceDim
-                .ignoresSafeArea()
-                .onTapGesture {
-                    UIApplication.shared.sendAction(
-                        #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
-                    )
-                }
-        )
-        .navigationBarBackButtonHidden(true)
-        .navigationTitle("EDIT RIDE")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(action: { dismiss() }) {
-                    // Back arrow, not a close X: this is a pushed page now, same as CREATE RIDE.
-                    Image(systemName: "arrow.left").foregroundColor(Color.primaryFixed)
-                }
+        .background(alignment: .top) {
+            ZStack(alignment: .top) {
+                DSScreenBackground()
+                DSHeroPhoto(imageName: "hero_road_sunset", height: 150 + 100, imageOpacity: 0.45)
+                    .ignoresSafeArea(edges: .top)
             }
+            .onTapGesture {
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+                )
+            }
+        }
+        // Sticky action above the home indicator, with the fade.
+        .dsStickyBottomAction {
+            DSPrimaryButton(title: "Save ride", systemImage: "arrow.turn.up.right", isLoading: isSaving) {
+                Task { await saveRide() }
+            }
+            .disabled(!canSave)
+        }
+        .toolbar(.hidden, for: .tabBar)
+        .navigationTitle("Edit Ride")
+        .navigationBarTitleDisplayMode(.inline)
+        .dsTransparentNavigationBar()
+        .toolbar {
+            // Editing happens inside a ride session, so the connection indicator applies.
             ToolbarItem(placement: .topBarTrailing) {
-                Image(systemName: "antenna.radiowaves.left.and.right").foregroundColor(Color.primaryFixed)
+                DSConnectionStatusButton(state: connectionState, isToolbarItem: true)
             }
         }
         .alert("Failed to Save Ride", isPresented: $showError) {
@@ -218,7 +192,7 @@ struct EditRideView: View {
         } message: {
             Text(errorMessage ?? "An unknown error occurred.")
         }
-        .alert("Delete this ride?", isPresented: $showDeleteConfirm) {
+        .alert("Delete This Ride?", isPresented: $showDeleteConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Delete Ride", role: .destructive) { Task { await deleteRide() } }
         } message: {
@@ -243,243 +217,8 @@ struct EditRideView: View {
             }
             await recalculateRoute(preferStoredMatch: true)
         }
+        .preferredColorScheme(.dark)
     }
-
-    // MARK: - Route Stops
-
-    private var routeStopsSection: some View {
-        VStack(spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                stopDot(color: Color.tertiaryFixed, hasLabel: true)
-                StopSearchField(
-                    label: "START LOCATION",
-                    placeholder: "Search start point...",
-                    icon: "location.fill",
-                    fieldID: "start",
-                    text: $startStop.text,
-                    place: $startStop.place,
-                    onSelect: { Task { await recalculateRoute() } },
-                    onResultsAppeared: { id in scrollTarget = id }
-                )
-            }
-
-            ForEach($middleStops) { $stop in
-                HStack(alignment: .top, spacing: 12) {
-                    stopDot(color: Color.primaryFixed.opacity(0.6), hasLabel: false)
-                    HStack(alignment: .top, spacing: 8) {
-                        StopSearchField(
-                            label: "",
-                            placeholder: "Search stop...",
-                            icon: "mappin",
-                            fieldID: "stop_\(stop.id)",
-                            text: $stop.text,
-                            place: $stop.place,
-                            onSelect: { Task { await recalculateRoute() } },
-                            onResultsAppeared: { id in scrollTarget = id }
-                        )
-                        Button(action: {
-                            middleStops.removeAll { $0.id == stop.id }
-                            Task { await recalculateRoute() }
-                        }) {
-                            Image(systemName: "minus.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(Color.errorColor)
-                                .padding(.top, 13)
-                        }
-                    }
-                }
-            }
-
-            Button(action: { middleStops.append(RouteStop()) }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 14))
-                        .foregroundColor(Color.primaryFixed)
-                    Text("ADD STOP")
-                        .font(.labelCaps).foregroundColor(Color.primaryFixed).tracking(2)
-                }
-            }
-            .padding(.leading, 26)
-            .padding(.vertical, 2)
-
-            HStack(alignment: .top, spacing: 12) {
-                stopDot(color: Color.primaryFixed, hasLabel: true)
-                StopSearchField(
-                    label: "DESTINATION",
-                    placeholder: "Search destination...",
-                    icon: "flag.checkered",
-                    fieldID: "destination",
-                    text: $endStop.text,
-                    place: $endStop.place,
-                    onSelect: { Task { await recalculateRoute() } },
-                    onResultsAppeared: { id in scrollTarget = id }
-                )
-            }
-        }
-    }
-
-    private func stopDot(color: Color, hasLabel: Bool) -> some View {
-        Circle()
-            .fill(color)
-            .frame(width: 14, height: 14)
-            .overlay(Circle().stroke(Color.surfaceDim, lineWidth: 2))
-            .padding(.top, hasLabel ? 37 : 17)
-    }
-
-    // MARK: - Route Map
-
-    private var routeMapSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("ROUTE PREVIEW")
-                .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
-            ZStack {
-                routeMap
-                if confirmedStops.count < 2 {
-                    ZStack {
-                        Color.surfaceContainerLow.opacity(0.92)
-                        VStack(spacing: 8) {
-                            Image(systemName: "map").font(.system(size: 28)).foregroundColor(Color.onSurfaceVariant)
-                            Text("ADD START & DESTINATION")
-                                .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-            }
-            .frame(maxWidth: .infinity).frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outline.opacity(0.2), lineWidth: 1))
-
-            routeSelectorChips
-
-            HStack(spacing: 12) {
-                RouteStatCard(icon: "timer", label: "EST. TIME", value: durationText)
-                RouteStatCard(icon: "arrow.triangle.turn.up.right.diamond", label: "DISTANCE", value: distanceText)
-            }
-        }
-    }
-
-    // Horizontally scrollable route options — shown only for a direct start→destination
-    // route with more than one alternative. Tapping a chip (or the dim map line) selects it.
-    @ViewBuilder
-    private var routeSelectorChips: some View {
-        if routeAlternatives.count > 1 {
-            let fastest = routeAlternatives.map(\.durationSeconds).min() ?? 0
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(Array(routeAlternatives.enumerated()), id: \.element.id) { index, option in
-                        let isSelected = index == selectedRouteIndex
-                        let delta = Int((option.durationSeconds - fastest) / 60)
-                        Button { selectRoute(index) } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(delta == 0 ? "FASTEST" : "+\(delta) MIN")
-                                    .font(.labelCaps).tracking(1)
-                                    .foregroundColor(isSelected ? Color.onPrimaryFixed.opacity(0.7) : Color.tertiaryFixed)
-                                Text(durationString(Int(option.durationSeconds / 60)))
-                                    .font(.dataMono)
-                                    .foregroundColor(isSelected ? Color.onPrimaryFixed : Color.onSurface)
-                                Text(String(format: "%.1f KM", option.distanceMeters / 1000))
-                                    .font(.labelCaps).tracking(1)
-                                    .foregroundColor(isSelected ? Color.onPrimaryFixed.opacity(0.7) : Color.onSurfaceVariant)
-                            }
-                            .padding(.horizontal, 14).padding(.vertical, 10)
-                            .background(isSelected ? Color.primaryFixed : Color.surfaceContainerHigh)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10)
-                                .stroke(isSelected ? Color.clear : Color.outline.opacity(0.3), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 2)
-            }
-        }
-    }
-
-    private func durationString(_ minutes: Int) -> String {
-        minutes >= 60 ? "\(minutes / 60)h \(minutes % 60)m" : "\(minutes)m"
-    }
-
-    private var routeMap: some View {
-        let stopPins: [MapPin] = confirmedStops.enumerated().map { index, stop in
-            let isEnd  = index == confirmedStops.count - 1
-            let color: UIColor = isEnd
-                ? UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 1)
-                : (index == 0 ? UIColor(red: 0.384, green: 1, blue: 0.588, alpha: 1)
-                              : UIColor(red: 0.792, green: 0.953, blue: 0, alpha: 0.6))
-            let size: CGFloat = isEnd ? 16 : 12
-            return MapPin(id: "stop_\(index)", coordinate: stop.coordinate,
-                          style: .simpleDot(color: color, size: size), anchorBottom: false)
-        }
-        return GoogleMapView(
-            routeCoords:   routeCoordinates,
-            pins:          stopPins,
-            cameraCommand: cameraCommand,
-            isInteractive: !routeAlternatives.isEmpty,   // enable taps to pick alternatives
-            alternativeRoutes: routeAlternatives.map { $0.coordinates },
-            selectedRouteIndex: selectedRouteIndex,
-            onSelectRoute: { index in selectRoute(index) }
-        )
-    }
-
-    // MARK: - Max Riders
-
-    private var maxRidersRow: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 16) {
-                ZStack {
-                    Circle().fill(Color.primaryContainer.opacity(0.2)).frame(width: 44, height: 44)
-                    Image(systemName: "person.3.fill").font(.iconMd).foregroundColor(Color.primaryFixed)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Max Riders").font(.bodyLg).foregroundColor(Color.onSurface)
-                    Text("Maximum group size").font(.labelCaps).foregroundColor(Color.onSurfaceVariant)
-                }
-                Spacer()
-                HStack(spacing: 16) {
-                    Button(action: { if maxRiders > 2 { maxRiders -= 1 } }) {
-                        Image(systemName: "minus.circle.fill").font(.iconLg).foregroundColor(Color.primaryFixed)
-                    }
-                    Text("\(maxRiders)").font(.headlineMd).foregroundColor(Color.onSurface).frame(minWidth: 28)
-                    Button(action: {
-                        if maxRiders < riderCap {
-                            maxRiders += 1
-                        } else if !membershipStore.isPremium {
-                            showMembership = true
-                        }
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.iconLg)
-                            .foregroundColor(atRiderCap ? Color.primaryFixed.opacity(0.35) : Color.primaryFixed)
-                    }
-                }
-            }
-            .padding(16)
-            .background(Color.surfaceContainer)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outline.opacity(0.2), lineWidth: 1))
-
-            if atRiderCap {
-                Button { showMembership = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "crown.fill").font(.iconXS)
-                        Text("Pro unlocks bigger packs").font(.labelCaps).tracking(0.5)
-                        Spacer()
-                        Text("UPGRADE →").font(.labelCaps).tracking(1)
-                    }
-                    .foregroundColor(Color.primaryFixed)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(Color.primaryFixed.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primaryFixed.opacity(0.25), lineWidth: 1))
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: atRiderCap)
-    }
-
-    private var atRiderCap: Bool { maxRiders >= riderCap && !membershipStore.isPremium }
 
     // MARK: - Route Calculation
 
@@ -569,29 +308,15 @@ struct EditRideView: View {
 
     // MARK: - Delete
 
-    // Full-width destructive action pinned to the end of the sheet. Shown only to the ride's
-    // creator (leader); disabled while a save or delete is already in flight.
+    // Destructive action at the end of the form, shown only to the ride's creator (leader);
+    // disabled while a save or delete is already in flight. Never the primary role.
     @ViewBuilder
     private var deleteRideButton: some View {
         if isLeader {
-            Button(action: { showDeleteConfirm = true }) {
-                HStack(spacing: 12) {
-                    if isDeleting {
-                        ProgressView().tint(Color.errorColor)
-                    } else {
-                        Image(systemName: "trash").font(.system(size: 18, weight: .semibold))
-                        Text("DELETE RIDE").font(.headlineMd).tracking(4)
-                    }
-                }
-                .foregroundColor(Color.errorColor)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(Color.errorColor.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.errorColor.opacity(0.4), lineWidth: 1))
+            DSDestructiveButton(title: "Delete ride", systemImage: "trash", isLoading: isDeleting) {
+                showDeleteConfirm = true
             }
             .disabled(isDeleting || isSaving)
-            .opacity(isSaving ? 0.5 : 1)
         }
     }
 
@@ -654,12 +379,4 @@ struct EditRideView: View {
             showError = true
         }
     }
-}
-
-// MARK: - RouteStop (local to EditRideView)
-
-private struct RouteStop: Identifiable {
-    let id = UUID()
-    var text: String = ""
-    var place: PlaceResult? = nil
 }

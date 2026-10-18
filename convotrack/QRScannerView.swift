@@ -108,18 +108,19 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
     }
 }
 
-// Full-screen scanner sheet with overlay UI
+// Full-screen scanner (presented with `.fullScreenCover`: it is a camera view, and the Join sheet
+// beneath it must not become a nested sheet).
 struct QRScannerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     var onCode: (String) -> Void
 
     @State private var cameraPermission: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+    /// Brackets flash accent-bright for 120 ms when a code is read.
+    @State private var flash = false
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-
             switch cameraPermission {
             case .authorized:
                 scannerContent
@@ -129,8 +130,12 @@ struct QRScannerSheet: View {
                 permissionDeniedView
             }
         }
+        .overlay(alignment: .topLeading) {
+            DSFloatingButton(systemImage: "xmark", label: "Close") { dismiss() }
+                .padding(.leading, DS.Space.screenInset)
+                .padding(.top, DS.Space.p2)
+        }
         .preferredColorScheme(.dark)
-        .presentationDragIndicator(.visible)
         .onChange(of: scenePhase) { _, phase in
             // Re-check when returning from Settings so a newly granted
             // permission takes effect without reopening the sheet.
@@ -142,84 +147,117 @@ struct QRScannerSheet: View {
 
     private var scannerContent: some View {
         ZStack {
+            Color.black.ignoresSafeArea()
+
             QRScannerView { code in
-                dismiss()
-                onCode(code)
+                DSHaptic.selection()
+                flash = true
+                Task {
+                    try? await Task.sleep(for: .milliseconds(120))
+                    dismiss()
+                    onCode(code)
+                }
             }
             .ignoresSafeArea()
 
-            // Overlay
-            VStack {
-                HStack {
-                    Spacer()
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 40, height: 40)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
+            // 260 pt viewfinder: 56% scrim outside it, accent brackets on it.
+            GeometryReader { proxy in
+                let side: CGFloat = 260
+                let frame = CGRect(x: (proxy.size.width - side) / 2, y: (proxy.size.height - side) / 2, width: side, height: side)
+                ZStack {
+                    Path { p in
+                        p.addRect(CGRect(origin: .zero, size: proxy.size))
+                        p.addRoundedRect(in: frame, cornerSize: CGSize(width: DS.Radius.lg, height: DS.Radius.lg))
                     }
-                    .padding(20)
+                    .fill(DS.Surface.scrim, style: FillStyle(eoFill: true))
+                    QRCornerBrackets(color: flash ? DS.Accent.bright : DS.Accent.base)
+                        .frame(width: side, height: side)
+                        .position(x: frame.midX, y: frame.midY)
                 }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            VStack {
                 Spacer()
-                Text("Point at a ConvoTrack QR code")
-                    .font(.labelCaps)
-                    .foregroundColor(.white.opacity(0.8))
-                    .tracking(2)
-                    .padding(.bottom, 48)
+                DSGlassPill {
+                    Text("Point at a ConvoTrack QR code")
+                        .dsText(.buttonPill)
+                        .foregroundStyle(DS.Text.onPhoto)
+                        .padding(.vertical, DS.Space.p1)
+                }
+                .padding(.bottom, DS.Space.p12)
             }
         }
     }
 
     private var permissionRequestView: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 48))
-                .foregroundColor(Color.primaryFixed)
-            Text("Camera Access Required")
-                .font(.headlineMd)
-                .foregroundColor(.white)
-            Text("ConvoTrack needs camera access to scan QR codes.")
-                .font(.bodyMd)
-                .foregroundColor(Color.onSurfaceVariant)
-                .multilineTextAlignment(.center)
-            Button("Continue") {
+        permissionLayout(
+            systemImage: "camera",
+            tint: DS.Accent.base,
+            disc: DS.Accent.tint,
+            title: "Camera Access Required",
+            message: "ConvoTrack needs camera access to scan QR codes."
+        ) {
+            DSPrimaryButton(title: "Continue") {
                 AVCaptureDevice.requestAccess(for: .video) { granted in
                     DispatchQueue.main.async {
                         cameraPermission = granted ? .authorized : .denied
                     }
                 }
             }
-            .modifier(LimePrimaryButton())
-            .padding(.horizontal, 40)
         }
-        .padding(32)
+        .background { DSScreenBackground() }
     }
 
     private var permissionDeniedView: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "camera.slash.fill")
-                .font(.system(size: 48))
-                .foregroundColor(Color.errorColor)
-            Text("Camera Access Denied")
-                .font(.headlineMd)
-                .foregroundColor(.white)
-            Text("Enable camera access in Settings to scan QR codes.")
-                .font(.bodyMd)
-                .foregroundColor(Color.onSurfaceVariant)
-                .multilineTextAlignment(.center)
-            Button("Open Settings") {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
+        permissionLayout(
+            systemImage: "camera.badge.ellipsis",
+            tint: DS.Status.danger,
+            disc: DS.Status.dangerTint,
+            title: "Camera Access Denied",
+            message: "Enable camera access in Settings to scan QR codes."
+        ) {
+            VStack(spacing: DS.Space.p3) {
+                DSPrimaryButton(title: "Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
                 }
+                DSSecondaryButton(title: "Close") { dismiss() }
             }
-            .modifier(LimePrimaryButton())
-            .padding(.horizontal, 40)
-            Button("Cancel") { dismiss() }
-                .font(.bodyMd)
-                .foregroundColor(Color.onSurfaceVariant)
         }
-        .padding(32)
+        .background {
+            ZStack(alignment: .top) {
+                DSScreenBackground()
+                DS.Gradient.dangerAura(endRadius: 420).ignoresSafeArea()
+            }
+        }
+    }
+
+    private func permissionLayout<Actions: View>(
+        systemImage: String, tint: Color, disc: Color,
+        title: LocalizedStringKey, message: LocalizedStringKey,
+        @ViewBuilder actions: () -> Actions
+    ) -> some View {
+        VStack(spacing: DS.Space.p6) {
+            Image(systemName: systemImage)
+                .dsIcon(30, weight: .medium)
+                .foregroundStyle(tint)
+                .frame(width: 64, height: 64)
+                .background(disc, in: Circle())
+                .accessibilityHidden(true)
+            VStack(spacing: DS.Space.p2) {
+                Text(title).dsText(.titleLarge).foregroundStyle(DS.Text.primary)
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
+                Text(message).dsText(.body).foregroundStyle(DS.Text.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            actions()
+        }
+        .padding(.horizontal, DS.Space.p8)
+        .frame(maxWidth: DS.Space.contentMaxWidth, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
     }
 }

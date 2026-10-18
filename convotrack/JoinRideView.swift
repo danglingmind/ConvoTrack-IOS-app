@@ -5,6 +5,7 @@ struct JoinRideView: View {
 
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     @State private var inviteCode = ""
     @State private var ridePreview: InviteCodeResponse? = nil
@@ -30,54 +31,55 @@ struct JoinRideView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.surfaceDim.ignoresSafeArea()
-                    .overlay(
-                        Canvas { ctx, size in
-                            for x in stride(from: 0, to: size.width, by: 24) {
-                                for y in stride(from: 0, to: size.height, by: 24) {
-                                    let rect = CGRect(x: x, y: y, width: 1.5, height: 1.5)
-                                    ctx.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.05)))
-                                }
-                            }
-                        }
-                    )
+                DSScreenBackground()
 
                 ScrollView {
-                    VStack(spacing: 32) {
+                    VStack(alignment: .leading, spacing: DS.Space.sectionGap) {
                         heroSection
 
                         // The active Join button sits directly beneath the verified ride details so
                         // it's reachable without scrolling to the bottom. Hidden until a ride is
                         // looked up (via code, link, or QR).
                         if ridePreview != nil {
-                            joinButton
-                                .transition(.move(edge: .top).combined(with: .opacity))
+                            DSPrimaryButton(
+                                title: alreadyInThisRide ? "Open lobby" : "Join ride",
+                                systemImage: alreadyInThisRide ? "arrow.right" : "bolt.fill",
+                                isLoading: isJoining
+                            ) { Task { await joinRide() } }
+                            .disabled(!canJoin)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+
+                        if let errorMessage {
+                            DSInlineError(message: LocalizedStringKey(errorMessage))
                         }
 
                         codeInputSection
 
-                        // Divider
-                        HStack(spacing: 16) {
-                            Rectangle().frame(height: 1).foregroundColor(Color.outlineVariant.opacity(0.3))
-                            Text("OR").font(.labelCaps).foregroundColor(Color.outline).tracking(2)
-                            Rectangle().frame(height: 1).foregroundColor(Color.outlineVariant.opacity(0.3))
-                        }
+                        DSOrDivider()
 
                         qrSection
-
-                        Color.clear.frame(height: 40)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .animation(.easeInOut(duration: 0.25), value: ridePreview != nil)
+                    .padding(.horizontal, DS.Space.screenInset)
+                    .padding(.top, DS.Space.p2)
+                    .padding(.bottom, DS.Space.p10)
+                    .dsAnimation(DS.Motion.standard, value: ridePreview != nil)
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
             .contentShape(Rectangle())
             .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                // A way out other than swiping the sheet away.
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
         }
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .presentationBackground(DS.Surface.sheet)
         .preferredColorScheme(.dark)
         .task {
             if let code = prefillCode, !code.isEmpty {
@@ -85,103 +87,82 @@ struct JoinRideView: View {
                 await lookupCode(code)
             }
         }
-        .alert("Couldn't Join", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage ?? "An error occurred. Please try again.")
+        // The scanner is a camera view, so it is full screen rather than a second sheet on top
+        // of this one (one sheet at a time).
+        .fullScreenCover(isPresented: $showScanner) {
+            QRScannerSheet { code in
+                inviteCode = code
+                Task { await lookupCode(code) }
+            }
         }
     }
 
-    // MARK: - Hero Section (transforms when a ride is verified)
+    // MARK: - Hero (standby → verified)
 
     private var heroSection: some View {
-        ZStack(alignment: .bottomLeading) {
-            AsyncImage(url: URL(string: "https://lh3.googleusercontent.com/aida-public/AB6AXuC5cr7RP__6cnlzy_FXSEwHuecBdhk1z8CjevrsLSh8580yPlvkaGAOgKvltHeI3SpSDe6BhCU-Wh0qivmOF65xwbO6Ok0rUgGwk3aJa3DBENGrwCrvoYok04hFxnERzE-xfJ2Cdd-w8UKnM51pdZnvnL7NmnzuWqZ_g5FXV-M4B0YoY5pLaeyM_S1Oexr5oUi51eUzZtsMsdzrnpdw-AcAfGEvftwpZ73YRHSxFdIQMRDU9tEkk2583rH7GxfwZ2X56DbQuZs9EjA")) { image in
-                image.resizable().scaledToFill()
-                    .opacity(ridePreview != nil ? 0.25 : 0.4)
-            } placeholder: {
-                Color.surfaceContainerLow
+        let verified = ridePreview != nil
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+        return Group {
+            if let preview = ridePreview {
+                verifiedRideInfo(preview)
+            } else {
+                standbyInfo
             }
-            .frame(maxWidth: .infinity, minHeight: 180)
-            .clipped()
-            .overlay(LinearGradient(colors: [.clear, Color.surfaceDim], startPoint: .top, endPoint: .bottom))
-
-            // Content area switches between placeholder and real ride info
-            Group {
-                if let preview = ridePreview {
-                    verifiedRideInfo(preview)
-                } else {
-                    standbyInfo
-                }
-            }
-            .padding(16)
         }
-        .frame(minHeight: 180)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(DS.Space.p4)
+        .frame(maxWidth: .infinity, minHeight: 150, alignment: .bottomLeading)
+        .background {
+            ZStack {
+                // Standby is a card; verified is the accent tint.
+                if verified { shape.fill(DS.Accent.tint) } else { shape.fill(DS.Surface.card) }
+                DotGrid()
+            }
+        }
+        .clipShape(shape)
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(
-                    ridePreview != nil ? Color.primaryFixed.opacity(0.6) : Color.outlineVariant.opacity(0.3),
-                    lineWidth: ridePreview != nil ? 1.5 : 1
-                )
+            shape.stroke(verified ? AnyShapeStyle(DS.Accent.border) : AnyShapeStyle(DS.Border.subtle),
+                         lineWidth: verified ? DS.BorderWidth.emphasis : DS.BorderWidth.default)
         )
-        .animation(.easeInOut(duration: 0.25), value: ridePreview != nil)
+        .accessibilityElement(children: .combine)
     }
 
     private var standbyInfo: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("SYSTEM: STANDBY")
-                .font(.labelCaps)
-                .foregroundColor(Color.primaryFixed)
-                .padding(.horizontal, 8).padding(.vertical, 4)
-                .background(Color.surfaceContainerHighest)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-                .tracking(2)
+        VStack(alignment: .leading, spacing: DS.Space.p2) {
+            DSChip(title: "System: Standby", variant: .neutral)
             Text("Ready to Connect")
-                .font(.headlineMd)
-                .foregroundColor(Color.onSurface)
+                .dsText(.titleLarge)
+                .foregroundStyle(DS.Text.primary)
             if isLookingUp {
                 HStack(spacing: 6) {
-                    ProgressView().tint(Color.primaryFixed).scaleEffect(0.8)
-                    Text("Verifying code...").font(.bodyMd).foregroundColor(Color.onSurfaceVariant)
+                    ProgressView().controlSize(.small).tint(DS.Accent.base)
+                    Text("Verifying code…").dsText(.bodySmall).foregroundStyle(DS.Text.muted)
                 }
             } else {
                 Text("Enter the 6-character code from your Ride Leader")
-                    .font(.bodyMd)
-                    .foregroundColor(Color.onSurfaceVariant)
+                    .dsText(.bodySmall)
+                    .foregroundStyle(DS.Text.muted)
             }
         }
     }
 
     private func verifiedRideInfo(_ preview: InviteCodeResponse) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text(alreadyInThisRide ? "YOUR RIDE" : "CODE VERIFIED")
-                    .font(.labelCaps)
-                    .foregroundColor(Color.onPrimaryFixed)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Color.primaryFixed)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                    .tracking(2)
+        VStack(alignment: .leading, spacing: DS.Space.p2) {
+            DSAdaptiveStack(spacing: DS.Space.p2) {
+                DSChip(title: alreadyInThisRide ? "Your ride" : "Code verified", variant: .positive)
                 if alreadyInThisRide {
-                    Text("You're the leader")
-                        .font(.labelCaps)
-                        .foregroundColor(Color.primaryFixed)
-                        .tracking(1)
+                    Text("You're the leader").dsText(.badge).foregroundStyle(DS.Accent.base)
                 }
             }
             Text(preview.title)
-                .font(.headlineMd)
-                .foregroundColor(Color.onSurface)
-            HStack(spacing: 8) {
+                .dsText(.titleLarge)
+                .foregroundStyle(DS.Text.primary)
+            DSAdaptiveStack(spacing: DS.Space.p2) {
                 Label(preview.leaderName, systemImage: "person.fill")
-                    .font(.bodyMd)
-                    .foregroundColor(Color.onSurfaceVariant)
-                Text("·")
-                    .foregroundColor(Color.outline)
+                    .dsText(.bodySmall)
+                    .foregroundStyle(DS.Text.secondary)
                 Label("\(preview.participantCount)/\(preview.maxParticipants)", systemImage: "person.3.fill")
-                    .font(.bodyMd)
-                    .foregroundColor(Color.onSurfaceVariant)
+                    .dsText(.bodySmall)
+                    .foregroundStyle(DS.Text.secondary)
             }
         }
     }
@@ -189,108 +170,52 @@ struct JoinRideView: View {
     // MARK: - Code Input
 
     private var codeInputSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
-                Image(systemName: "key.fill").font(.system(size: 16)).foregroundColor(Color.primaryFixed)
-                Text("ENTER INVITE CODE")
-                    .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(4)
-            }
-
-            ZStack(alignment: .trailing) {
-                TextField("A1B2C3", text: $inviteCode)
-                    .font(.system(size: 32, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color.primaryFixed)
-                    .multilineTextAlignment(.center)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.characters)
-                    .frame(height: 64)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.surfaceContainerHighest)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(codeReady ? Color.primaryFixed : Color.outlineVariant, lineWidth: 2)
-                    )
-                    .onChange(of: inviteCode) { _, newValue in
-                        ridePreview = nil
-                        errorMessage = nil
-                        // Sanitize: uppercase, alphanumeric only, max 6
-                        let cleaned = String(newValue.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
-                        if cleaned != newValue { inviteCode = cleaned }
-                        if cleaned.count == 6 {
-                            Task { await lookupCode(cleaned) }
-                        }
+        VStack(alignment: .leading, spacing: 0) {
+            DSSectionHeading("Enter invite code", systemImage: "key")
+            DSCodeInput(text: $inviteCode, kind: .invite, length: 6, isVerifying: isLookingUp)
+                .onChange(of: inviteCode) { _, newValue in
+                    ridePreview = nil
+                    errorMessage = nil
+                    // Sanitize: uppercase, alphanumeric only, max 6
+                    let cleaned = String(newValue.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
+                    if cleaned != newValue { inviteCode = cleaned }
+                    if cleaned.count == 6 {
+                        Task { await lookupCode(cleaned) }
                     }
-
-                if isLookingUp {
-                    ProgressView().tint(Color.primaryFixed).padding(.trailing, 16)
-                } else {
-                    Image(systemName: codeReady ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(codeReady ? Color.primaryFixed : Color.outlineVariant)
-                        .padding(.trailing, 16)
                 }
-            }
-
             Text("6-character code shared by the Ride Leader. Case-insensitive.")
-                .font(.bodyMd)
-                .foregroundColor(Color.onSurfaceVariant.opacity(0.7))
+                .dsText(.bodySmall)
+                .foregroundStyle(DS.Text.muted)
+                .padding(.top, DS.Space.p3)
         }
     }
 
     // MARK: - QR Section
 
     private var qrSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
-                Image(systemName: "qrcode.viewfinder").font(.system(size: 18)).foregroundColor(Color.primaryFixed)
-                Text("SCAN QR CODE")
-                    .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(4)
-            }
-
-            Button(action: { showScanner = true }) {
+        VStack(alignment: .leading, spacing: 0) {
+            DSSectionHeading("Scan QR code", systemImage: "camera")
+            Button { showScanner = true } label: {
                 ZStack {
-                    Color.surfaceContainerLow
                     QRCornerBrackets()
-                    VStack(spacing: 8) {
-                        Image(systemName: "camera.fill").font(.system(size: 36)).foregroundColor(Color.primaryFixed)
-                        Text("TAP TO SCAN").font(.labelCaps).foregroundColor(Color.primaryFixed).tracking(4)
+                    VStack(spacing: DS.Space.p3) {
+                        Image(systemName: "camera")
+                            .dsIcon(30, weight: .medium)
+                            .foregroundStyle(DS.Accent.base)
+                            .frame(width: 64, height: 64)
+                            .background(DS.Accent.tint, in: Circle())
+                        Text("Tap to scan").dsText(.buttonPill).foregroundStyle(DS.Accent.base)
                     }
                 }
+                .frame(width: 260, height: 260)
+                .background(DS.Surface.card, in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).stroke(DS.Border.default, lineWidth: DS.BorderWidth.default))
                 .frame(maxWidth: .infinity)
-                .aspectRatio(1, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.outlineVariant, lineWidth: 2))
-                .frame(maxWidth: 280)
-                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
             }
-            .sheet(isPresented: $showScanner) {
-                QRScannerSheet { code in
-                    inviteCode = code
-                    Task { await lookupCode(code) }
-                }
-            }
+            .buttonStyle(DSPressStyle(scale: 0.98))
+            .accessibilityLabel(Text("Scan QR code"))
         }
-    }
-
-    // MARK: - Join Button
-
-    private var joinButton: some View {
-        Button(action: { Task { await joinRide() } }) {
-            HStack(spacing: 12) {
-                if isJoining {
-                    ProgressView().tint(Color.onPrimaryFixed)
-                } else if alreadyInThisRide {
-                    Text("OPEN LOBBY").font(.headlineMd).tracking(4)
-                    Image(systemName: "arrow.right")
-                } else {
-                    Text("JOIN RIDE").font(.headlineMd).tracking(4)
-                    Image(systemName: "bolt.fill")
-                }
-            }
-            .modifier(LimePrimaryButton())
-        }
-        .disabled(!canJoin)
-        .opacity(canJoin ? 1 : 0.5)
     }
 
     // MARK: - API Calls
@@ -364,38 +289,52 @@ struct JoinRideView: View {
     }
 }
 
+/// Dot-grid texture (1.2 pt dots every 24 pt) for the Join hero.
+private struct DotGrid: View {
+    var body: some View {
+        Canvas { ctx, size in
+            for x in stride(from: 12.0, to: size.width, by: 24) {
+                for y in stride(from: 12.0, to: size.height, by: 24) {
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - 1.2, y: y - 1.2, width: 2.4, height: 2.4)), with: .color(DS.Control.dotGrid))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Accent corner brackets (32 pt long, 4 pt stroke, 16 pt inset, round caps).
 struct QRCornerBrackets: View {
+    var color: Color = DS.Accent.base
     let bracketSize: CGFloat = 32
     let lineWidth: CGFloat = 4
+    let inset: CGFloat = 16
 
     var body: some View {
         GeometryReader { geo in
-            ZStack {
-                Path { p in
-                    p.move(to: CGPoint(x: 16, y: 16 + bracketSize))
-                    p.addLine(to: CGPoint(x: 16, y: 16))
-                    p.addLine(to: CGPoint(x: 16 + bracketSize, y: 16))
-                }.stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-
-                Path { p in
-                    p.move(to: CGPoint(x: geo.size.width - 16 - bracketSize, y: 16))
-                    p.addLine(to: CGPoint(x: geo.size.width - 16, y: 16))
-                    p.addLine(to: CGPoint(x: geo.size.width - 16, y: 16 + bracketSize))
-                }.stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-
-                Path { p in
-                    p.move(to: CGPoint(x: 16, y: geo.size.height - 16 - bracketSize))
-                    p.addLine(to: CGPoint(x: 16, y: geo.size.height - 16))
-                    p.addLine(to: CGPoint(x: 16 + bracketSize, y: geo.size.height - 16))
-                }.stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-
-                Path { p in
-                    p.move(to: CGPoint(x: geo.size.width - 16 - bracketSize, y: geo.size.height - 16))
-                    p.addLine(to: CGPoint(x: geo.size.width - 16, y: geo.size.height - 16))
-                    p.addLine(to: CGPoint(x: geo.size.width - 16, y: geo.size.height - 16 - bracketSize))
-                }.stroke(Color.primaryFixed, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+            let w = geo.size.width, h = geo.size.height
+            Path { p in
+                // top-leading
+                p.move(to: CGPoint(x: inset, y: inset + bracketSize))
+                p.addLine(to: CGPoint(x: inset, y: inset))
+                p.addLine(to: CGPoint(x: inset + bracketSize, y: inset))
+                // top-trailing
+                p.move(to: CGPoint(x: w - inset - bracketSize, y: inset))
+                p.addLine(to: CGPoint(x: w - inset, y: inset))
+                p.addLine(to: CGPoint(x: w - inset, y: inset + bracketSize))
+                // bottom-leading
+                p.move(to: CGPoint(x: inset, y: h - inset - bracketSize))
+                p.addLine(to: CGPoint(x: inset, y: h - inset))
+                p.addLine(to: CGPoint(x: inset + bracketSize, y: h - inset))
+                // bottom-trailing
+                p.move(to: CGPoint(x: w - inset - bracketSize, y: h - inset))
+                p.addLine(to: CGPoint(x: w - inset, y: h - inset))
+                p.addLine(to: CGPoint(x: w - inset, y: h - inset - bracketSize))
             }
+            .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
         }
+        .accessibilityHidden(true)
     }
 }
 

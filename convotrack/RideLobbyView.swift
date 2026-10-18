@@ -219,6 +219,8 @@ struct RideLobbyView: View {
     // in the band that's actually visible. Defaults are first-frame fallbacks only — the
     // fit re-runs once the real values land.
     @State private var topChromeBottom: CGFloat = 100
+    /// Status bar + nav bar height, so the hero (which runs under them) keeps a fixed visible band.
+    @State private var heroTopInset: CGFloat = 106
     @State private var statPillsHeight: CGFloat = 76
     // Hero state for the destination photo. An explicit phase rather than an optional image:
     // "still resolving" and "there is no photo" must look different, otherwise switching rides
@@ -270,97 +272,102 @@ struct RideLobbyView: View {
         return false
     }
 
-    // MARK: - Top Overlay
+    // MARK: - Toolbar
 
-    private var topOverlay: some View {
-        VStack {
-            HStack(spacing: 12) {
-                Button(action: {
-                    rideSession.stop()
-                    dismiss()
-                }) {
-                    Image(systemName: "arrow.left")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .background(Color.black.opacity(0.4))
-                        .clipShape(Circle())
-                }
-                // Single line, truncating. The trailing slot now holds a worded capsule rather
-                // than a 36pt glyph circle, so a long ride title has ~32pt less to play with —
-                // without this it wraps to two lines, which grows the bar, moves
-                // `topChromeBottom` and re-fits the map camera around it.
-                Text(rideTitle)
-                    .font(.bodyLg)
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .shadow(color: .black.opacity(0.6), radius: 4)
-                Spacer(minLength: 8)
-                if canEditRide {
-                    Button(action: { showEditSheet = true }) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-                } else if canLeaveRide {
-                    leaveRideButton
-                }
+    /// System back/edit/more buttons. On iOS 26 toolbar items float over the hero as Liquid Glass
+    /// circles; `ToolbarSpacer` keeps edit and more as separate capsules.
+    @ToolbarContentBuilder
+    private var lobbyToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button {
+                rideSession.stop()
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.backward").foregroundStyle(DS.Text.primary)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            // Bottom edge of the top chrome in SCREEN coords. The map's top edge is screen
-            // y=0 (the scroll view ignores the top safe area), so this single number is the
-            // whole obscured region — notch/status bar included, with no assumption about
-            // how SwiftUI propagated the safe area and no per-device constant.
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.frame(in: .global).maxY.rounded(.up)
-            } action: { bottom in
-                topChromeBottom = bottom
-            }
-            if rideSession.connectionState == .reconnecting {
-                ConnectionBanner(state: rideSession.connectionState)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .animation(.spring(), value: rideSession.connectionState)
-            }
-            Spacer()
+            .accessibilityLabel(Text("Back"))
         }
+        if canEditRide {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showEditSheet = true } label: { Image(systemName: "pencil").foregroundStyle(DS.Text.primary) }
+                    .accessibilityLabel(Text("Edit ride"))
+            }
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+        }
+        ToolbarItem(placement: .topBarTrailing) { moreMenu }
+    }
+
+    /// Share, QR and (riders only) Leave live in one menu instead of a row of circles.
+    private var moreMenu: some View {
+        Menu {
+            Button { showShareSheet = true } label: {
+                Label("Share Invite", systemImage: "square.and.arrow.up")
+            }
+            Button { showQRModal = true } label: {
+                Label("Show QR Code", systemImage: "qrcode")
+            }
+            if canLeaveRide {
+                Button(role: .destructive) { showLeaveConfirm = true } label: {
+                    Label("Leave Ride", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                .disabled(vm.isLeaving)
+            }
+        } label: {
+            Image(systemName: "ellipsis").foregroundStyle(DS.Text.primary)
+        }
+        .accessibilityLabel(Text("More"))
     }
 
     // MARK: - Body
 
-    private var mainContent: some View {
-        ZStack(alignment: .bottom) {
-            Color.surfaceDim.ignoresSafeArea()
+    private func lobbyContent(topInset: CGFloat) -> some View {
+        ZStack(alignment: .top) {
+            DSScreenBackground()
 
             ScrollView {
-                VStack(spacing: 0) {
-                    mapSection
-                    rosterSection
-                    Color.clear.frame(height: 120)
+                VStack(alignment: .leading, spacing: 0) {
+                    lobbyHero
+                    VStack(alignment: .leading, spacing: DS.Space.sectionGap) {
+                        detailsSection
+                        rosterSection
+                    }
+                    .padding(.horizontal, DS.Space.screenInset)
+                    .padding(.top, DS.Space.p5)
+                    .padding(.bottom, DS.Space.sectionGap)
                 }
+                .frame(maxWidth: .infinity)
             }
             .ignoresSafeArea(edges: .top)
 
-            topOverlay
-
-            bottomBar
+            if rideSession.connectionState == .reconnecting {
+                DSReconnectingBanner()
+                    .padding(.horizontal, DS.Space.screenInset)
+                    .padding(.top, topInset + 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
+        .dsAnimation(DS.Motion.emphasized, value: rideSession.connectionState)
         // The chrome is measured after the first layout pass, so a route that loaded before
         // then was framed with the fallback insets. Re-fit when the real numbers arrive (and
         // on rotation, when they change again).
+        .onChange(of: topInset, initial: true) { _, inset in
+            heroTopInset = inset
+            topChromeBottom = inset
+        }
         .onChange(of: topChromeBottom) { _, _ in fitRouteToVisibleBand(routeCoordinates) }
         .onChange(of: statPillsHeight) { _, _ in fitRouteToVisibleBand(routeCoordinates) }
     }
 
     var body: some View {
-        mainContent
+        GeometryReader { proxy in
+            lobbyContent(topInset: proxy.safeAreaInsets.top)
+        }
+        // Sticky action sits above the tab bar, which stays visible with Home selected.
+        .dsStickyBottomAction { bottomAction }
         .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .dsTransparentNavigationBar()
+        .toolbar { lobbyToolbar }
         .navigationDestination(isPresented: $showNavigation) {
             RideNavigationView(rideId: vm.rideId)
         }
@@ -410,11 +417,7 @@ struct RideLobbyView: View {
                 }
             }
         }
-        .confirmationDialog(
-            "Leave this ride?",
-            isPresented: $showLeaveConfirm,
-            titleVisibility: .visible
-        ) {
+        .alert("Leave This Ride?", isPresented: $showLeaveConfirm) {
             Button("Leave Ride", role: .destructive) { Task { await leaveRide() } }
             Button("Cancel", role: .cancel) { }
         } message: {
@@ -448,47 +451,85 @@ struct RideLobbyView: View {
         )
     }
 
-    // MARK: - Map Section
+    // MARK: - Hero
 
-    private var mapSection: some View {
-        ZStack(alignment: .bottom) {
-            // Three outcomes, three appearances: blank while we don't yet know, the photo when
-            // Google has one, the route map when it doesn't. Collapsing "resolving" into the map
-            // case is what caused the ride-switch glitch — the map appeared for a beat and was
-            // then replaced by the photo.
+    /// Title, live line and destination over the photo (or route map), with the Places credit
+    /// pill at the bottom-end. The media is the background, so the hero grows with the text at
+    /// large Dynamic Type sizes instead of clipping it.
+    private var lobbyHero: some View {
+        VStack(alignment: .leading, spacing: DS.Space.p2) {
+            heroTitleBlock
+            photoAttribution
+        }
+        // Measured so the route camera is framed above the title, not underneath it.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height.rounded(.up)
+        } action: { height in
+            statPillsHeight = height
+        }
+        .padding(.horizontal, DS.Space.screenInset)
+        .padding(.top, heroTopInset + 24)
+        .padding(.bottom, DS.Space.p4)
+        .frame(maxWidth: .infinity, minHeight: mapPreviewHeight, alignment: .bottomLeading)
+        .background { heroMedia }
+        .dsAnimation(.easeInOut(duration: 0.35), value: heroPhase)
+    }
+
+    private var statusLine: LocalizedStringKey {
+        appState.currentRide?.status == "ACTIVE" ? "Riding" : "In lobby"
+    }
+
+    private var heroTitleBlock: some View {
+        VStack(alignment: .leading, spacing: DS.Space.p2) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Ride").dsText(.eyebrow).foregroundStyle(DS.Text.label)
+                Text(rideTitle)
+                    .dsText(.heroTitle)
+                    .foregroundStyle(DS.Text.onPhoto)
+                    .lineLimit(2)
+                    .dsShadow(DS.Shadow.textOnPhoto)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            HStack(spacing: DS.Space.p2) {
+                Circle().fill(DS.Accent.base).frame(width: 8, height: 8).accessibilityHidden(true)
+                Text(statusLine).dsText(.bodyStrong).foregroundStyle(DS.Accent.base)
+            }
+            if !destinationName.isEmpty {
+                Label {
+                    Text(destinationName).dsText(.body).lineLimit(2)
+                } icon: {
+                    Image(systemName: "mappin").dsIcon(DS.IconSize.md)
+                }
+                .foregroundStyle(DS.Text.secondary)
+                .dsShadow(DS.Shadow.textOnPhoto)
+            }
+        }
+    }
+
+    /// Three outcomes, three appearances: blank while we don't yet know, the photo when Google has
+    /// one, the route map when it doesn't. Collapsing "resolving" into the map case is what caused
+    /// the ride-switch glitch — the map appeared for a beat and was then replaced by the photo.
+    private var heroMedia: some View {
+        ZStack {
             switch heroPhase {
             case .resolving:
-                // Deliberately empty: neither the photo nor the map. Showing the map here is
-                // what made a ride switch flash map → photo. A plain surface reads as "loading"
-                // without committing to either outcome.
-                Color.surfaceContainerLow
-                    .frame(maxWidth: .infinity)
-                    .frame(height: mapPreviewHeight)
+                // Deliberately empty: neither the photo nor the map.
+                DS.Surface.raised
 
             case .photo(let photo):
-                // A fixed-size container owns the layout and the photo is decoration INSIDE it,
-                // via `.overlay`. Sizing the Image itself leaks its aspect ratio outward: a 16:9
-                // photo filling 420pt of height reports a 747pt-wide view, which widened this
-                // whole page to 747pt and shifted every element — title, pills, roster — 177pt
-                // left of the screen. `.clipped()` cannot save it; clipping trims pixels after
-                // layout is already decided. An overlay never resizes its parent, so the photo
-                // and the chrome are now on genuinely independent layout planes.
+                // The photo is decoration inside a fixed layout plane (`.overlay` never resizes
+                // its parent); sizing the Image directly leaked its aspect ratio outward once and
+                // widened the whole page.
                 Color.clear
-                    .frame(maxWidth: .infinity)
-                    .frame(height: mapPreviewHeight)
                     .overlay {
-                        // Arbitrary photo into a near-square slot: show the WHOLE photo
-                        // (`scaledToFit`, nothing cropped) over a blurred, zoomed copy of itself
-                        // that fills the leftover space. A plain `scaledToFill` crop would show
-                        // only 53% of a 16:9 photo's width, and `scaledToFit` alone would leave
-                        // ~200pt of dead bands. This handles any aspect — landscape or portrait —
-                        // without the slot's height having to change.
+                        // Whole photo (`scaledToFit`) over a blurred, zoomed copy of itself that
+                        // fills the leftover space, so any aspect works without cropping.
                         ZStack {
                             Image(uiImage: photo.image)
                                 .resizable()
                                 .scaledToFill()
                                 .blur(radius: 24, opaque: true)
-                                .overlay(Color.black.opacity(0.25))
+                                .overlay(Color.black.opacity(0.35))
                             Image(uiImage: photo.image)
                                 .resizable()
                                 .scaledToFit()
@@ -505,58 +546,78 @@ struct RideLobbyView: View {
                     cameraCommand: cameraCommand,
                     isInteractive: false
                 )
-                .frame(maxWidth: .infinity, minHeight: mapPreviewHeight)
+                .allowsHitTesting(false)
                 .transition(.opacity)
             }
 
-            LinearGradient(
-                colors: [Color.black.opacity(0.45), .clear],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(height: 120)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-
-            LinearGradient(
-                colors: [Color.surfaceDim, Color.surfaceDim.opacity(0.55), .clear],
-                startPoint: .bottom, endPoint: .top
-            )
-            .frame(height: mapPreviewHeight)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    FloatingStatPill(label: "DISTANCE", value: distanceKm, unit: "km")
-                    FloatingStatPill(label: "RIDERS", value: "\(vm.participants.count)", unit: nil)
-                    FloatingStatPill(
-                        label: "STATUS",
-                        value: vm.readyStatusText,
-                        unit: nil,
-                        dotColor: vm.allRidersReady ? Color.primaryFixed : Color.secondaryFixed
-                    )
-                    if !inviteCode.isEmpty {
-                        FloatingStatPill(label: "CODE", value: inviteCode, unit: nil)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
-            }
-            // Pills keep floating over the map; the camera fit is what moves. Measuring the
-            // row (bottom padding included) means the route is framed above it whatever the
-            // pill content does — an extra CODE pill, a longer value, a bigger text size.
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.height.rounded(.up)
-            } action: { height in
-                statPillsHeight = height
-            }
-
-            photoAttribution
+            // Keeps the toolbar buttons legible over a bright photo, then fades into the base.
+            LinearGradient(colors: [Color.black.opacity(0.45), .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 120)
+                .frame(maxHeight: .infinity, alignment: .top)
+            DS.Gradient.photoFade
         }
-        .frame(height: mapPreviewHeight)
-        .animation(.easeInOut(duration: 0.35), value: heroPhase)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .allowsHitTesting(false)   // decorative; an overflowing photo must not swallow taps
     }
 
-    /// Height of the map preview. Shared by the frame, the fade gradient and the camera-fit
-    /// clamp so they can't drift apart.
-    private var mapPreviewHeight: CGFloat { 420 }
+    // MARK: - Ride details
+
+    @State private var codeCopied = false
+
+    private var detailRows: [DSDetailRow] {
+        let ride = appState.currentRide
+        let start = ride?.waypoints.first(where: { $0.type == "START" })?.name
+        var rows: [DSDetailRow] = [
+            DSDetailRow(systemImage: "location.north.fill", label: "Start point", value: start ?? "--"),
+            DSDetailRow(systemImage: "flag.fill", label: "Destination", value: destinationName.isEmpty ? "--" : destinationName, tag: "destination"),
+            DSDetailRow(systemImage: "point.topleft.down.to.point.bottomright.curvepath", label: "Distance",
+                        value: (ride?.distanceMeters ?? 0) > 0 ? String(format: "%.1f km", (ride?.distanceMeters ?? 0) / 1000) : "--"),
+            DSDetailRow(systemImage: "clock", label: "Estimated time", value: RideDuration.inline(ride?.estimatedDurationSeconds)),
+        ]
+        if !inviteCode.isEmpty {
+            rows.append(DSDetailRow(systemImage: "key", label: "Joining code", value: inviteCode, isMono: true, tag: "code"))
+        }
+        return rows
+    }
+
+    private var detailsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSSectionHeading("Ride details")
+            DSDetailsList(rows: detailRows) { row in
+                switch row.tag {
+                case "destination":
+                    if let coordinate = destinationCoordinate {
+                        DSSquareIconButton(systemImage: "location.north.fill", label: "Open in Maps") {
+                            openInMaps(coordinate)
+                        }
+                    }
+                case "code":
+                    DSSquareIconButton(systemImage: codeCopied ? "checkmark" : "doc.on.doc", label: "Copy code") {
+                        UIPasteboard.general.string = inviteCode
+                        codeCopied = true
+                        Task {
+                            try? await Task.sleep(for: .seconds(2))
+                            codeCopied = false
+                        }
+                    }
+                default:
+                    EmptyView()
+                }
+            }
+        }
+    }
+
+    private func openInMaps(_ coordinate: CLLocationCoordinate2D) {
+        let name = destinationName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "https://maps.apple.com/?ll=\(coordinate.latitude),\(coordinate.longitude)&q=\(name)") {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    /// Height of the hero. Shared by the frame and the camera-fit clamp so they can't drift apart.
+    /// The hero runs under the status bar and nav bar, so their height is added to the visible band.
+    private var mapPreviewHeight: CGFloat { heroTopInset + 250 }
 
     private var destinationCoordinate: CLLocationCoordinate2D? {
         guard let ride = appState.currentRide else { return nil }
@@ -596,20 +657,22 @@ struct RideLobbyView: View {
         heroPhase = fetched.map { .photo($0) } ?? .unavailable
     }
 
-    /// Photographer credit for the destination photo. Required by Google's Places policy
-    /// whenever a Place Photo is displayed, so it renders with the image rather than being
-    /// optional decoration. Sits just above the stat pills, using their measured height.
+    /// Photographer credit for the destination photo. Required by Google's Places policy whenever
+    /// a Place Photo is displayed, so it renders with the image rather than being optional
+    /// decoration: a glass pill at the photo's bottom-end.
     @ViewBuilder
     private var photoAttribution: some View {
         if case .photo(let photo) = heroPhase, let attribution = photo.attribution {
-            Text("Photo: \(attribution) · Google")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(.white.opacity(0.75))
-                .shadow(color: .black.opacity(0.7), radius: 3)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.horizontal, 20)
-                .padding(.bottom, statPillsHeight + 2)
+            HStack {
+                Spacer(minLength: 0)
+                Text("Photo: \(attribution) · Google")
+                    .dsText(.micro)
+                    .foregroundStyle(DS.Text.onPhotoMuted)
+                    .lineLimit(1)
+                    .padding(.horizontal, DS.Space.p3)
+                    .frame(minHeight: 28)
+                    .dsGlass(clear: true)
+            }
         }
     }
 
@@ -636,70 +699,103 @@ struct RideLobbyView: View {
 
     // MARK: - Roster Section
 
+    /// Leader first, then everyone else in server order.
+    private var orderedParticipants: [RideParticipant] {
+        vm.participants.filter { $0.isLeader } + vm.participants.filter { !$0.isLeader }
+    }
+
     private var rosterSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("SQUAD ROSTER")
-                    .font(.labelCaps).foregroundColor(Color.primaryFixed).tracking(4)
-                Spacer()
-                if vm.socketConnected {
-                    HStack(spacing: 4) {
-                        Circle().fill(Color.primaryFixed).frame(width: 6, height: 6)
-                        Text("LIVE").font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.primaryFixed).tracking(2)
-                    }
-                }
-                Spacer()
+        VStack(alignment: .leading, spacing: 0) {
+            DSSectionHeading(title: "Squad roster") {
                 HStack(spacing: 8) {
-                    ShareButton(icon: "link") { showShareSheet = true }
-                    ShareButton(icon: "qrcode") { showQRModal = true }
+                    DSSquareIconButton(systemImage: "link", label: "Share invite") { showShareSheet = true }
+                    DSSquareIconButton(systemImage: "qrcode", label: "Show QR code") { showQRModal = true }
                 }
             }
+            // Live state and the ready tally sit under the heading; with the two buttons they
+            // don't all fit on the heading's line at 402 pt.
+            HStack(spacing: DS.Space.p3) {
+                if vm.socketConnected { DSLiveIndicator() }
+                Text(LocalizedStringKey(vm.readyStatusText))
+                    .dsText(.badge)
+                    .foregroundStyle(vm.allRidersReady ? DS.Accent.base : DS.Text.muted.base)
+            }
+            .padding(.bottom, DS.Space.p3)
 
             if vm.participants.isEmpty {
-                VStack(spacing: 12) {
-                    ProgressView().tint(Color.primaryFixed)
-                    Text("Loading roster...")
-                        .font(.bodyMd).foregroundColor(Color.onSurfaceVariant)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 32)
+                DSLoadingState()
             } else {
-                VStack(spacing: 12) {
-                    ForEach(vm.participants, id: \.userId) { participant in
-                        let isMe = participant.userId == vm.myUserId
-                        let name = isMe ? (myClerkName ?? participant.name) : participant.name
-                        let status = isMe ? vm.myStatus : participant.status
-                        // The leader can tap any non-leader rider to open the
-                        // management sheet (remove from ride).
-                        let canManage = vm.amILeader && participant.userId != vm.leaderId
-                        let row = ParticipantRiderRow(participant: participant, nameOverride: name, statusOverride: status, isOnline: vm.onlineUserIds.contains(participant.userId), rideActive: appState.currentRide?.status == "ACTIVE")
-                        if canManage {
-                            Button { participantToManage = participant } label: { row }
-                                .buttonStyle(.plain)
-                        } else {
-                            row
-                        }
+                VStack(spacing: DS.Space.listGap) {
+                    ForEach(orderedParticipants, id: \.userId) { participant in
+                        rosterRow(participant)
                     }
                 }
             }
         }
-        .padding(20)
     }
 
-    // MARK: - Bottom Bar
+    @ViewBuilder
+    private func rosterRow(_ participant: RideParticipant) -> some View {
+        let isMe = participant.userId == vm.myUserId
+        let name = isMe ? (myClerkName ?? participant.name) : participant.name
+        let status = isMe ? vm.myStatus : participant.status
+        // The leader can tap any non-leader rider to open the management sheet (remove from ride).
+        let canManage = vm.amILeader && participant.userId != vm.leaderId
+        // The leader starts the ride rather than readying up, so a leader never reads as
+        // WAITING. Once the ride is ACTIVE everyone is riding.
+        let badge: DSStatusBadge.Kind = appState.currentRide?.status == "ACTIVE" ? .riding
+            : (participant.isLeader || status == "READY") ? .ready : .waiting
+        let row = DSRosterRow(
+            name: name,
+            id: participant.userId,
+            imageURL: participant.avatarUrl.flatMap(URL.init(string:)),
+            isMe: isMe,
+            isLeader: participant.isLeader,
+            isOnline: vm.onlineUserIds.contains(participant.userId),
+            badge: badge,
+            showsChevron: canManage
+        )
+        if canManage {
+            Button { participantToManage = participant } label: { row }
+                .buttonStyle(.plain)
+        } else {
+            row
+        }
+    }
 
-    private var bottomBar: some View {
-        VStack(spacing: 0) {
-            LinearGradient(colors: [Color.surfaceDim.opacity(0), Color.surfaceDim], startPoint: .top, endPoint: .bottom)
-                .frame(height: 40)
+    // MARK: - Sticky action
 
-            if appState.currentRide?.status == "ACTIVE" {
-                resumeNavigationButton
-            } else if vm.amILeader {
-                leaderStartButton
-            } else {
-                riderReadyButton
+    @ViewBuilder
+    private var bottomAction: some View {
+        if appState.currentRide?.status == "ACTIVE" {
+            DSPrimaryButton(title: "Resume navigation", systemImage: "arrow.triangle.turn.up.right.diamond.fill") {
+                showNavigation = true
+            }
+        } else if vm.amILeader {
+            DSPrimaryButton(
+                title: vm.canStart ? "Start ride" : "Waiting for riders",
+                systemImage: vm.canStart ? "play.fill" : "clock",
+                isLoading: vm.isStarting
+            ) {
+                Task {
+                    await vm.startRide(rideId: vm.rideId)
+                    if vm.startError == nil {
+                        // Mark ride as ACTIVE locally so resuming correctly shows RESUME NAVIGATION
+                        if let ride = appState.currentRide {
+                            appState.currentRide = ride.with(status: "ACTIVE")
+                        }
+                        showNavigation = true
+                    }
+                }
+            }
+            .disabled(!vm.canStart || vm.isStarting)
+        } else if vm.myStatus == "READY" {
+            DSSecondaryButton(title: "You're ready", isConfirmed: true) {}
+                .disabled(true)
+        } else {
+            // Marking ready is the rider's one next action, so it carries the lime.
+            DSPrimaryButton(title: "Mark as ready", systemImage: "checkmark.circle") {
+                vm.markReady(rideId: vm.rideId)
             }
         }
     }
@@ -723,46 +819,6 @@ struct RideLobbyView: View {
         return true
     }
 
-    /// Sits in the top bar's trailing slot — the leader's Edit button's exact place, and the two
-    /// are mutually exclusive (`canEditRide` is leader-only, `canLeaveRide` rider-only), so the
-    /// corner holds whichever one applies to you and never both.
-    ///
-    /// A capsule rather than the neighbours' 36pt circles, because it carries a word instead of a
-    /// glyph — but the same 36pt height and the same `black.opacity(0.4)` scrim, so back, title
-    /// and leave read as one row of chrome floating over the hero, and the word stays legible
-    /// over whatever destination photo happens to be behind it.
-    ///
-    /// Tinted rather than filled. A solid `errorContainer` capsule was the only saturated red on
-    /// a lime-and-green screen, so it pulled the eye straight past the destination photo and the
-    /// roster to the one control a rider is least likely to want. It also overstated the stakes:
-    /// leaving is reversible — the join route has an explicit re-join-after-LEFT branch, and the
-    /// confirmation says so — whereas END RIDE and DELETE RIDE are not. Keeping the filled red
-    /// for those two, and giving this one `errorColor` as a foreground only, restores the
-    /// difference between "you can undo this" and "you cannot".
-    ///
-    /// `errorColor` (a warm salmon) still separates cleanly from the cool lime/green palette, so
-    /// the control reads as the way out at a glance without shouting.
-    private var leaveRideButton: some View {
-        Button(action: { showLeaveConfirm = true }) {
-            Group {
-                if vm.isLeaving {
-                    ProgressView().tint(Color.errorColor).controlSize(.small)
-                } else {
-                    Text("LEAVE").font(.labelCaps).tracking(1)
-                }
-            }
-            .foregroundColor(Color.errorColor)
-            .frame(height: 36)
-            .padding(.horizontal, 14)
-            .background(Color.black.opacity(0.4))
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(Color.errorColor.opacity(0.28), lineWidth: 1))
-        }
-        .disabled(vm.isLeaving)
-        // Never let a long ride title squeeze the word out of the capsule; the title truncates.
-        .fixedSize()
-    }
-
     /// Exits the ride on this device once the server has confirmed the leave. Same teardown the
     /// "removed by the leader" path uses: stop the shared session, drop the persisted active
     /// ride, pop back to Home. On failure the alert fires and the rider stays put.
@@ -773,89 +829,6 @@ struct RideLobbyView: View {
         appState.currentRideId = nil   // also clears currentRide
         appState.inviteCode = nil
         dismiss()
-    }
-
-    private var resumeNavigationButton: some View {
-        Button(action: { showNavigation = true }) {
-            HStack(spacing: 12) {
-                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
-                    .font(.system(size: 20, weight: .bold))
-                Text("RESUME NAVIGATION").font(.headlineMd).tracking(-0.5)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(Color.primaryFixed)
-            .foregroundColor(Color.onPrimaryFixed)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .shadow(color: Color.primaryFixed.opacity(0.3), radius: 20)
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 60)
-        .background(Color.surfaceDim)
-    }
-
-    private var leaderStartButton: some View {
-        Button(action: {
-            Task {
-                await vm.startRide(rideId: vm.rideId)
-                if vm.startError == nil {
-                    // Mark ride as ACTIVE locally so resuming correctly shows RESUME NAVIGATION
-                    if let ride = appState.currentRide {
-                        appState.currentRide = ride.with(status: "ACTIVE")
-                    }
-                    showNavigation = true
-                }
-            }
-        }) {
-            HStack(spacing: 12) {
-                if vm.isStarting {
-                    ProgressView().tint(Color.onPrimaryFixed)
-                    Text("STARTING...").font(.headlineMd).tracking(-0.5)
-                } else if vm.canStart {
-                    Image(systemName: "play.fill").font(.system(size: 20, weight: .bold))
-                    Text("START RIDE").font(.headlineMd).tracking(-0.5)
-                } else {
-                    Image(systemName: "clock").font(.system(size: 20))
-                    Text("WAITING FOR RIDERS").font(.headlineMd).tracking(-0.5)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(vm.canStart ? Color.primaryFixed : Color.surfaceContainerHigh)
-            .foregroundColor(vm.canStart ? Color.onPrimaryFixed : Color.onSurfaceVariant)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .shadow(color: vm.canStart ? Color.primaryFixed.opacity(0.3) : .clear, radius: 20)
-        }
-        .disabled(!vm.canStart || vm.isStarting)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 60)
-        .background(Color.surfaceDim)
-    }
-
-    private var riderReadyButton: some View {
-        Button(action: {
-            vm.markReady(rideId: vm.rideId)
-        }) {
-            HStack(spacing: 12) {
-                Image(systemName: vm.myStatus == "READY" ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20, weight: .bold))
-                Text(vm.myStatus == "READY" ? "YOU'RE READY" : "MARK AS READY")
-                    .font(.headlineMd).tracking(-0.5)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(vm.myStatus == "READY" ? Color.surfaceContainerHigh : Color.primaryFixed)
-            .foregroundColor(vm.myStatus == "READY" ? Color.primaryFixed : Color.onPrimaryFixed)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(vm.myStatus == "READY" ? Color.primaryFixed : .clear, lineWidth: 1.5)
-            )
-        }
-        .disabled(vm.myStatus == "READY")
-        .padding(.horizontal, 20)
-        .padding(.bottom, 60)
-        .background(Color.surfaceDim)
     }
 
     // MARK: - Load + Connect
@@ -1070,131 +1043,6 @@ private struct LobbyAlerts: ViewModifier {
     }
 }
 
-// MARK: - Participant Row
-
-struct ParticipantRiderRow: View {
-    let participant: RideParticipant
-    var nameOverride: String? = nil
-    var statusOverride: String? = nil
-    var isOnline: Bool = false
-    /// True once the ride has left the lobby (status ACTIVE). Everyone is riding, so the
-    /// ready/waiting distinction is moot and the badge reads "RIDING".
-    var rideActive: Bool = false
-
-    private enum RosterState: Equatable { case waiting, ready, riding }
-
-    private var displayName: String { nameOverride ?? participant.name }
-    private var displayStatus: String { statusOverride ?? participant.status }
-
-    // The leader starts the ride rather than readying up, so a leader must never render as
-    // WAITING. Once the ride is ACTIVE everyone is riding.
-    private var rosterState: RosterState {
-        if rideActive { return .riding }
-        if participant.isLeader || displayStatus == "READY" { return .ready }
-        return .waiting
-    }
-    private var isActive: Bool { rosterState != .waiting }
-
-    private var badgeText: String {
-        switch rosterState {
-        case .waiting: return "WAITING"
-        case .ready:   return "READY"
-        case .riding:  return "RIDING"
-        }
-    }
-    private var badgeTextColor: Color {
-        switch rosterState {
-        case .waiting: return Color.onSurfaceVariant
-        case .ready:   return Color.onPrimaryContainer
-        case .riding:  return Color.onPrimaryFixed
-        }
-    }
-    private var badgeBackground: Color {
-        switch rosterState {
-        case .waiting: return Color.surfaceVariant
-        case .ready:   return Color.primaryContainer
-        case .riding:  return Color.tertiaryFixed
-        }
-    }
-    private var accentColor: Color {
-        switch rosterState {
-        case .waiting: return Color.outline
-        case .ready:   return Color.primaryFixed
-        case .riding:  return Color.tertiaryFixed
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 16) {
-            ZStack(alignment: .bottomTrailing) {
-                if let url = participant.avatarUrl.flatMap(URL.init) {
-                    AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Circle().fill(Color.surfaceVariant)
-                    }
-                    .frame(width: 48, height: 48)
-                    .clipShape(Circle())
-                } else {
-                    Circle()
-                        .fill(Color.surfaceVariant)
-                        .frame(width: 48, height: 48)
-                        .overlay(
-                            Text(String(displayName.prefix(1)).uppercased())
-                                .font(.headlineMd).foregroundColor(Color.onSurface)
-                        )
-                }
-
-                Circle()
-                    .fill(isOnline ? Color.tertiaryFixed : Color.surfaceVariant)
-                    .frame(width: 14, height: 14)
-                    .overlay(Circle().stroke(Color.surfaceDim, lineWidth: 2))
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(displayName).font(.bodyLg).foregroundColor(Color.onSurface)
-                    if participant.isLeader {
-                        Text("LEADER")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.onPrimaryFixed).tracking(1)
-                            .padding(.horizontal, 5).padding(.vertical, 2)
-                            .background(Color.primaryFixed).clipShape(Capsule())
-                    }
-                }
-                Text(participant.isLeader ? "RIDE LEADER" : "FORMATION RIDER")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color.onSurfaceVariant).tracking(1)
-            }
-
-            Spacer()
-
-            // Roster state (waiting / ready / riding) — connection state is shown by the presence
-            // dot, never as a "DISCONNECTED" badge (which conflated roster status with liveness).
-            Text(badgeText)
-                .font(.labelCaps)
-                .foregroundColor(badgeTextColor)
-                .tracking(1)
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(badgeBackground)
-                .clipShape(Capsule())
-        }
-        .padding(16)
-        .background(Color.surfaceContainerHigh.opacity(0.7))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(isActive ? accentColor : Color.outline, lineWidth: 1))
-        .overlay(
-            HStack {
-                Rectangle()
-                    .fill(accentColor)
-                    .frame(width: 4).clipShape(RoundedRectangle(cornerRadius: 2))
-                Spacer()
-            }
-        )
-        .animation(.easeInOut(duration: 0.2), value: rosterState)
-    }
-}
-
 // MARK: - Remove Rider Sheet
 
 struct RemoveRiderSheet: View {
@@ -1204,104 +1052,58 @@ struct RemoveRiderSheet: View {
     let onRemove: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
-            Capsule().fill(Color.outline).frame(width: 36, height: 4).padding(.top, 12)
-
-            VStack(spacing: 12) {
-                if let url = participant.avatarUrl.flatMap(URL.init) {
-                    AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Circle().fill(Color.surfaceVariant)
-                    }
-                    .frame(width: 72, height: 72)
-                    .clipShape(Circle())
-                } else {
-                    Circle()
-                        .fill(Color.surfaceVariant)
-                        .frame(width: 72, height: 72)
-                        .overlay(
-                            Text(String(participant.name.prefix(1)).uppercased())
-                                .font(.headlineLg).foregroundColor(Color.onSurface)
-                        )
-                }
-
-                Text(participant.name).font(.headlineMd).foregroundColor(Color.onSurface)
-                Text(participant.isLeader ? "RIDE LEADER" : "FORMATION RIDER")
-                    .font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
+        VStack(spacing: DS.Space.p6) {
+            VStack(spacing: DS.Space.p3) {
+                DSAvatar(
+                    name: participant.name,
+                    id: participant.userId,
+                    imageURL: participant.avatarUrl.flatMap(URL.init(string:)),
+                    size: DS.AvatarSize.xl
+                )
+                Text(participant.name).dsText(.titleLarge).foregroundStyle(DS.Text.primary)
+                Text(participant.isLeader ? "Ride leader" : "Formation rider")
+                    .dsText(.badge)
+                    .foregroundStyle(DS.Text.muted)
             }
-
-            Button(action: onRemove) {
-                HStack(spacing: 10) {
-                    if isRemoving {
-                        ProgressView().tint(Color.errorColor)
-                    } else {
-                        Image(systemName: "person.fill.xmark").font(.system(size: 18, weight: .bold))
-                    }
-                    Text(isRemoving ? "REMOVING..." : "REMOVE FROM RIDE")
-                        .font(.headlineMd).tracking(-0.5)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(Color.errorContainer)
-                .foregroundColor(Color.errorColor)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(spacing: DS.Space.p3) {
+                // The destructive action is never the primary role.
+                DSDestructiveButton(
+                    title: "Remove from ride",
+                    systemImage: "person.fill.xmark",
+                    isLoading: isRemoving,
+                    action: onRemove
+                )
+                DSSecondaryButton(title: "Cancel") { dismiss() }
+                    .disabled(isRemoving)
             }
-            .disabled(isRemoving)
-
-            Button(action: { dismiss() }) {
-                Text("CANCEL")
-                    .font(.headlineMd).tracking(-0.5)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .foregroundColor(Color.onSurfaceVariant)
-                    .background(Color.surfaceContainerHigh)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .disabled(isRemoving)
-
-            Spacer()
         }
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.surfaceDim.ignoresSafeArea())
-        .presentationDetents([.height(360)])
-        .presentationDragIndicator(.hidden)
+        .padding(.horizontal, DS.Space.screenInset)
+        .padding(.top, DS.Space.p8)
+        .padding(.bottom, DS.Space.p5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .presentationDetents([.height(380), .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(DS.Surface.sheet)
         .preferredColorScheme(.dark)
     }
 }
 
 // MARK: - Supporting Views
 
-struct ShareButton: View {
-    let icon: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: icon).font(.system(size: 18)).foregroundColor(Color.onSurface)
-                .frame(width: 44, height: 44)
-                .background(Color.surfaceContainerHigh.opacity(0.7))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.outline.opacity(0.2), lineWidth: 1))
-        }
-    }
-}
-
 struct LobbyStartPin: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                Circle().fill(Color.surfaceContainerHigh).frame(width: 36, height: 36)
-                    .overlay(Circle().stroke(Color.primaryFixed, lineWidth: 2.5))
+                Circle().fill(DS.Surface.raised).frame(width: 36, height: 36)
+                    .overlay(Circle().stroke(DS.Accent.base, lineWidth: 2.5))
                 Image(systemName: "mappin.circle.fill").font(.system(size: 20, weight: .bold))
-                    .foregroundColor(Color.primaryFixed)
+                    .foregroundColor(DS.Accent.base)
             }
-            Triangle().fill(Color.primaryFixed).frame(width: 8, height: 5).offset(y: -1)
+            Triangle().fill(DS.Accent.base).frame(width: 8, height: 5).offset(y: -1)
             Text("START").font(.system(size: 8, weight: .black, design: .monospaced))
-                .foregroundColor(Color.onSurface).tracking(0.5)
+                .foregroundColor(DS.Text.primary.base).tracking(0.5)
                 .padding(.horizontal, 7).padding(.vertical, 3)
-                .background(Color.surfaceContainerHigh.opacity(0.92)).clipShape(Capsule())
+                .background(DS.Surface.raised.opacity(0.92)).clipShape(Capsule())
         }
     }
 }
@@ -1329,43 +1131,48 @@ struct QRCodeModal: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.surfaceDim.opacity(0.95).ignoresSafeArea()
-            VStack(spacing: 32) {
+        ScrollView {
+            VStack(spacing: DS.Space.p6) {
                 HStack {
                     Spacer()
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark").font(.system(size: 20)).foregroundColor(Color.onSurfaceVariant)
-                            .frame(width: 44, height: 44)
-                    }
+                    DSSquareIconButton(systemImage: "xmark", label: "Close") { dismiss() }
                 }
-                Text("JOIN CONVOTRACK").font(.headlineMd).foregroundColor(Color.primaryFixed).tracking(2)
+                Text("Join ConvoTrack")
+                    .dsText(.headerTitle)
+                    .foregroundStyle(DS.Text.primary)
+                    .accessibilityAddTraits(.isHeader)
 
+                // The code stays black on white whatever the theme, so scanners can read it.
                 ZStack {
-                    RoundedRectangle(cornerRadius: 16).fill(Color.white).frame(width: 256, height: 256)
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(Color.white)
                     if let img = qrImage {
                         Image(uiImage: img)
                             .interpolation(.none)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 220, height: 220)
+                            .padding(16)
+                            .accessibilityLabel(Text("QR code for invite \(inviteCode)"))
                     } else {
-                        ProgressView().tint(Color.surfaceContainerLowest)
+                        ProgressView().tint(DS.Background.deep)
                     }
                 }
+                .frame(width: 240, height: 240)
 
                 if !inviteCode.isEmpty {
-                    VStack(spacing: 4) {
-                        Text("INVITE CODE").font(.labelCaps).foregroundColor(Color.onSurfaceVariant).tracking(2)
-                        Text(inviteCode).font(.system(size: 28, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.primaryFixed).tracking(6)
+                    VStack(spacing: DS.Space.p1) {
+                        Text("Invite code").dsText(.fieldLabel).foregroundStyle(DS.Text.muted)
+                        Text(inviteCode).dsText(.codeDisplay).foregroundStyle(DS.Accent.base)
                     }
+                    .accessibilityElement(children: .combine)
                 }
-                Spacer()
             }
-            .padding(24).padding(.top, 16)
+            .padding(.horizontal, DS.Space.p6)
+            .padding(.vertical, DS.Space.p4)
+            .frame(maxWidth: .infinity)
         }
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .presentationBackground(DS.Surface.sheet)
         .preferredColorScheme(.dark)
     }
 }
