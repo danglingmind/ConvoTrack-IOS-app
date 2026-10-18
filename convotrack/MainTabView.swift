@@ -10,8 +10,12 @@ private struct JoinSheetContext: Identifiable {
     let code: String?     // nil = opened manually (user enters the code); non-nil = deep link / QR
 }
 
+enum AppTab: Hashable {
+    case history, home, profile
+}
+
 struct MainTabView: View {
-    @State private var activeTab: ConvoTrackBottomNav.Tab = .track
+    @State private var activeTab: AppTab = .home
     @State private var joinSheet: JoinSheetContext? = nil
     @StateObject private var appState = AppState()
     // Owns the ride's realtime socket for its whole lifetime, above both the lobby and the
@@ -20,33 +24,34 @@ struct MainTabView: View {
     @Environment(Clerk.self) private var clerk
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Group {
-                switch activeTab {
-                case .flagged:
-                    NavigationStack {
-                        RideHistoryView()
-                    }
-                case .track:
-                    // HomeView's "Join Ride" button just opens the sheet with no prefilled code.
-                    HomeView(activeTab: $activeTab, showJoinRide: Binding(
-                        get: { joinSheet != nil },
-                        set: { open in joinSheet = open ? JoinSheetContext(code: nil) : nil }
-                    ))
-                case .profile:
-                    NavigationStack {
-                        ProfileView(activeTab: $activeTab)
-                    }
+        // Native iOS 26 tab bar (floating Liquid Glass). Every tab keeps its own NavigationStack
+        // alive, so switching tabs no longer rebuilds them. The ride Lobby is pushed inside the
+        // Home stack, so Home stays selected there. Navigation / Create / Edit / Summary hide the
+        // bar with `.toolbar(.hidden, for: .tabBar)`.
+        TabView(selection: $activeTab) {
+            Tab("History", systemImage: "flag.fill", value: AppTab.history) {
+                NavigationStack {
+                    RideHistoryView()
                 }
             }
-
-            if !appState.isRideActive {
-                ConvoTrackBottomNav(activeTab: $activeTab)
+            Tab("Home", systemImage: "location.north.fill", value: AppTab.home) {
+                // HomeView's "Join Ride" button just opens the sheet with no prefilled code.
+                HomeView(activeTab: $activeTab, showJoinRide: Binding(
+                    get: { joinSheet != nil },
+                    set: { open in joinSheet = open ? JoinSheetContext(code: nil) : nil }
+                ))
+            }
+            Tab("Profile", systemImage: "person.fill", value: AppTab.profile) {
+                NavigationStack {
+                    ProfileView()
+                }
             }
         }
+        .tint(DS.Accent.base)
+        .tabViewStyle(.sidebarAdaptable)
+        .tabBarMinimizeBehavior(.onScrollDown)
         .environmentObject(appState)
         .environmentObject(rideSession)
-        .ignoresSafeArea(edges: .bottom)
         .preferredColorScheme(.dark)
         .sheet(item: $joinSheet) { ctx in
             JoinRideView(prefillCode: ctx.code)

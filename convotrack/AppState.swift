@@ -2,7 +2,6 @@ import Combine
 import Foundation
 
 class AppState: ObservableObject {
-    @Published var isRideActive = false
     @Published var popToRoot = false   // set true to signal HomeView to reset its nav stack
     @Published var currentUser: ConvoTrackUser? = nil
     @Published var currentRide: Ride? = nil
