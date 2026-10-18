@@ -32,7 +32,8 @@ final class RideRealtimeSession: ObservableObject {
     @Published private(set) var liveState: RideStateUpdate? = nil       // latest ride:state_update
 
     // MARK: Transient events — screens react via .sink / .onChange
-    @Published private(set) var splitActive: Bool = false
+    /// Latest `ride:split_detected` payload; nil once `ride:split_resolved` arrives.
+    @Published private(set) var split: SplitInfo? = nil
     @Published private(set) var latestRegroup: RegroupEvent? = nil
     @Published private(set) var latestRegroupResolvedId: String? = nil
     @Published private(set) var latestEmergency: EmergencyEvent? = nil
@@ -119,7 +120,7 @@ final class RideRealtimeSession: ObservableObject {
         leaderId = ""
         rideStatus = "LOBBY"
         liveState = nil
-        splitActive = false
+        split = nil
         latestRegroup = nil
         latestRegroupResolvedId = nil
         latestEmergency = nil
@@ -267,8 +268,8 @@ final class RideRealtimeSession: ObservableObject {
         socket.onRideUpdated = { [weak self] event in self?.rideUpdated = event }
         socket.onRideDeleted = { [weak self] in self?.wasDeleted = true }
 
-        socket.onSplitDetected = { [weak self] _ in self?.splitActive = true }
-        socket.onSplitResolved = { [weak self] in self?.splitActive = false }
+        socket.onSplitDetected = { [weak self] dict in self?.split = SplitInfo(dict) }
+        socket.onSplitResolved = { [weak self] in self?.split = nil }
         socket.onRegroupStarted = { [weak self] event in self?.latestRegroup = event }
         socket.onRegroupResolved = { [weak self] id in self?.latestRegroupResolvedId = id }
         socket.onEmergencyStarted = { [weak self] event in self?.latestEmergency = event }
@@ -289,6 +290,19 @@ final class RideRealtimeSession: ObservableObject {
 
 /// Slim "reconnecting" strip. Callers gate it on `connectionState == .reconnecting`, so it takes no
 /// layout space while the connection is healthy (and doesn't flash on a cold connect or teardown).
+/// `ride:split_detected` payload: how far the last rider has fallen behind, and who they are.
+struct SplitInfo: Equatable {
+    let gapMeters: Double
+    let leaderId: String?
+    let lastRiderId: String?
+
+    init(_ dict: [String: Any]) {
+        gapMeters = (dict["gapMeters"] as? NSNumber)?.doubleValue ?? 0
+        leaderId = dict["leaderId"] as? String
+        lastRiderId = dict["lastRiderId"] as? String
+    }
+}
+
 struct ConnectionBanner: View {
     let state: RideRealtimeSession.ConnectionState
 

@@ -175,7 +175,9 @@ struct GoogleMapView: UIViewRepresentable {
     /// A camera fit must add this to its top inset: `GMSCameraUpdate.fit` frames the
     /// coordinates and knows nothing about the marker towering over them, so a route whose
     /// northernmost point is a stop would otherwise have that pin clipped off-screen.
-    static let stopPinTopExtent: CGFloat = 92
+    static let stopPinTopExtent: CGFloat = 104
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -199,6 +201,8 @@ struct GoogleMapView: UIViewRepresentable {
 
     func updateUIView(_ mapView: GMSMapView, context: Context) {
         let c = context.coordinator
+        // Read so a Dynamic Type change re-runs this; `applyPins` then re-bakes at the new size.
+        _ = dynamicTypeSize
         c.onInteraction = onInteraction
         c.onSelectRoute = onSelectRoute
         c.onEdgeIndicators = onEdgeIndicators
@@ -314,6 +318,7 @@ extension GoogleMapView {
 
         var markers:       [String: GMSMarker] = [:]
         var pinRenderKeys: [String: Int]        = [:]   // styleHash — gates icon re-bake
+        var bakedLabelSize: CGFloat             = 0     // pin label size the current icons were baked at
         var pinModels:     [String: MapPin]     = [:]   // last pin per id, to re-bake on avatar load
 
         // Avatar photos for rider markers. Baking a marker icon is synchronous, so each avatar
@@ -612,6 +617,12 @@ extension GoogleMapView {
         func applyPins(_ pins: [MapPin], to mapView: GMSMapView) {
             let currentIds = Set(pins.map { $0.id })
 
+            // Text-size change: every baked label is the wrong size, so force a re-bake.
+            if bakedLabelSize != Self.pinLabelSize {
+                bakedLabelSize = Self.pinLabelSize
+                pinRenderKeys.removeAll()
+            }
+
             // Remove stale
             for id in Array(markers.keys) where !currentIds.contains(id) {
                 markers[id]?.map = nil
@@ -699,6 +710,14 @@ extension GoogleMapView {
 
         // MARK: Icon rendering
 
+        /// Label size for every pin, in points. Pin art is baked into bitmaps, so it can't follow
+        /// Dynamic Type on its own: scale from the 11 pt iOS minimum with the user's setting,
+        /// capped so a big setting grows the labels without letting them swallow the route.
+        static var pinLabelSize: CGFloat {
+            let scaled = UIFontMetrics(forTextStyle: .caption1).scaledValue(for: DS.Map.minLabelSize)
+            return min(max(scaled, DS.Map.minLabelSize), DS.Map.minLabelSize * 1.5)
+        }
+
         /// Body art for a pin plus the point within it that is the semantic tip
         /// (the pixel that must sit on the true coordinate).
         ///
@@ -709,10 +728,10 @@ extension GoogleMapView {
         private func renderBody(_ pin: MapPin) -> (image: UIImage, anchorInBody: CGPoint)? {
             switch pin.style {
             case .destination(let name):
-                guard let img = renderSwiftUIFit(DestinationPin(name: name)) else { return nil }
+                guard let img = renderSwiftUIFit(DestinationPin(name: name, labelSize: Self.pinLabelSize)) else { return nil }
                 return (img, CGPoint(x: img.size.width / 2, y: img.size.height))
             case .waypoint(let name):
-                guard let img = renderSwiftUIFit(WaypointPin(name: name)) else { return nil }
+                guard let img = renderSwiftUIFit(WaypointPin(name: name, labelSize: Self.pinLabelSize)) else { return nil }
                 return (img, CGPoint(x: img.size.width / 2, y: img.size.height))
             case .lobbyStart:
                 guard let img = renderSwiftUIFit(LobbyStartPin()) else { return nil }
@@ -721,10 +740,10 @@ extension GoogleMapView {
             // centred their ~62pt art, leaving ~14pt of empty canvas below it — so with a
             // bottom anchor the marker floated that far above its true coordinate.
             case .regroup(let type):
-                guard let img = renderSwiftUIFit(RegroupPin(type: type)) else { return nil }
+                guard let img = renderSwiftUIFit(RegroupPin(type: type, labelSize: Self.pinLabelSize)) else { return nil }
                 return (img, CGPoint(x: img.size.width / 2, y: img.size.height))
             case .emergency:
-                guard let img = renderSwiftUIFit(EmergencyPin()) else { return nil }
+                guard let img = renderSwiftUIFit(EmergencyPin(labelSize: Self.pinLabelSize)) else { return nil }
                 return (img, CGPoint(x: img.size.width / 2, y: img.size.height))
             case .rider(let name, let avatarUrl, let isMe, _, let isSelected, let isOffline):
                 let size = Self.riderCircleSize(isSelected)
@@ -902,7 +921,7 @@ extension GoogleMapView {
 
         /// Height of the name band drawn above the rider circle. The circle's center
         /// (the marker's anchor) is therefore at `riderNameBandH + size/2`.
-        static let riderNameBandH: CGFloat = 20
+        static var riderNameBandH: CGFloat { max(20, ceil(pinLabelSize * 1.22) + 7) }
 
         /// Rider circle diameter. Kept small so a rider sitting on a sharp turn
         /// doesn't hide the route curve underneath. Shared by the renderer and the
@@ -916,10 +935,10 @@ extension GoogleMapView {
             let size = Self.riderCircleSize(isSelected)
             let lime = UIColor(DS.Map.riderRing)
 
-            // Name (above) — first name, uppercased.
-            let name0 = (name.components(separatedBy: " ").first?.uppercased() ?? "") as NSString
+            // Name (above) — first name.
+            let name0 = (name.components(separatedBy: " ").first ?? "") as NSString
             let nameAttrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.monospacedSystemFont(ofSize: isSelected ? 9 : 8, weight: .black),
+                .font: UIFont.systemFont(ofSize: Self.pinLabelSize, weight: .semibold),
                 .foregroundColor: UIColor.white
             ]
             let ns = name0.size(withAttributes: nameAttrs)
@@ -927,13 +946,13 @@ extension GoogleMapView {
             // Distance (below).
             let dist = (distanceText ?? "") as NSString
             let distAttrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.monospacedSystemFont(ofSize: 9, weight: .semibold),
+                .font: UIFont.monospacedSystemFont(ofSize: Self.pinLabelSize, weight: .semibold),
                 .foregroundColor: lime
             ]
             let ds = distanceText == nil ? .zero : dist.size(withAttributes: distAttrs)
 
             let nameBandH = Self.riderNameBandH
-            let distBandH: CGFloat = distanceText == nil ? 0 : 16
+            let distBandH: CGFloat = distanceText == nil ? 0 : max(16, ceil(Self.pinLabelSize * 1.22) + 3)
             let canvasW = max(size + 8, ceil(ns.width) + 8, ceil(ds.width) + 8)
             let totalH  = nameBandH + size + distBandH
             let cx      = canvasW / 2

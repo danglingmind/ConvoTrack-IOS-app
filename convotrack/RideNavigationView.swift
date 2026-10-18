@@ -121,7 +121,13 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         guard let at = lastCourseFixAt else { return true }
         return Date().timeIntervalSince(at) > 5
     }
-    @Published var showSplitAlert = false
+    /// The open split, straight from the server; nil when the convoy is together.
+    @Published private(set) var splitInfo: SplitInfo? = nil
+    /// "I dismissed this alert" is separate from the server state, which clears on its own when
+    /// the split resolves. Reset then, so the next split alerts again.
+    @Published private var splitDismissed = false
+    var showSplitAlert: Bool { splitInfo != nil && !splitDismissed }
+    func dismissSplitAlert() { splitDismissed = true }
     @Published var showSummary = false
     @Published var isEnding = false
     @Published var endError: String? = nil
@@ -162,6 +168,35 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// carries riders that have posted a location tick.
     var liveRiderCount: Int {
         leaderboardRows.filter { $0.isMe || onlineUserIds.contains($0.id) }.count
+    }
+
+    /// First name of the rider furthest behind, for the split alert.
+    var splitRiderName: String {
+        guard let id = splitInfo?.lastRiderId else { return String(localized: "A rider") }
+        if id == myUserId { return String(localized: "You") }
+        let full = leaderboardRows.first { $0.id == id }?.name
+            ?? staticParticipants.first { $0.userId == id }?.name
+            ?? String(localized: "A rider")
+        return full.components(separatedBy: " ").first ?? full
+    }
+
+    /// Gap between the leader and the last rider, in metres. Recomputed from the live leaderboard
+    /// so the number keeps moving while the alert is up; the server's figure covers the moment
+    /// before every row has a position of its own.
+    var splitGapMeters: Double {
+        guard let info = splitInfo else { return 0 }
+        if let lastId = info.lastRiderId,
+           let last = leaderboardRows.first(where: { $0.id == lastId }),
+           let lead = leaderboardRows.first(where: { $0.id == (info.leaderId ?? "") }) ?? leaderboardRows.first {
+            let live = (last.distanceToGoalKm - lead.distanceToGoalKm) * 1000
+            if live > 0 { return live }
+        }
+        return info.gapMeters
+    }
+
+    /// False once the rider has driven past the stop at this coordinate.
+    func isStopAhead(lat: Double, lng: Double) -> Bool {
+        remainingStops.contains { abs($0.latitude - lat) < 1e-6 && abs($0.longitude - lng) < 1e-6 }
     }
 
     var emergencyReporterName: String {
@@ -416,8 +451,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         session.$connectionState
             .sink { [weak self] in self?.connectionState = $0 }
             .store(in: &cancellables)
-        session.$splitActive
-            .sink { [weak self] in self?.showSplitAlert = $0 }
+        session.$split
+            .sink { [weak self] info in
+                self?.splitInfo = info
+                if info == nil { self?.splitDismissed = false }
+            }
             .store(in: &cancellables)
         // `dropFirst` skips the value `@Published` replays on subscribe, so re-entering navigation
         // (lobby → route preview → navigation) never re-fires a siren for a stale regroup/emergency.
@@ -2072,7 +2110,9 @@ struct RideNavigationView: View {
                                distanceText: distText))
         }
         for wp in vm.middleWaypoints {
-            pins.append(MapPin(id: "wp_\(wp.order)", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .waypoint(name: wp.name)))
+            // A stop already passed keeps its marker but loses its label.
+            let label = vm.isStopAhead(lat: wp.lat, lng: wp.lng) ? wp.name : ""
+            pins.append(MapPin(id: "wp_\(wp.order)", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .waypoint(name: label)))
         }
         if let coord = vm.destinationCoordinate {
             pins.append(MapPin(id: "dest", coordinate: coord, style: .destination(name: destinationName)))
@@ -2320,7 +2360,9 @@ struct RideNavigationView: View {
 
                 if vm.showSplitAlert {
                     GroupSplitAlert(
-                        onIgnore: { withAnimation(.spring()) { vm.showSplitAlert = false } },
+                        riderName: vm.splitRiderName,
+                        gapMeters: vm.splitGapMeters,
+                        onIgnore: { withAnimation(.spring()) { vm.dismissSplitAlert() } },
                         onRegroup: { showRegroup = true }
                     )
                     .padding(.horizontal, 20)
@@ -2574,7 +2616,9 @@ struct RideNavigationView: View {
             }
             if vm.showSplitAlert {
                 GroupSplitAlert(
-                    onIgnore: { withAnimation(.spring()) { vm.showSplitAlert = false } },
+                    riderName: vm.splitRiderName,
+                    gapMeters: vm.splitGapMeters,
+                    onIgnore: { withAnimation(.spring()) { vm.dismissSplitAlert() } },
                     onRegroup: { showRegroup = true }
                 )
             }
@@ -3181,7 +3225,10 @@ struct ConvoTrackLocationPin: View {
 // MARK: - Waypoint Pin
 
 struct WaypointPin: View {
+    /// Empty for a stop already passed: icon only, so the label doesn't crowd the route.
     let name: String
+    /// Baked into a bitmap, so Dynamic Type can't reach it; the map passes the scaled size in.
+    var labelSize: CGFloat = DS.Map.minLabelSize
 
     var body: some View {
         VStack(spacing: 2) {
@@ -3195,17 +3242,18 @@ struct WaypointPin: View {
                     .foregroundColor(DS.Status.success)
             }
             Triangle().fill(DS.Status.success).frame(width: 8, height: 5).offset(y: -1)
-            Text(name.uppercased())
-                .font(.system(size: 7, weight: .black, design: .monospaced))
-                .foregroundColor(DS.Text.primary.base)
-                .tracking(0.5)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 104)
-                .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(DS.Surface.raised.opacity(0.92))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            if !name.isEmpty {
+                Text(name)
+                    .font(.system(size: labelSize, weight: .semibold))
+                    .foregroundColor(DS.Text.primary.base)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 120)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(DS.Surface.raised.opacity(0.92))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
         }
     }
 }
@@ -3214,6 +3262,7 @@ struct WaypointPin: View {
 
 struct DestinationPin: View {
     let name: String
+    var labelSize: CGFloat = DS.Map.minLabelSize
 
     var body: some View {
         VStack(spacing: 2) {
@@ -3224,14 +3273,13 @@ struct DestinationPin: View {
                     .foregroundColor(DS.Text.onAccent)
             }
             Triangle().fill(DS.Accent.base).frame(width: 10, height: 6).offset(y: -1)
-            Text(name.uppercased())
-                .font(.system(size: 8, weight: .black, design: .monospaced))
+            Text(name)
+                .font(.system(size: labelSize, weight: .semibold))
                 .foregroundColor(DS.Text.primary.base)
-                .tracking(0.5)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 112)
+                .frame(maxWidth: 128)
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(DS.Surface.raised.opacity(0.92))
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -3261,6 +3309,7 @@ struct StartPin: View {
 
 struct RegroupPin: View {
     let type: String
+    var labelSize: CGFloat = DS.Map.minLabelSize
 
     private var icon: String {
         switch type {
@@ -3282,10 +3331,10 @@ struct RegroupPin: View {
 
     private var label: String {
         switch type {
-        case "FUEL":      return "FUEL STOP"
-        case "FOOD":      return "FOOD STOP"
-        case "SCENIC":    return "SCENIC STOP"
-        default:          return "STOP"
+        case "FUEL":      return String(localized: "Fuel stop")
+        case "FOOD":      return String(localized: "Food stop")
+        case "SCENIC":    return String(localized: "Scenic stop")
+        default:          return String(localized: "Stop")
         }
     }
 
@@ -3302,10 +3351,9 @@ struct RegroupPin: View {
             }
             Triangle().fill(accentColor).frame(width: 8, height: 5).offset(y: -1)
             Text(label)
-                .font(.system(size: 7, weight: .black, design: .monospaced))
+                .font(.system(size: labelSize, weight: .semibold))
                 .foregroundColor(DS.Text.primary.base)
-                .tracking(0.5)
-                .padding(.horizontal, 6).padding(.vertical, 2)
+                .padding(.horizontal, 8).padding(.vertical, 2)
                 .background(DS.Surface.raised.opacity(0.92))
                 .clipShape(Capsule())
         }
@@ -3316,6 +3364,8 @@ struct RegroupPin: View {
 
 /// Distinct from RegroupPin — an emergency is its own concept, not a regroup "type".
 struct EmergencyPin: View {
+    var labelSize: CGFloat = DS.Map.minLabelSize
+
     var body: some View {
         VStack(spacing: 2) {
             ZStack {
@@ -3327,11 +3377,10 @@ struct EmergencyPin: View {
                     .foregroundColor(.white)
             }
             Triangle().fill(DS.Status.danger).frame(width: 8, height: 5).offset(y: -1)
-            Text("EMERGENCY")
-                .font(.system(size: 7, weight: .black, design: .monospaced))
+            Text("Emergency")
+                .font(.system(size: labelSize, weight: .semibold))
                 .foregroundColor(.white)
-                .tracking(0.5)
-                .padding(.horizontal, 6).padding(.vertical, 2)
+                .padding(.horizontal, 8).padding(.vertical, 2)
                 .background(DS.Status.danger.opacity(0.92))
                 .clipShape(Capsule())
         }

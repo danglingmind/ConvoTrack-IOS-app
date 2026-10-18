@@ -176,6 +176,8 @@ extension DS {
         static let markerPlate = Color(rgb: 0x0A1014, opacity: 0.86)
         static let riderRing = Accent.base
         static let edgeChipRing = Status.success
+        /// Smallest text allowed on a map pin (iOS minimum).
+        static let minLabelSize: CGFloat = 11
         static let routeRail = Color(rgb: 0x313838)
     }
 }

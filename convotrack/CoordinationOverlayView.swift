@@ -94,6 +94,8 @@ struct CoordinationOverlayView: View {
                 // Group Split Alert
                 if showGroupSplitAlert {
                     GroupSplitAlert(
+                        riderName: "Ravi",
+                        gapMeters: 2400,
                         onIgnore: {
                             withAnimation(.spring()) { showGroupSplitAlert = false }
                         },
@@ -168,8 +170,17 @@ struct HUDWidget: View {
 }
 
 struct GroupSplitAlert: View {
+    let riderName: String
+    let gapMeters: Double
     let onIgnore: () -> Void
     let onRegroup: () -> Void
+
+    /// Whole metres under a kilometre, tenths of a km above, rounded the way the turn banner is so
+    /// the figure doesn't tick on every GPS fix.
+    private var gapText: String {
+        if gapMeters < 1000 { return "\(max(10, Int((gapMeters / 10).rounded()) * 10)) m" }
+        return String(format: "%.1f km", gapMeters / 1000)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Space.p4) {
@@ -186,14 +197,9 @@ struct GroupSplitAlert: View {
                     .accessibilityAddTraits(.isHeader)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Last rider is **2.4 km behind**.")
-                    .dsText(.body)
-                    .foregroundStyle(DS.Text.primary)
-                Text("Signal strength dropping rapidly.")
-                    .dsText(.body)
-                    .foregroundStyle(DS.Text.primary)
-            }
+            Text("**\(riderName)** is **\(gapText)** behind the leader.")
+                .dsText(.body)
+                .foregroundStyle(DS.Text.primary)
 
             // Regroup is the action; Dismiss is a quiet text button.
             DSAdaptiveStack(spacing: DS.Space.p3) {
@@ -207,7 +213,7 @@ struct GroupSplitAlert: View {
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).stroke(DS.Status.dangerBorder, lineWidth: DS.BorderWidth.emphasis))
         .accessibilityElement(children: .contain)
         .onAppear {
-            AccessibilityNotification.Announcement(String(localized: "Group split. Last rider is 2.4 km behind")).post()
+            AccessibilityNotification.Announcement(String(localized: "Group split. \(riderName) is \(gapText) behind the leader")).post()
             DSHaptic.alert()
         }
     }
