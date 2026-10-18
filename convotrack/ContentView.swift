@@ -6,7 +6,7 @@ import ClerkKit
 /// Returning, signed-in riders never see the splash or onboarding. Riders who arrive from a
 /// join link go straight to sign-in; they already know why they're here.
 struct ContentView: View {
-    private enum Stage { case launch, splash, onboarding, auth, paywall, main }
+    private enum Stage { case launch, splash, onboarding, auth, paywall, main, gallery }
 
     @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var membershipStore: MembershipStore
@@ -14,7 +14,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            Color.surfaceDim.ignoresSafeArea()
+            DS.Background.base.ignoresSafeArea()
 
             switch stage {
             case .launch:
@@ -29,6 +29,12 @@ struct ContentView: View {
                 MembershipView(presentation: .onboarding, onFinish: { go(.main) })
             case .main:
                 MainTabView()
+            case .gallery:
+                #if DEBUG
+                DSGalleryView()
+                #else
+                EmptyView()
+                #endif
             }
         }
         .preferredColorScheme(.dark)
@@ -51,6 +57,7 @@ struct ContentView: View {
             case "onboarding": go(.onboarding); return
             case "auth":       go(.auth);       return
             case "paywall":    go(.paywall);    return
+            case "gallery":    go(.gallery);    return
             default: break
             }
         }
