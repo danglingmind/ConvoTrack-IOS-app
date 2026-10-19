@@ -213,4 +213,4 @@ Mirror Phases 3–6 with identical thresholds and copy:
 6. **Store copy + App Review notes** — App Store / Play description lines for the trial; review notes explaining the app-level trial and that the paywall is dismissible.
 7. **en-US subscription localizations** — draft names/descriptions for approval, then add via the App Store Connect API.
 8. **Android visual pass** — after the user signs in on the emulator.
-9. **Rollout checklist** — deploy backend (switch off) → ship iOS → flip switch → ship Android; manual: remove the Play Console free-trial offer on `convotrack_pro_monthly` / `convotrack_pro_yearly`.
+9. ~~**Rollout checklist**~~ — `docs/rollout-trial.md`.
