@@ -44,8 +44,16 @@ struct MembershipView: View {
         trialOffer.map { PlanPeriod($0.period).longLabel }
     }
     private func close() {
-        if !store.isPremium { PaywallAnalytics.log(.paywallDismissed, source: analyticsSource, access: store.access) }
+        logDismissIfNeeded()
         if let onFinish { onFinish() } else { dismiss() }
+    }
+
+    /// Exactly once per presentation, whether the rider used the X, "Continue", or swiped the sheet
+    /// down (which never reaches `close()`). A rider who just bought is a conversion, not a dismissal.
+    private func logDismissIfNeeded() {
+        guard !loggedExit, !store.isPremium else { return }
+        loggedExit = true
+        PaywallAnalytics.log(.paywallDismissed, source: analyticsSource, access: store.access)
     }
 
     /// Onboarding has no presenter source of its own.
@@ -59,6 +67,7 @@ struct MembershipView: View {
 
     @State private var selectedPlan: String = "danglingmind.convotrack.membership.yearly"
     @State private var showSuccess = false
+    @State private var loggedExit = false
     @State private var purchaseError: String? = nil
     @State private var isPurchasing = false
 
@@ -89,6 +98,7 @@ struct MembershipView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear { PaywallAnalytics.log(.paywallShown, source: analyticsSource, access: store.access) }
+        .onDisappear { logDismissIfNeeded() }
         .task {
             await store.loadProducts()
             // Catches a country change that happened while the app was suspended,

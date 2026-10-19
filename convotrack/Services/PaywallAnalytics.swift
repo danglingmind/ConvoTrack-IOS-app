@@ -1,8 +1,8 @@
 import Foundation
 
 /// Upsell funnel events (`POST /events`): which surface opened the paywall and whether the rider
-/// bought. Fire-and-forget — batched for a couple of seconds, and a failed send is dropped rather
-/// than retried, since a lost funnel event must never cost the rider anything.
+/// bought. Batched for a couple of seconds; a failed batch is kept and goes out with the next one
+/// (in memory only — a lost funnel event must never cost the rider anything, so no disk queue).
 @MainActor
 enum PaywallAnalytics {
     enum Event: String {
@@ -38,7 +38,14 @@ enum PaywallAnalytics {
         guard !batch.isEmpty else { return }
         pending.removeFirst(batch.count)
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-        try? await APIClient.shared.sendEvents(PaywallEventsRequest(platform: "ios", appVersion: version, events: batch))
+        do {
+            try await APIClient.shared.sendEvents(PaywallEventsRequest(platform: "ios", appVersion: version, events: batch))
+        } catch {
+            // Keep it for the next flush, capped so an offline rider can't grow it without bound.
+            pending.insert(contentsOf: batch, at: 0)
+            if pending.count > 200 { pending.removeLast(pending.count - 200) }
+            return
+        }
         if !pending.isEmpty { await flush() }
     }
 
