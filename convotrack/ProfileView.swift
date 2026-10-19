@@ -54,8 +54,8 @@ struct ProfileView: View {
                     stats
                     DSPromoBanner(
                         eyebrow: "ConvoTrack Pro",
-                        message: store.isPremium ? "Your membership is active" : "Unlimited rides & advanced telemetry",
-                        actionTitle: store.isPremium ? "Active" : "Upgrade",
+                        message: promoMessage,
+                        actionTitle: store.isPremium ? "Active" : "Go Pro",
                         isSubscribed: store.isPremium
                     ) { paywall.present(.profile) }
 
@@ -139,6 +139,21 @@ struct ProfileView: View {
         }
     }
 
+    /// The trial leads; the generic pitch is only for riders with no enforced trial.
+    private var promoMessage: LocalizedStringKey {
+        switch store.access {
+        case .pro:
+            return "Your membership is active"
+        case .trial:
+            guard let days = store.trialDaysLeft, days > 1 else { return "Your free trial ends today" }
+            return "\(days) days left in your free trial"
+        case .trialExpired:
+            return "Your free trial has ended. Go Pro to keep riding."
+        case .free:
+            return "Unlimited rides & bigger packs"
+        }
+    }
+
     // MARK: - Sections
 
     private var identity: some View {
@@ -159,10 +174,12 @@ struct ProfileView: View {
                     .accessibilityAddTraits(.isHeader)
                 DSSquareIconButton(systemImage: "pencil", label: "Edit profile") { showEditProfile = true }
             }
-            Text("\(store.isPremium ? String(localized: "ConvoTrack Pro") : String(localized: "Free plan")) · \(rideCount) rides")
-                .dsText(.statLabel)
-                .foregroundStyle(DS.Text.muted)
-                .multilineTextAlignment(.center)
+            HStack(spacing: DS.Space.p2) {
+                PlanBadgeButton(source: .profile)
+                Text("\(rideCount) rides")
+                    .dsText(.statLabel)
+                    .foregroundStyle(DS.Text.muted)
+            }
         }
         .frame(maxWidth: .infinity)
     }

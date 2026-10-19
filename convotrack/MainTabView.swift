@@ -68,8 +68,15 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .convotrackJoinRide)) { note in
             guard let code = note.userInfo?["code"] as? String else { return }
             DeepLinkRouter.pendingJoinCode = nil   // consumed live; don't let onAppear replay it
-            // New identity each time so a repeat tap re-presents even if a sheet is already up.
-            joinSheet = JoinSheetContext(code: code)
+            openJoin(code: code)
+        }
+        // A rider who went Pro from a blocked invite link carries straight on into that ride.
+        .onChange(of: membershipStore.isPremium) { _, isPremium in
+            guard isPremium, let code = paywall.joinAfterUpgradeCode else { return }
+            paywall.joinAfterUpgradeCode = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                joinSheet = JoinSheetContext(code: code)
+            }
         }
         .onAppear {
             // Cold-launch deep link: MainTabView wasn't listening when the link arrived, so drain
@@ -79,7 +86,7 @@ struct MainTabView: View {
             if let code = DeepLinkRouter.pendingJoinCode {
                 DeepLinkRouter.pendingJoinCode = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                    joinSheet = JoinSheetContext(code: code)
+                    openJoin(code: code)
                 }
             }
         }
@@ -91,6 +98,18 @@ struct MainTabView: View {
                 .trimmingCharacters(in: .whitespaces)
             let displayName = name.isEmpty ? (user.username ?? "Rider") : name
             try? await APIClient.shared.syncProfile(name: displayName, avatarUrl: user.imageUrl.isEmpty ? nil : user.imageUrl)
+        }
+    }
+
+    /// Invite link / QR entry point. Once the trial is over the paywall comes first; the code is
+    /// kept so buying Pro drops the rider straight into the join sheet.
+    private func openJoin(code: String) {
+        if membershipStore.mustUpgradeToRide {
+            paywall.joinAfterUpgradeCode = code
+            paywall.present(.joinBlocked)
+        } else {
+            // New identity each time so a repeat tap re-presents even if a sheet is already up.
+            joinSheet = JoinSheetContext(code: code)
         }
     }
 }

@@ -132,6 +132,83 @@ struct DSLeaderBadge: View {
     }
 }
 
+/// Membership state at a glance: PRO (earned, quiet lime outline), TRIAL · 2D (countdown,
+/// amber on the last day) or GO PRO (the one filled variant — it's an invitation, not a label).
+struct DSPlanBadge: View {
+    enum Kind: Equatable {
+        case pro
+        /// `daysLeft` 1 = last day.
+        case trial(daysLeft: Int)
+        case goPro
+    }
+    let kind: Kind
+
+    private var title: LocalizedStringKey {
+        switch kind {
+        case .pro: "Pro"
+        case .trial(let days): days <= 1 ? "Trial · today" : "Trial · \(days)d"
+        case .goPro: "Go Pro"
+        }
+    }
+
+    private var systemImage: String {
+        switch kind {
+        case .pro: "rosette"
+        case .trial: "hourglass"
+        case .goPro: "sparkles"
+        }
+    }
+
+    private var isLastDay: Bool { kind == .trial(daysLeft: 1) || kind == .trial(daysLeft: 0) }
+
+    private var ink: Color {
+        switch kind {
+        case .pro: DS.Accent.base
+        case .trial: isLastDay ? DS.Status.warning : DS.Text.primary.base
+        case .goPro: DS.Text.onAccent
+        }
+    }
+
+    private var fill: Color {
+        switch kind {
+        case .pro: DS.Accent.tint
+        case .trial: isLastDay ? DS.Status.warningTint : DS.Surface.glassSubtle
+        case .goPro: DS.Accent.base
+        }
+    }
+
+    private var stroke: Color {
+        switch kind {
+        case .pro: DS.Accent.border
+        case .trial: isLastDay ? DS.Status.warning.opacity(0.45) : DS.Border.default.base
+        case .goPro: .clear
+        }
+    }
+
+    private var accessibilityText: Text {
+        switch kind {
+        case .pro: Text("ConvoTrack Pro")
+        case .trial(let days):
+            days <= 1 ? Text("Free trial, ends today") : Text("Free trial, \(days) days left")
+        case .goPro: Text("Go Pro")
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: systemImage).dsIcon(12, weight: .bold)
+            Text(title).dsText(.badgeSmall).lineLimit(1).fixedSize()
+        }
+        .foregroundStyle(ink)
+        .padding(.horizontal, 10)
+        .frame(minHeight: 26)
+        .background(fill, in: Capsule())
+        .overlay(Capsule().stroke(stroke, lineWidth: DS.BorderWidth.default))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
+}
+
 struct DSChip: View {
     enum Variant { case positive, neutral }
     let title: LocalizedStringKey
@@ -313,6 +390,7 @@ struct FeedbackGallery: View {
                     }
                     DSAdaptiveStack { DSStatusBadge(kind: .ready); DSStatusBadge(kind: .waiting); DSStatusBadge(kind: .riding); DSLeaderBadge() }
                     DSAdaptiveStack { DSChip(title: "Ready", variant: .positive); DSChip(title: "Solo") }
+                    DSAdaptiveStack { DSPlanBadge(kind: .pro); DSPlanBadge(kind: .trial(daysLeft: 2)); DSPlanBadge(kind: .trial(daysLeft: 1)); DSPlanBadge(kind: .goPro) }
                     DSAdaptiveStack { DSMetaChip(systemImage: "point.topleft.down.to.point.bottomright.curvepath", text: "51.7 km"); DSMetaChip(systemImage: "clock", text: "1h 12m") }
                     DSAdaptiveStack { DSLiveIndicator(); DSLiveIndicator(title: "Riding"); DSStatusPill(title: "Offline", systemImage: "wifi.slash") }
                     DSInlineError(message: "Couldn't join. Check the code and try again.")

@@ -22,6 +22,10 @@ struct PaywallRequest: Identifiable {
 final class PaywallPresenter: ObservableObject {
     @Published var request: PaywallRequest?
 
+    /// Invite code the rider couldn't use yet because Pro was needed. `MainTabView` reopens the
+    /// join sheet with it as soon as the rider goes Pro, from whichever screen they were blocked.
+    var joinAfterUpgradeCode: String?
+
     func present(_ source: PaywallSource) {
         // One paywall at a time; a second tap while one is up is a no-op.
         guard request == nil else { return }

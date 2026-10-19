@@ -391,6 +391,30 @@ struct RideRouteForm: View {
 
     // MARK: Max riders
 
+    /// The limit is always visible, not only once the rider walks into it. Free riders get a quiet
+    /// way into the paywall; Pro riders just see what their plan allows.
+    @ViewBuilder private var riderPlanLine: some View {
+        if isPremium {
+            Label { Text("Pro · up to \(riderCap) riders") } icon: { Image(systemName: "rosette") }
+                .dsText(.helper)
+                .foregroundStyle(DS.Text.muted)
+        } else {
+            Button(action: onUpgrade) {
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.fill").dsIcon(11, weight: .semibold)
+                    Text("Up to \(riderCap) riders on your plan").foregroundStyle(DS.Text.muted)
+                    Text("Bigger packs with Pro").foregroundStyle(DS.Accent.base)
+                }
+                .dsText(.helper)
+                .frame(minHeight: DS.Target.minimum, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(DS.Text.muted)
+            .accessibilityHint(Text("Shows ConvoTrack Pro plans"))
+        }
+    }
+
     private var ridersSection: some View {
         VStack(alignment: .leading, spacing: DS.Space.p3) {
             DSStepperRow(
@@ -408,6 +432,8 @@ struct RideRouteForm: View {
             if atRiderCap {
                 DSPromoBanner(eyebrow: "ConvoTrack Pro", message: "Pro unlocks bigger packs", actionTitle: "Upgrade", action: onUpgrade)
                     .transition(.opacity.combined(with: .move(edge: .top)))
+            } else {
+                riderPlanLine
             }
         }
         .dsAnimation(.spring(response: 0.3, dampingFraction: 0.8), value: atRiderCap)

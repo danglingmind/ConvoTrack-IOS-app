@@ -10,6 +10,8 @@ struct RideSummaryView: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var membershipStore: MembershipStore
+    @EnvironmentObject private var paywall: PaywallPresenter
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var summary: RideSummary? = nil
@@ -28,6 +30,20 @@ struct RideSummaryView: View {
     }
 
     /// Terminal screen: no back button (DONE leaves), a sticky DONE, and the share action.
+    private var summaryPromoMessage: LocalizedStringKey {
+        switch membershipStore.access {
+        case .trial:
+            guard let days = membershipStore.trialDaysLeft, days > 1 else {
+                return "Good ride. Your free trial ends today — go Pro to keep riding."
+            }
+            return "Good ride. \(days) days left in your trial — go Pro to keep riding."
+        case .trialExpired:
+            return "Good ride. Go Pro to start the next one."
+        case .pro, .free:
+            return "Bigger packs and every ride kept, with Pro."
+        }
+    }
+
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .top) {
@@ -58,6 +74,15 @@ struct RideSummaryView: View {
                                 isLoading: isGeneratingShare
                             ) { Task { await generateAndShare() } }
                             .disabled(isGeneratingShare || isLoading)
+
+                            // Right after a ride is when Pro is easiest to want.
+                            if !membershipStore.isPremium {
+                                DSPromoBanner(
+                                    eyebrow: "ConvoTrack Pro",
+                                    message: summaryPromoMessage,
+                                    actionTitle: "Go Pro"
+                                ) { paywall.present(.rideSummary) }
+                            }
                         }
                         .padding(.horizontal, DS.Space.screenInset)
                         .padding(.top, DS.Space.p5)
@@ -425,4 +450,6 @@ private struct SummaryShareSheet: UIViewControllerRepresentable {
 #Preview {
     RideSummaryView(rideId: nil, rideTitle: "Preview Ride")
         .environmentObject(AppState())
+        .environmentObject(MembershipStore())
+        .environmentObject(PaywallPresenter())
 }

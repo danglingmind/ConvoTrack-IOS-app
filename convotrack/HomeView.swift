@@ -15,6 +15,8 @@ struct HomeView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var rideSession: RideRealtimeSession
     @Environment(Clerk.self) private var clerk
+    @EnvironmentObject private var membershipStore: MembershipStore
+    @EnvironmentObject private var paywall: PaywallPresenter
     @Binding var activeTab: AppTab
     @Binding var showJoinRide: Bool
     @State private var navPath = NavigationPath()
@@ -117,6 +119,10 @@ struct HomeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .dsTransparentNavigationBar()
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                PlanBadgeButton(source: .homeBadge)
+            }
+            .sharedBackgroundVisibility(.hidden)
             // The connection indicator only means something while a ride session exists.
             if appState.currentRideId != nil {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -160,8 +166,15 @@ struct HomeView: View {
                 subtitle: "Plan, join and track rides with your tribe."
             )
             DSActionButtonPair(
-                createAction: { navPath.append(HomeRoute.createRide) },
-                joinAction: { showJoinRide = true }
+                createAction: {
+                    if membershipStore.mustUpgradeToRide { paywall.present(.createBlocked) }
+                    else { navPath.append(HomeRoute.createRide) }
+                },
+                joinAction: {
+                    if membershipStore.mustUpgradeToRide { paywall.present(.joinBlocked) }
+                    else { showJoinRide = true }
+                },
+                isLocked: membershipStore.mustUpgradeToRide
             )
             .padding(.top, 22)
         }
@@ -805,4 +818,6 @@ struct ActiveRideCard: View {
     HomeView(activeTab: .constant(.home), showJoinRide: .constant(false))
         .environmentObject(AppState())
         .environmentObject(RideRealtimeSession())
+        .environmentObject(MembershipStore())
+        .environmentObject(PaywallPresenter())
 }

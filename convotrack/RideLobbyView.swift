@@ -196,6 +196,7 @@ final class LobbyViewModel: ObservableObject {
 struct RideLobbyView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var membershipStore: MembershipStore
+    @EnvironmentObject private var paywall: PaywallPresenter
     @EnvironmentObject private var rideSession: RideRealtimeSession
     @Environment(Clerk.self) private var clerk
     @Environment(\.dismiss) private var dismiss
@@ -724,6 +725,8 @@ struct RideLobbyView: View {
                 Text(LocalizedStringKey(vm.readyStatusText))
                     .dsText(.badge)
                     .foregroundStyle(vm.allRidersReady ? DS.Accent.base : DS.Text.muted.base)
+                Spacer(minLength: 0)
+                riderCapChip
             }
             .padding(.bottom, DS.Space.p3)
 
@@ -736,6 +739,32 @@ struct RideLobbyView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Free leader only: how full the ride is against the plan's cap. Within one seat of the cap it
+    /// turns into the way to a bigger pack.
+    @ViewBuilder private var riderCapChip: some View {
+        if canEditRide, !membershipStore.isPremium,
+           let cap = appState.currentRide?.maxAllowedParticipants, !vm.participants.isEmpty {
+            let count = vm.participants.count
+            let nearCap = count >= cap - 1
+            Button {
+                paywall.present(.riderCap)
+            } label: {
+                HStack(spacing: 5) {
+                    if nearCap { Image(systemName: "lock.fill").dsIcon(11, weight: .semibold) }
+                    Text("\(count)/\(cap) riders")
+                }
+                .dsText(.badge)
+                .foregroundStyle(nearCap ? DS.Accent.base : DS.Text.muted.base)
+                .frame(minHeight: DS.Target.minimum)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!nearCap)
+            .accessibilityLabel(Text("\(count) of \(cap) riders"))
+            .accessibilityHint(nearCap ? Text("Shows ConvoTrack Pro plans for bigger packs") : Text(""))
         }
     }
 
@@ -1212,5 +1241,7 @@ struct ShareSheetPresenter: UIViewControllerRepresentable {
 #Preview {
     RideLobbyView()
         .environmentObject(AppState())
+        .environmentObject(MembershipStore())
+        .environmentObject(PaywallPresenter())
         .environment(Clerk.shared)
 }

@@ -319,6 +319,9 @@ struct DSSquareIconButton: View {
 struct DSActionButtonPair: View {
     let createAction: () -> Void
     let joinAction: () -> Void
+    /// Both actions need an upgrade first: icons become locks, the buttons still respond (they
+    /// open the paywall) rather than going dead.
+    var isLocked = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var createButton: some View {
@@ -327,7 +330,7 @@ struct DSActionButtonPair: View {
             createAction()
         } label: {
             HStack(spacing: DS.Space.p2) {
-                Image(systemName: "plus.circle.fill").dsIcon(DS.IconSize.lg)
+                Image(systemName: isLocked ? "lock.fill" : "plus.circle.fill").dsIcon(DS.IconSize.lg)
                 Text("Create ride").dsText(.buttonWide).lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1).minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.7).multilineTextAlignment(.center)
             }
             .foregroundStyle(DS.Text.onAccent)
@@ -337,6 +340,7 @@ struct DSActionButtonPair: View {
             .dsShadow(DS.Shadow.accentGlow)
         }
         .buttonStyle(DSPressStyle())
+        .accessibilityHint(isLocked ? Text("Needs ConvoTrack Pro") : Text(""))
     }
 
     private var joinButton: some View {
@@ -345,7 +349,7 @@ struct DSActionButtonPair: View {
             joinAction()
         } label: {
             HStack(spacing: DS.Space.p2) {
-                Image(systemName: "person.badge.plus").dsIcon(DS.IconSize.default)
+                Image(systemName: isLocked ? "lock.fill" : "person.badge.plus").dsIcon(DS.IconSize.default)
                 Text("Join ride").dsText(.buttonWide).lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1).minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.7).multilineTextAlignment(.center)
             }
             .foregroundStyle(DS.Text.primary.base)
@@ -354,6 +358,7 @@ struct DSActionButtonPair: View {
             .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous), clear: true, interactive: true)
         }
         .buttonStyle(DSPressStyle())
+        .accessibilityHint(isLocked ? Text("Needs ConvoTrack Pro") : Text(""))
     }
 
     var body: some View {

@@ -256,6 +256,8 @@ struct JoinRideView: View {
     /// The paywall is a sibling sheet on `MainTabView`, and a view can't present a second sheet
     /// while this one is up — so close this sheet first and open the paywall once it has gone.
     private func openPaywall() {
+        // Kept so going Pro drops the rider straight back into this join.
+        paywall.joinAfterUpgradeCode = codeReady ? normalizedCode : nil
         dismiss()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             paywall.present(.joinBlocked)
