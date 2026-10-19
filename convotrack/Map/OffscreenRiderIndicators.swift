@@ -15,8 +15,21 @@ struct EdgeIndicator: Identifiable, Equatable {
 
 // MARK: - Merged view models
 
+/// Pin ids for the non-rider things worth an edge chip. They share the rider tap path.
+enum EdgeTarget {
+    static let regroupId = "regroup"
+    static let emergencyId = "emergency"
+}
+
 /// An `EdgeIndicator` joined with the rider's display metadata.
 struct EdgeChipModel: Identifiable, Equatable {
+    enum Kind: Equatable {
+        case rider
+        case regroup(type: String)
+        case emergency
+    }
+
+    var kind: Kind = .rider
     let id: String
     let name: String
     let avatarUrl: String?
@@ -39,7 +52,12 @@ struct EdgeCluster: Identifiable {
 /// points of each other. Members are seeded nearest-first so the closest rider
 /// anchors each cluster.
 func clusterIndicators(_ chips: [EdgeChipModel], radius: CGFloat = 60) -> [EdgeCluster] {
-    let sorted = chips.sorted { $0.distanceMeters < $1.distanceMeters }
+    // The regroup point and the emergency are never folded into a rider count: they are the
+    // thing the rider is being asked to go to, so each keeps its own chip.
+    let special = chips.filter { $0.kind != .rider }.map {
+        EdgeCluster(id: $0.id, members: [$0], anchor: $0.edgePoint, arrowAngle: $0.arrowAngle, minDistance: $0.distanceMeters)
+    }
+    let sorted = chips.filter { $0.kind == .rider }.sorted { $0.distanceMeters < $1.distanceMeters }
     var assigned = Set<String>()
     var clusters: [EdgeCluster] = []
 
@@ -61,7 +79,7 @@ func clusterIndicators(_ chips: [EdgeChipModel], radius: CGFloat = 60) -> [EdgeC
             minDistance: members.map(\.distanceMeters).min() ?? seed.distanceMeters
         ))
     }
-    return clusters
+    return clusters + special
 }
 
 // MARK: - Overlay
@@ -98,6 +116,8 @@ struct OffscreenIndicatorsOverlay: View {
                             .onTapGesture { expandedClusterId = cluster.id }
                     } else if let only = cluster.members.first {
                         EdgeChip(model: only)
+                            .frame(minWidth: DS.Target.minimum, minHeight: DS.Target.minimum)
+                            .contentShape(Rectangle())
                             .position(cluster.anchor)
                             .onTapGesture { onTapRider(only.id) }
                     }
@@ -146,7 +166,13 @@ struct EdgeChip: View {
 
     var body: some View {
         VStack(spacing: 3) {
-            avatar
+            Group {
+                switch model.kind {
+                case .rider:                  avatar
+                case .regroup(let type):      marker(icon: Self.regroupIcon(type), color: DS.Category.color(forRegroup: type), foreground: DS.Text.onAccent)
+                case .emergency:              marker(icon: "exclamationmark.triangle.fill", color: DS.Status.dangerStrong, foreground: .white)
+                }
+            }
             Text(formatEdgeDistance(model.distanceMeters))
                 .dsText(.dataMono)
                 .foregroundColor(DS.Text.primary.base)
@@ -156,6 +182,39 @@ struct EdgeChip: View {
                 .shadow(color: .black.opacity(0.6), radius: 1)
         }
         .opacity(model.isOffline ? 0.55 : 1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(accessibilityName))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(Text("Shows it on the map"))
+    }
+
+    private var accessibilityName: String {
+        let distance = formatEdgeDistance(model.distanceMeters)
+        switch model.kind {
+        case .rider:     return "\(model.name), \(distance) away"
+        case .regroup:   return "Regroup point, \(distance) away"
+        case .emergency: return "Emergency, \(distance) away"
+        }
+    }
+
+    private static func regroupIcon(_ type: String) -> String {
+        switch type {
+        case "FUEL":   return "fuelpump.fill"
+        case "FOOD":   return "fork.knife"
+        case "SCENIC": return "camera.fill"
+        default:       return "hand.raised.fill"
+        }
+    }
+
+    /// Icon in a solid disc: the regroup point and the emergency are places, not people.
+    private func marker(icon: String, color: Color, foreground: Color) -> some View {
+        Image(systemName: icon)
+            .dsIcon(DS.IconSize.sm, weight: .bold)
+            .foregroundStyle(foreground)
+            .frame(width: size, height: size)
+            .background(color, in: Circle())
+            .overlay(Circle().stroke(Color.white.opacity(0.9), lineWidth: 2))
+            .shadow(color: .black.opacity(0.55), radius: 4, y: 1)
     }
 
     private var avatar: some View {

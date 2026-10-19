@@ -25,6 +25,22 @@ struct NavLeaderboardRow: Identifiable {
     let isMe: Bool
 }
 
+// MARK: - Alerts
+
+/// The alerts that can claim the banner slot, in priority order: the first case that is active
+/// is the one shown. Off-route and reconnecting are NOT here; they are a status line on the turn
+/// card (`NavStatus`), because they describe the guidance itself rather than ask for a decision.
+enum NavAlert: Int, Comparable {
+    case emergency, split, regroup, regroupResolved
+
+    static func < (a: NavAlert, b: NavAlert) -> Bool { a.rawValue < b.rawValue }
+}
+
+/// What is wrong with the guidance right now, shown on the turn card. Off-route wins.
+enum NavStatus {
+    case offRoute, reconnecting
+}
+
 // MARK: - NavigationViewModel
 
 @MainActor
@@ -141,10 +157,18 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// banner arrow, so the arrow can't disagree with the instruction text.
     @Published var currentManeuver: String = ""
     @Published var distanceToNextTurnMeters: Double = 0
-    @Published var isOffRoute: Bool = false
+    @Published var isOffRoute: Bool = false {
+        didSet {
+            if isOffRoute && !oldValue {
+                VoiceAnnouncer.shared.announce("Off route. Rerouting.", priority: .alert)
+            }
+        }
+    }
+    /// The maneuver after the one on the banner, set only when it follows within ~150 m.
+    @Published private(set) var thenManeuver: String? = nil
+    private var voiceGuide = NavVoiceGuide()
     @Published var activeRegroup: RegroupEvent? = nil
     @Published var hasMarkedArrived: Bool = false
-    @Published var showRegroupToast: Bool = false
     @Published var showRegroupResolvedToast: Bool = false
     @Published var activeEmergency: EmergencyEvent? = nil
 
@@ -168,6 +192,22 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// carries riders that have posted a location tick.
     var liveRiderCount: Int {
         leaderboardRows.filter { $0.isMe || onlineUserIds.contains($0.id) }.count
+    }
+
+    /// Every alert that is live, most urgent first. The HUD shows `first` and a "+N" chip for the rest.
+    var activeAlerts: [NavAlert] {
+        var alerts: [NavAlert] = []
+        if activeEmergency != nil { alerts.append(.emergency) }
+        if showSplitAlert { alerts.append(.split) }
+        if activeRegroup != nil { alerts.append(.regroup) }
+        if showRegroupResolvedToast { alerts.append(.regroupResolved) }
+        return alerts
+    }
+
+    var navStatus: NavStatus? {
+        if isOffRoute { return .offRoute }
+        if connectionState == .reconnecting { return .reconnecting }
+        return nil
     }
 
     /// First name of the rider furthest behind, for the split alert.
@@ -453,8 +493,14 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             .store(in: &cancellables)
         session.$split
             .sink { [weak self] info in
-                self?.splitInfo = info
-                if info == nil { self?.splitDismissed = false }
+                guard let self else { return }
+                self.splitInfo = info
+                if info == nil {
+                    self.splitDismissed = false
+                } else {
+                    let gap = NavVoiceGuide.spokenDistance(self.splitGapMeters)
+                    VoiceAnnouncer.shared.announce("Group split. \(self.splitRiderName) is \(gap) behind the leader.", priority: .alert)
+                }
             }
             .store(in: &cancellables)
         // `dropFirst` skips the value `@Published` replays on subscribe, so re-entering navigation
@@ -492,6 +538,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     }
 
     func teardown() {
+        VoiceAnnouncer.shared.stop()
+        voiceGuide.reset()
         regroupResolvedToastTask?.cancel()
         emergencySirenTimer?.invalidate()
         emergencySirenTimer = nil
@@ -689,8 +737,15 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // Alert riders who didn't broadcast it — toast + a bold two-tone siren that's clearly
         // distinct from the emergency wail. The initiator already knows, so stays silent.
         if event.createdBy != myUserId {
-            showRegroupToast = true
             SirenPlayer.shared.play(.regroup)
+            let stop: String
+            switch event.type {
+            case "FUEL":   stop = String(localized: "the fuel stop")
+            case "FOOD":   stop = String(localized: "the food stop")
+            case "SCENIC": stop = String(localized: "the scenic stop")
+            default:       stop = String(localized: "the meeting point")
+            }
+            VoiceAnnouncer.shared.announce("Regroup called. Head to \(stop).", after: 1.8, priority: .alert)
         }
     }
 
@@ -698,7 +753,6 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         guard activeRegroup?.regroupId == regroupId else { return }
         activeRegroup = nil
         hasMarkedArrived = false
-        showRegroupToast = false
         showRegroupResolvedToast = true
         regroupResolvedToastTask?.cancel()
         regroupResolvedToastTask = Task { [weak self] in
@@ -739,6 +793,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         guard activeEmergency?.emergencyId != event.emergencyId else { return }
         activeEmergency = event
         startEmergencySiren()
+        VoiceAnnouncer.shared.announce("Emergency. \(emergencyReporterName) needs help.", after: 1.8, priority: .emergency)
     }
 
     /// Emergency siren repeats every 10s until the emergency is resolved — an unresolved emergency
@@ -1140,6 +1195,32 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         distanceToNextTurnMeters = max(0, banner.junctionDistanceAlongRoute - progress)
         currentInstruction = banner.instruction
         currentManeuver    = banner.maneuver
+        thenManeuver       = banner.then?.maneuver
+        speakNextManeuver(then: banner.then?.maneuver)
+    }
+
+    /// Feeds the voice guide the maneuver being approached. A new route (reroute, edited ride)
+    /// or a new step starts a fresh set of prompts.
+    private func speakNextManeuver(then: String?) {
+        guard !currentInstruction.isEmpty else { return }
+        let input = NavVoiceGuide.Input(
+            key: routeVersion * 10_000 + currentStepIndex,
+            distanceMeters: distanceToNextTurnMeters,
+            speedKmh: mySpeedKmh,
+            instruction: currentInstruction,
+            maneuver: currentManeuver,
+            thenManeuver: then
+        )
+        if let sentence = voiceGuide.update(input) {
+            VoiceAnnouncer.shared.announce(sentence, priority: .turn)
+        }
+    }
+
+    /// Voice was just switched back on: say where the next turn is so the rider knows it works.
+    func repeatInstruction() {
+        if let sentence = voiceGuide.repeatCurrent() {
+            VoiceAnnouncer.shared.announce(sentence, priority: .turn)
+        }
     }
 
     /// The maneuver to announce next, and how far along the route it is performed.
@@ -1160,16 +1241,30 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// `currentIndex` independently would re-introduce the same mispairing at a smaller scale.
     private static func upcomingBanner(
         steps: [NavStep], currentIndex: Int
-    ) -> (instruction: String, maneuver: String, junctionDistanceAlongRoute: Double) {
-        guard let last = steps.last else { return ("", "", 0) }
+    ) -> (instruction: String, maneuver: String, junctionDistanceAlongRoute: Double,
+          then: (maneuver: String, gapMeters: Double)?) {
+        guard let last = steps.last else { return ("", "", 0, nil) }
         if currentIndex + 1 < steps.count {
             for j in (currentIndex + 1)..<steps.count where !steps[j].instruction.isEmpty {
-                return (steps[j].instruction, steps[j].maneuver ?? "", steps[j - 1].endDistanceAlongRoute)
+                let junction = steps[j - 1].endDistanceAlongRoute
+                // The maneuver after this one, when it follows closely enough to be worth a
+                // "then …" (a quick double turn the rider should be ready for).
+                var then: (maneuver: String, gapMeters: Double)?
+                if j + 1 < steps.count {
+                    for k in (j + 1)..<steps.count where !steps[k].instruction.isEmpty {
+                        let gap = steps[k - 1].endDistanceAlongRoute - junction
+                        if gap <= NavVoiceGuide.thenWithinMeters, let m = steps[k].maneuver, !m.isEmpty, m != "ARRIVE" {
+                            then = (m, gap)
+                        }
+                        break
+                    }
+                }
+                return (steps[j].instruction, steps[j].maneuver ?? "", junction, then)
             }
         }
         // No maneuver left ahead — what remains is the arrival. The last step ends at the
         // destination, so its along-route end is genuinely the distance still to ride.
-        return ("Arrive at destination", "ARRIVE", last.endDistanceAlongRoute)
+        return ("Arrive at destination", "ARRIVE", last.endDistanceAlongRoute, nil)
     }
 
     /// Rider's distance along the drawn route, read off the single `navLocation` the fix
@@ -1919,6 +2014,9 @@ struct RideNavigationView: View {
     @State private var cameraCommand: MapCameraCommand? = nil
     @State private var selectedRiderId: String? = nil
     @State private var showRegroup = false
+    /// Which of several live alerts the slot is showing; tapping the "+N" chip advances it.
+    @State private var alertCycle = 0
+    @AppStorage(VoiceAnnouncer.mutedKey) private var voiceMuted = false
     @State private var isBroadcasting = false
     @State private var showEndError = false
     @State private var showEndConfirm = false
@@ -1968,7 +2066,7 @@ struct RideNavigationView: View {
                     isBroadcasting: isBroadcasting
                 )
             }
-            .onChange(of: vm.activeRegroup) { _, regroup in handleRegroupChanged(regroup) }
+            .onChange(of: vm.activeAlerts) { _, _ in alertCycle = 0 }
             .navigationDestination(isPresented: $vm.showSummary) {
                 RideSummaryView(rideId: rideId, rideTitle: appState.currentRide?.title, isPostRide: true)
             }
@@ -2161,6 +2259,14 @@ struct RideNavigationView: View {
     private var edgeClusters: [EdgeCluster] {
         let byId = Dictionary(uniqueKeysWithValues: vm.riders.map { ($0.id, $0) })
         let models: [EdgeChipModel] = edgeIndicators.compactMap { ind in
+            if ind.id == EdgeTarget.regroupId, let regroup = vm.activeRegroup {
+                return EdgeChipModel(kind: .regroup(type: regroup.type), id: ind.id, name: "", avatarUrl: nil, isOffline: false,
+                                     edgePoint: ind.edgePoint, arrowAngle: ind.arrowAngle, distanceMeters: ind.distanceMeters)
+            }
+            if ind.id == EdgeTarget.emergencyId, vm.activeEmergency != nil {
+                return EdgeChipModel(kind: .emergency, id: ind.id, name: "", avatarUrl: nil, isOffline: false,
+                                     edgePoint: ind.edgePoint, arrowAngle: ind.arrowAngle, distanceMeters: ind.distanceMeters)
+            }
             guard let rider = byId[ind.id] else { return nil }
             return EdgeChipModel(
                 id: ind.id, name: rider.name, avatarUrl: rider.avatarUrl,
@@ -2307,6 +2413,9 @@ struct RideNavigationView: View {
     /// Tapping an edge indicator flies the camera to that rider and breaks
     /// follow; the RESUME capsule (shown while `isFreeLooking`) re-engages nav.
     private func focusRider(_ id: String) {
+        // Edge chips for the regroup point and the emergency use the same tap path as riders.
+        if id == EdgeTarget.regroupId, let r = vm.activeRegroup { peek(lat: r.lat, lng: r.lng); return }
+        if id == EdgeTarget.emergencyId, let e = vm.activeEmergency { peek(lat: e.lat, lng: e.lng); return }
         guard let rider = vm.riders.first(where: { $0.id == id }) else { return }
         isFreeLooking = true
         lastInteractionDate = Date()
@@ -2316,15 +2425,14 @@ struct RideNavigationView: View {
         )
     }
 
-    private func handleRegroupChanged(_ regroup: RegroupEvent?) {
-        guard let regroup else { return }
+    /// Flies to a point of interest the rider asked to see. The follow camera comes back on its
+    /// own after `peekSeconds` of movement, the same way it does after a pan.
+    private func peek(lat: Double, lng: Double, zoom: Float = 16) {
+        let peekSeconds = 10.0
         isFreeLooking = true
-        lastInteractionDate = Date()
-        cameraCommand = MapCameraCommand.focus(lat: regroup.lat, lng: regroup.lng, zoom: 15)
-        Task {
-            try? await Task.sleep(for: .seconds(5))
-            resumeNavigation()
-        }
+        // Future-dated so the "3 s since last touch" auto-resume doesn't cut the peek short.
+        lastInteractionDate = Date().addingTimeInterval(peekSeconds - 3)
+        cameraCommand = MapCameraCommand.focus(lat: lat, lng: lng, zoom: zoom)
     }
 
     // MARK: - HUD
@@ -2338,72 +2446,17 @@ struct RideNavigationView: View {
                     topChromeBottom = bottom
                 }
 
-            if vm.connectionState == .reconnecting {
+            // Preview only: once guidance is live the same fact is a status line on the turn card.
+            if !isNavigationActive && vm.connectionState == .reconnecting {
                 ConnectionBanner(state: vm.connectionState)
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .animation(.spring(), value: vm.connectionState)
             }
 
             if isNavigationActive {
-                if vm.isOffRoute {
-                    HStack {
-                        offRouteBanner
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .animation(.spring(), value: vm.isOffRoute)
-                }
-
-                if vm.showSplitAlert {
-                    GroupSplitAlert(
-                        riderName: vm.splitRiderName,
-                        gapMeters: vm.splitGapMeters,
-                        onIgnore: { withAnimation(.spring()) { vm.dismissSplitAlert() } },
-                        onRegroup: { showRegroup = true }
-                    )
+                alertSlot
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
-                    .transition(.scale.combined(with: .opacity))
-                    .animation(.spring(), value: vm.showSplitAlert)
-                }
-
-                if vm.showRegroupToast, let regroup = vm.activeRegroup {
-                    RegroupToastBanner(type: regroup.type)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .animation(.spring(), value: vm.showRegroupToast)
-                        .task {
-                            try? await Task.sleep(for: .seconds(4))
-                            withAnimation { vm.showRegroupToast = false }
-                        }
-                }
-
-                if vm.showRegroupResolvedToast {
-                    RegroupResolvedBanner()
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .animation(.spring(), value: vm.showRegroupResolvedToast)
-                }
-
-                if let emergency = vm.activeEmergency {
-                    EmergencyAlertBanner(
-                        reporterName: vm.emergencyReporterName,
-                        message: emergency.message,
-                        // Only the raiser or the leader can clear it; for everyone else the banner
-                        // has no dismiss control and persists (with the pin) until they do.
-                        onDismiss: vm.canDismissEmergency ? { vm.dismissEmergency() } : nil
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .animation(.spring(), value: vm.activeEmergency)
-                }
             }
 
             Spacer()
@@ -2415,18 +2468,15 @@ struct RideNavigationView: View {
                     .padding(.bottom, 8)
             }
 
-            if vm.activeRegroup != nil && isNavigationActive {
-                Group {
-                    if vm.hasMarkedArrived {
-                        waitingForOthersPill
-                    } else {
-                        arrivedButton
-                    }
+            if isNavigationActive {
+                // Bottom-trailing, in thumb reach: the rider reaches for it with the hand that
+                // is already near the controls, not across the whole screen to the top.
+                HStack {
+                    Spacer()
+                    voiceButton
                 }
-                .padding(.bottom, 12)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.spring(response: 0.3), value: vm.hasMarkedArrived)
-                .animation(.spring(), value: vm.activeRegroup != nil)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
             }
 
             Group {
@@ -2449,6 +2499,76 @@ struct RideNavigationView: View {
             }
         }
         .animation(.easeInOut(duration: 0.4), value: isNavigationActive)
+    }
+
+    // MARK: - Alert slot
+
+    /// One banner at a time, chosen by priority (`NavAlert`). When more than one is live a "+N"
+    /// chip under the banner steps through the rest, so a stack of alerts never pushes the road
+    /// off the screen and the most urgent one can't end up at the bottom of the pile.
+    @ViewBuilder
+    private var alertSlot: some View {
+        let alerts = vm.activeAlerts
+        if let current = alerts.isEmpty ? nil : alerts[min(alertCycle, alerts.count - 1)] {
+            VStack(alignment: .trailing, spacing: 4) {
+                alertBanner(current)
+                    .id(current)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                if alerts.count > 1 {
+                    Button {
+                        DSHaptic.selection()
+                        alertCycle = (alertCycle + 1) % alerts.count
+                    } label: {
+                        Text("+\(alerts.count - 1) more")
+                            .dsText(.badge)
+                            .foregroundStyle(DS.Text.primary)
+                            .padding(.horizontal, DS.Space.p3)
+                            .frame(minHeight: 28)
+                            .dsGlass(clear: true)
+                            .frame(minHeight: DS.Target.minimum)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(Text("\(alerts.count - 1) more alerts"))
+                    .accessibilityHint(Text("Shows the next alert"))
+                }
+            }
+            .animation(.spring(response: 0.3), value: current)
+        }
+    }
+
+    @ViewBuilder
+    private func alertBanner(_ alert: NavAlert) -> some View {
+        switch alert {
+        case .emergency:
+            if let emergency = vm.activeEmergency {
+                EmergencyAlertBanner(
+                    reporterName: vm.emergencyReporterName,
+                    message: emergency.message,
+                    onShow: { peek(lat: emergency.lat, lng: emergency.lng) },
+                    // Only the raiser or the leader can clear it; for everyone else the banner
+                    // has no dismiss control and persists (with the pin) until they do.
+                    onDismiss: vm.canDismissEmergency ? { vm.dismissEmergency() } : nil
+                )
+            }
+        case .split:
+            GroupSplitAlert(
+                riderName: vm.splitRiderName,
+                gapMeters: vm.splitGapMeters,
+                onIgnore: { withAnimation(.spring()) { vm.dismissSplitAlert() } },
+                onRegroup: { showRegroup = true }
+            )
+        case .regroup:
+            if let regroup = vm.activeRegroup {
+                RegroupAlertBanner(
+                    type: regroup.type,
+                    hasArrived: vm.hasMarkedArrived,
+                    onShow: { peek(lat: regroup.lat, lng: regroup.lng, zoom: 15) },
+                    onArrived: { vm.markArrivedAtRegroup() }
+                )
+            }
+        case .regroupResolved:
+            RegroupResolvedBanner()
+        }
     }
 
     // MARK: - Landscape side panel
@@ -2560,6 +2680,20 @@ struct RideNavigationView: View {
                     .contentShape(Rectangle())
             }
             .accessibilityLabel(Text("Regroup"))
+            Button {
+                voiceMuted.toggle()
+                if voiceMuted { VoiceAnnouncer.shared.stop() } else { vm.repeatInstruction() }
+            } label: {
+                Image(systemName: voiceMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .dsIcon(DS.IconSize.default, weight: .medium)
+                    .foregroundStyle(DS.Text.primary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: buttonSize)
+                    .background(DS.Surface.card, in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).stroke(DS.Border.default, lineWidth: DS.BorderWidth.default))
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(Text(voiceMuted ? "Turn on voice guidance" : "Mute voice guidance"))
             Button(action: {
                 // Same rule as portrait: the leader confirms, everyone else just leaves the screen.
                 if vm.amILeader { showEndConfirm = true } else { dismiss() }
@@ -2596,41 +2730,9 @@ struct RideNavigationView: View {
         }
     }
 
-    /// Banners, alerts and the resume/arrived controls — everything that appears only sometimes.
-    @ViewBuilder
+    /// The same single alert slot as portrait, so the two orientations can't disagree about order.
     private var landscapeTransientStack: some View {
-        VStack(spacing: 8) {
-            if vm.connectionState == .reconnecting {
-                ConnectionBanner(state: vm.connectionState)
-            }
-            if vm.isOffRoute {
-                HStack { offRouteBanner; Spacer(minLength: 0) }
-            }
-            if let emergency = vm.activeEmergency {
-                EmergencyAlertBanner(
-                    reporterName: vm.emergencyReporterName,
-                    message: emergency.message,
-                    // Same rule as portrait: no dismiss control unless you raised it or lead.
-                    onDismiss: vm.canDismissEmergency ? { vm.dismissEmergency() } : nil
-                )
-            }
-            if vm.showSplitAlert {
-                GroupSplitAlert(
-                    riderName: vm.splitRiderName,
-                    gapMeters: vm.splitGapMeters,
-                    onIgnore: { withAnimation(.spring()) { vm.dismissSplitAlert() } },
-                    onRegroup: { showRegroup = true }
-                )
-            }
-            if vm.showRegroupToast, let regroup = vm.activeRegroup {
-                RegroupToastBanner(type: regroup.type)
-            }
-            if vm.activeRegroup != nil {
-                if vm.hasMarkedArrived { waitingForOthersPill } else { arrivedButton }
-            }
-        }
-        .animation(.spring(response: 0.3), value: vm.showSplitAlert)
-        .animation(.spring(response: 0.3), value: isFreeLooking)
+        alertSlot
     }
 
     private var navigationPreviewBar: some View {
@@ -2675,6 +2777,18 @@ struct RideNavigationView: View {
     // MARK: - Top Bar
 
     /// Shared by portrait's top bar and the landscape side panel, so the two can't drift.
+    /// Voice guidance on/off. Muting silences every prompt but emergencies. Turning it back on
+    /// repeats the next maneuver, so the rider hears that it took.
+    private var voiceButton: some View {
+        DSFloatingButton(
+            systemImage: voiceMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+            label: voiceMuted ? "Turn on voice guidance" : "Mute voice guidance"
+        ) {
+            voiceMuted.toggle()
+            if voiceMuted { VoiceAnnouncer.shared.stop() } else { vm.repeatInstruction() }
+        }
+    }
+
     private var backButton: some View {
         DSFloatingButton(systemImage: "chevron.backward", label: "Back") { dismiss() }
     }
@@ -2745,6 +2859,7 @@ struct RideNavigationView: View {
             // remaining width to this column, which is what lets the street name wrap instead of
             // truncating. A Spacer would compete for that same space and shrink it back.
             VStack(alignment: .leading, spacing: 2) {
+                if let status = vm.navStatus { statusLine(status) }
                 let distText = Self.turnDistanceText(vm.distanceToNextTurnMeters)
                 if !distText.isEmpty {
                     Text(distText)
@@ -2759,15 +2874,49 @@ struct RideNavigationView: View {
                     .lineLimit(2)
                     .truncationMode(.tail)
                     .fixedSize(horizontal: false, vertical: true)
+                // A quick double turn: show the second one too, so it isn't a surprise.
+                if let then = vm.thenManeuver {
+                    HStack(spacing: 4) {
+                        Text("Then").dsText(.bodySmall)
+                        Image(systemName: maneuverIcon(for: then, instruction: "")).dsIcon(DS.IconSize.sm, weight: .bold)
+                    }
+                    .foregroundStyle(DS.Text.secondary)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(Text("Then \(NavVoiceGuide.phrase(for: then) ?? "continue")"))
+                }
             }
         }
         .padding(.horizontal, DS.Space.p3)
         .padding(.vertical, 10)
         .frame(maxWidth: expand ? .infinity : nil, alignment: .leading)
         .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).stroke(DS.Accent.border, lineWidth: DS.BorderWidth.default))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).stroke(statusBorder, lineWidth: DS.BorderWidth.default))
         .dsShadow(DS.Shadow.floating)
         .accessibilityElement(children: .combine)
+    }
+
+    private var statusBorder: Color {
+        switch vm.navStatus {
+        case .offRoute:     DS.Status.dangerBorder
+        case .reconnecting: DS.Status.warning.opacity(0.5)
+        case nil:           DS.Accent.border
+        }
+    }
+
+    /// One line above the distance: the guidance is unreliable, and why.
+    private func statusLine(_ status: NavStatus) -> some View {
+        HStack(spacing: 6) {
+            switch status {
+            case .offRoute:
+                Image(systemName: "exclamationmark.triangle.fill").dsIcon(DS.IconSize.xs)
+                Text("Off route · rerouting…").dsText(.badge)
+            case .reconnecting:
+                ProgressView().controlSize(.mini).tint(DS.Status.warning)
+                Text("Reconnecting…").dsText(.badge)
+            }
+        }
+        .foregroundStyle(status == .offRoute ? DS.Status.danger : DS.Status.warning)
+        .lineLimit(1)
     }
 
     /// Distance-to-maneuver, rounded the way Google Maps rounds it.
@@ -2900,8 +3049,6 @@ struct RideNavigationView: View {
         }
     }
 
-    private var offRouteBanner: some View { DSOffRouteChip() }
-
     // MARK: - Bottom Controls
 
     /// Adaptive by construction rather than by tuned constants: `ViewThatFits`
@@ -3027,18 +3174,6 @@ struct RideNavigationView: View {
                 dismiss()
             }
         }
-    }
-
-    // MARK: - Arrived Button
-
-    private var arrivedButton: some View {
-        DSRegroupArrivalControl(hasArrived: false) { vm.markArrivedAtRegroup() }
-    }
-
-    // Subtle indicator shown after this rider has marked arrived, while we wait for the regroup to
-    // be resolved. Not interactive.
-    private var waitingForOthersPill: some View {
-        DSRegroupArrivalControl(hasArrived: true) {}
     }
 
 }
@@ -3400,8 +3535,11 @@ private extension String {
     }
 }
 
-struct RegroupToastBanner: View {
+struct RegroupAlertBanner: View {
     let type: String
+    let hasArrived: Bool
+    let onShow: () -> Void
+    let onArrived: () -> Void
 
     private var icon: String {
         switch type {
@@ -3423,24 +3561,35 @@ struct RegroupToastBanner: View {
 
     var body: some View {
         let accent = type.regroupColor
-        HStack(spacing: DS.Space.p3) {
-            Image(systemName: icon)
-                .dsIcon(DS.IconSize.md, weight: .semibold)
-                .foregroundStyle(accent)
-                .frame(width: 36, height: 36)
-                .background(accent.opacity(0.16), in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Regroup called").dsText(.badge).foregroundStyle(accent)
-                Text("Head to the \(label)").dsText(.bodySmall).fontWeight(.semibold).foregroundStyle(DS.Text.primary)
+        VStack(alignment: .leading, spacing: DS.Space.p3) {
+            HStack(spacing: DS.Space.p3) {
+                Image(systemName: icon)
+                    .dsIcon(DS.IconSize.md, weight: .semibold)
+                    .foregroundStyle(accent)
+                    .frame(width: 36, height: 36)
+                    .background(accent.opacity(0.16), in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Regroup called").dsText(.badge).foregroundStyle(accent)
+                    Text("Head to the \(label)").dsText(.bodySmall).fontWeight(.semibold).foregroundStyle(DS.Text.primary)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            // Show is a peek, not a camera move: the map stays on the road until the rider asks.
+            DSAdaptiveStack(spacing: DS.Space.p2) {
+                DSPillButton(title: "Show", systemImage: "scope", variant: .tonal, large: true, action: onShow)
+                if hasArrived {
+                    DSPillButton(title: "Waiting for others", systemImage: "clock", variant: .neutral, large: true) {}
+                        .disabled(true)
+                } else {
+                    DSPillButton(title: "Mark as arrived", systemImage: "checkmark.circle.fill", variant: .primary, large: true, action: onArrived)
+                }
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, DS.Space.p3)
         .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).stroke(accent.opacity(0.5), lineWidth: DS.BorderWidth.emphasis))
-        .accessibilityElement(children: .combine)
-        .onAppear { AccessibilityNotification.Announcement(String(localized: "Regroup called. Head to the \(label)")).post() }
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -3474,6 +3623,7 @@ struct RegroupResolvedBanner: View {
 struct EmergencyAlertBanner: View {
     let reporterName: String
     let message: String
+    let onShow: () -> Void
     /// nil for riders who aren't allowed to clear the emergency (only the raiser or leader can);
     /// the dismiss control is hidden for them and the banner stays until an authorized rider clears it.
     let onDismiss: (() -> Void)?
@@ -3493,6 +3643,14 @@ struct EmergencyAlertBanner: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
+            Button(action: onShow) {
+                Image(systemName: "scope")
+                    .dsIcon(DS.IconSize.sm, weight: .bold)
+                    .foregroundStyle(DS.Status.danger)
+                    .frame(width: DS.Target.minimum, height: DS.Target.minimum)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(Text("Show emergency on map"))
             if let onDismiss {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")

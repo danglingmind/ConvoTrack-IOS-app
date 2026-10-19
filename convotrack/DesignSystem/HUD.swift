@@ -199,23 +199,6 @@ struct DSReconnectingBanner: View {
     }
 }
 
-struct DSOffRouteChip: View {
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill").dsIcon(DS.IconSize.xs)
-            Text("Off route").dsText(.badge)
-        }
-        .foregroundStyle(DS.Status.danger)
-        .lineLimit(1)
-        .fixedSize()
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(DS.Surface.dangerContainer, in: Capsule())
-        .overlay(Capsule().stroke(DS.Status.dangerBorder, lineWidth: DS.BorderWidth.default))
-        .accessibilityElement(children: .combine)
-    }
-}
-
 // MARK: - Pills
 
 struct DSDestinationPill: View {
@@ -363,7 +346,7 @@ struct HUDGallery: View {
                     }
                     DSBanner(tone: .regroup, eyebrow: "Regroup called", message: "Fuel stop in 500 m", detail: "Called by Asha")
                     DSBanner(tone: .emergency, eyebrow: "Emergency", message: "Ravi needs help")
-                    DSAdaptiveStack { DSOffRouteChip(); DSDestinationPill(name: "Nandi Hills", showsChevron: true); DSResumePill() }
+                    DSAdaptiveStack { DSDestinationPill(name: "Nandi Hills", showsChevron: true); DSResumePill() }
                     DSAdaptiveStack(spacing: 24) { DSEdgeChip(name: "Ravi", id: "b", distance: "1.2 km"); DSEdgeChip(name: "Mia", id: "c", distance: "3.4 km", isOffline: true) }
                     DSRegroupArrivalControl(hasArrived: false) {}
                     DSNavBottomBar(speed: "62", eta: "10:42", distance: "18.4") {} onEnd: {}

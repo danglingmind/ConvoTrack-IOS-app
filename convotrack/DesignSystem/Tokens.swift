@@ -135,6 +135,14 @@ extension DS {
         static let scenic = Color(rgb: 0x5AB8FF)
         static let other = Color(rgb: 0xB58CFF)
         static let emergency = Status.danger
+        static func color(forRegroup type: String) -> Color {
+            switch type {
+            case "FUEL":   return fuel
+            case "FOOD":   return food
+            case "SCENIC": return scenic
+            default:       return other
+            }
+        }
     }
 
     enum Border {

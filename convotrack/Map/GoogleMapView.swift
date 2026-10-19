@@ -1137,7 +1137,11 @@ extension GoogleMapView {
 
             var out: [EdgeIndicator] = []
             for (id, pin) in pinModels {
-                guard case .rider(_, _, let isMe, _, _, _) = pin.style, !isMe else { continue }
+                switch pin.style {
+                case .rider(_, _, let isMe, _, _, _) where !isMe: break
+                case .regroup, .emergency: break          // places the rider is asked to go to
+                default: continue
+                }
                 let coord = pin.coordinate
                 if proj.contains(coord) { continue }   // on-screen → no chip
 
