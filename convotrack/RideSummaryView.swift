@@ -73,6 +73,7 @@ struct RideSummaryView: View {
         }
         .toolbar(.hidden, for: .tabBar)
         .navigationBarBackButtonHidden(true)
+        .swipeBackDisabled(isPostRide)
         .navigationTitle("Ride Summary")
         .navigationBarTitleDisplayMode(.inline)
         .dsTransparentNavigationBar()

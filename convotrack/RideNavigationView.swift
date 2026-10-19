@@ -2201,6 +2201,7 @@ struct RideNavigationView: View {
         // measure from the same physical edges. No-op in portrait.
         .ignoresSafeArea(edges: isLandscape ? .horizontal : [])
         .navigationBarHidden(true)
+        .swipeBackDisabled()
         .toolbar(.hidden, for: .tabBar)
         .preferredColorScheme(.dark)
         .onAppear {

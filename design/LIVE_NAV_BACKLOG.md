@@ -78,6 +78,26 @@ device/simulator · **decide** needs a product call.
 - iOS (done, Phase 6) `landscapeTransientStack` inlined, unused `DSBanner` tones removed, `GroupSplitAlert` moved to `HUD.swift`, `CoordinationOverlayView` deleted. The regroup banner now also posts a VoiceOver announcement (it went through DSBanner).
 - Android `HudBanner`-based banners and the new `RegroupAlertBanner` duplicate the frame styling; fold into one.
 
+## Image caching (iOS `ImageCache`, Android `data/imagecache`)
+
+Not part of the original plan; added alongside it. Both implemented, committed, never run on a device.
+
+- **decide** Google Maps terms on caching static-map images. iOS keeps them 30 days (`ImageCategory` constant); Android honours the server's own `max-age` (about a day, floored at 5 minutes). The rendered summary card (map baked in) never expires on either platform. Confirm against the terms.
+- **verify** Avatars, history thumbnails, destination photos and the summary card all load a second time without a network fetch; edit a ride and confirm the thumbnail and card refresh; sign out and confirm the cache is empty; delete/leave a ride and confirm its map and card are gone.
+- **verify** iOS only: LRU eviction, 304 revalidation and the format-version wipe were never exercised, even in the standalone harness.
+- Place photos stay on their own existing cache on both platforms (attribution and Google photo terms); they are not in `ImageCache` on iOS and only share the Android layer.
+- History thumbnails are keyed by place, not ride, so deleting a ride does not purge them; they age out by TTL and the size cap. A deleted ride can also drop a destination photo another ride to the same place would have reused (one refetch).
+- A ride removed from another rider's phone via the `ride:deleted` socket event is not evicted there (only the local delete and leave paths are wired).
+- Thumbnails do not work offline: each history row still calls `getRide` once to find its destination. Persisting that mapping would fix it.
+- No cache-clearing UI was added; `clearAll()` exists on both platforms and runs on sign-out and account deletion.
+- iOS `ImageCache` has no tests (the project has no test target); Android has no unit-test dependencies.
+
+## Swipe back
+
+- iOS: `SwipeBack.swift` restores the edge-swipe-back gesture that `navigationBarBackButtonHidden` / a hidden nav bar switch off (lobby, summary). `.swipeBackDisabled()` opts out: live navigation, and the post-ride summary (back would land on an ended ride). **verify** on a device: swipe back from lobby, summary (history), create/edit ride, and that it stays dead on live navigation and the post-ride summary.
+- Android: predictive back is enabled in the manifest (`enableOnBackInvokedCallback`); the back swipe is swallowed on live navigation while guidance is active and still leaves the route preview. **verify** the predictive back animation on Android 14+, and that Exit navigation / End ride remain the only ways out of guidance.
+- Not changed: sheets and the join/QR flows rely on their own dismiss gestures.
+
 ## Cross-cutting
 
 - Live Activity v2: server-pushed updates via ActivityKit push tokens when iOS suspends the app (needs a backend endpoint). Out of scope until v1 ships.
