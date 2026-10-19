@@ -1,2 +1,3 @@
-• Omberegning af ruten er hurtigere og mere præcis, når du kører væk fra ruten.
-• Retningspilen i liggende format er rettet – med telefonen på tværs i holderen peger kortet nu den vej, du rent faktisk kører.
+• Alle får 3 dage gratis fra i dag; nye konti får 3 dage fra login. Mærket på Hjem viser, hvor mange dage der er tilbage.
+• Efter de gratis dage kræver det Pro at oprette eller deltage i ture – en igangværende tur kan altid køres færdig.
+• Din kørergrænse vises, når du planlægger en tur, og lobbyen viser, hvor fuld gruppen er.

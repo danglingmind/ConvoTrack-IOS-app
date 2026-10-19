@@ -1,2 +1,3 @@
-• Il ricalcolo del percorso è più rapido e preciso quando esci dall'itinerario.
-• Corretta la freccia di direzione in orizzontale: con il telefono di lato sul supporto, la mappa ora punta nella direzione in cui stai davvero viaggiando.
+• Da oggi tutti hanno 3 giorni gratis; i nuovi account 3 giorni dalla registrazione. Il badge nella Home mostra i giorni rimasti.
+• Dopo i giorni gratis serve Pro per creare o unirti a un giro: un giro già in corso si può sempre concludere.
+• Mentre pianifichi un giro vedi il tuo limite di motociclisti, e la lobby mostra quanto è pieno il gruppo.

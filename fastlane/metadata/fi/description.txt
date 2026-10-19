@@ -26,10 +26,13 @@ Kun ajo päättyy, kaikki saavat todelliset luvut: todellisen ajoajan, kuljetun 
 AJOHISTORIA
 Kaikki ajot, joita olet johtanut tai joihin olet osallistunut, yhdessä paikassa.
 
-CONVOTRACK PRO
-Isommat ryhmät, ei kuukausittaista ajorajaa, live-tilastot ja synkronointipisteet sekä täysi 365 päivän ajohistoria-arkisto.
+3 PÄIVÄÄ ILMAISEKSI, SITTEN CONVOTRACK PRO
+Jokainen uusi tili alkaa 3 ilmaisella päivällä – enintään 3 ajelua, kussakin enintään 5 kuljettajaa, ilman maksutietoja. Sen jälkeen ajelujen luominen tai niihin liittyminen vaatii Pron. Käynnissä olevan ajelun voi aina ajaa loppuun.
 
-ConvoTrack Pro on automaattisesti uusiutuva tilaus. Maksu veloitetaan Apple Account -tililtäsi oston vahvistuksen yhteydessä. Tilaus uusiutuu automaattisesti, ellei sitä peruuteta vähintään 24 tuntia ennen kuluvan jakson päättymistä. Hallitse tai peruuta tilaus Apple Account -asetuksissa.
+CONVOTRACK PRO
+Rajattomasti ajeluja, enintään 25 kuljettajan ryhmät, livetilastot ja synkkapisteet sekä 365 päivän ajeluarkisto.
+
+ConvoTrack Pro on automaattisesti uusiutuva tilaus. Maksu veloitetaan Apple Account -tililtäsi oston vahvistuksen yhteydessä. Tilaus uusiutuu automaattisesti, ellei sitä peruuteta vähintään 24 tuntia ennen kuluvan jakson päättymistä. Hallitse tai peruuta tilaus Apple Account -asetuksissa. Tilaaminen ilmaisten päivien aikana käynnistää maksullisen tilauksen heti.
 
 Tietosuojakäytäntö: https://convotrack.in/privacy
 Käyttöehdot: https://convotrack.in/terms

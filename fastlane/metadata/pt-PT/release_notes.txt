@@ -1,2 +1,3 @@
-• O recálculo do trajeto é mais rápido e preciso quando sai do percurso.
-• Corrigimos a seta de direção no modo horizontal: com o telemóvel deitado no suporte, o mapa aponta agora para onde está realmente a seguir.
+• Todos têm 3 dias grátis a partir de hoje; contas novas, 3 dias a partir do registo. O distintivo no Início mostra os dias que faltam.
+• Depois dos dias grátis, o Pro é necessário para criar ou juntar-se a passeios — um passeio em curso pode sempre ser terminado.
+• O seu limite de motociclistas aparece ao planear um passeio, e o lobby mostra quão cheio está o grupo.

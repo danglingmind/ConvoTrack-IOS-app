@@ -26,10 +26,13 @@ Po skončení dostane každý skutočné čísla: reálny čas na ceste, prejden
 HISTÓRIA JÁZD
 Všetky jazdy, ktoré ste viedli alebo absolvovali, na jednom mieste.
 
-CONVOTRACK PRO
-Väčšie skupiny, žiadny mesačný limit jázd, živé štatistiky a skóre zladenosti a kompletný archív histórie jázd za 365 dní.
+3 DNI ZADARMO, POTOM CONVOTRACK PRO
+Každý nový účet začína 3 dňami zadarmo – až 3 jazdy, každá až pre 5 jazdcov, bez platobných údajov. Potom je na vytváranie jázd a pripájanie sa k nim potrebné Pro. Prebiehajúcu jazdu možno vždy dokončiť.
 
-ConvoTrack Pro je automaticky obnovované predplatné. Platba sa strhne z vášho účtu Apple Account pri potvrdení nákupu. Obnovuje sa automaticky, ak ho nezrušíte aspoň 24 hodín pred koncom aktuálneho obdobia. Predplatné spravujete v nastaveniach účtu Apple Account.
+CONVOTRACK PRO
+Neobmedzené jazdy, skupiny až 25 jazdcov, živé štatistiky a skóre synchronizácie a úplný archív jázd za 365 dní.
+
+ConvoTrack Pro je automaticky obnovované predplatné. Platba sa strhne z vášho účtu Apple Account pri potvrdení nákupu. Obnovuje sa automaticky, ak ho nezrušíte aspoň 24 hodín pred koncom aktuálneho obdobia. Predplatné spravujete v nastaveniach účtu Apple Account. Predplatné uzavreté počas dní zadarmo začne platiť okamžite.
 
 Zásady ochrany osobných údajov: https://convotrack.in/privacy
 Podmienky služby: https://convotrack.in/terms

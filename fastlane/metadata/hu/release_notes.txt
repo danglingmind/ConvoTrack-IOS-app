@@ -1,2 +1,3 @@
-• Az útvonal újratervezése gyorsabb és pontosabb, ha letérsz az útvonalról.
-• Javítottuk az iránynyilat fekvő nézetben – ha a telefon oldalra fordítva van a tartóban, a térkép mostantól abba az irányba mutat, amerre valóban haladsz.
+• Mától mindenki 3 ingyenes napot kap; az új fiókok a bejelentkezéstől 3 napot. A Kezdőlap jelvénye mutatja, hány nap van hátra.
+• Az ingyenes napok után túrák létrehozásához vagy csatlakozáshoz Pro kell – a folyamatban lévő túrát mindig befejezheted.
+• Tervezéskor látod a motoros-korlátodat, a váró pedig megmutatja, mennyire telt meg a csapat.

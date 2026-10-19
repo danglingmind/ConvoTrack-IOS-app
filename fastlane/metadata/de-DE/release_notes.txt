@@ -1,2 +1,3 @@
-• Die Neuberechnung der Route ist schneller und genauer, wenn du von der Route abkommst.
-• Der Richtungspfeil im Querformat wurde korrigiert – liegt das Handy quer in der Halterung, zeigt die Karte jetzt in die Richtung, in die du tatsächlich fährst.
+• Alle erhalten ab heute 3 Tage gratis, neue Konten 3 Tage ab der Anmeldung. Das Abzeichen auf Home zeigt die verbleibenden Tage.
+• Nach den Gratistagen brauchst du Pro, um Touren zu erstellen oder beizutreten – laufende Touren kannst du immer beenden.
+• Beim Planen siehst du dein Fahrerlimit, und die Lobby zeigt, wie voll die Gruppe ist.

@@ -1,2 +1,3 @@
-• Le recalcul d'itinéraire est plus rapide et plus précis lorsque vous quittez le trajet.
-• Correction de la flèche de direction en mode paysage : le téléphone posé de côté sur le support, la carte pointe maintenant dans la direction où vous roulez vraiment.
+• Tout le monde reçoit 3 jours gratuits dès aujourd'hui; les nouveaux comptes, 3 jours dès l'inscription. Le badge sur l'accueil indique les jours restants.
+• Après les jours gratuits, Pro est nécessaire pour créer ou rejoindre une randonnée — une randonnée en cours peut toujours être terminée.
+• Votre limite de motocyclistes s'affiche pendant la planification, et le salon montre le remplissage du groupe.

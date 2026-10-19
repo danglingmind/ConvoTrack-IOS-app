@@ -1,2 +1,3 @@
-• Omberäkning av rutten går snabbare och blir mer exakt när du kör av rutten.
-• Riktningspilen i liggande läge är fixad – med telefonen på tvären i hållaren pekar kartan nu åt det håll du faktiskt kör.
+• Alla får 3 dagar gratis från i dag; nya konton 3 dagar från inloggningen. Märket på Hem visar hur många dagar som är kvar.
+• Efter gratisdagarna krävs Pro för att skapa eller gå med i turer – en pågående tur kan alltid slutföras.
+• Din förargräns visas när du planerar en tur, och lobbyn visar hur full gruppen är.

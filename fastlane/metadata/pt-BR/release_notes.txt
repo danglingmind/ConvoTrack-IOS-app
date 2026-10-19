@@ -1,2 +1,3 @@
-• O recálculo da rota é mais rápido e preciso quando você sai do trajeto.
-• Corrigimos a seta de direção no modo paisagem: com o celular deitado no suporte, o mapa agora aponta para onde você está realmente indo.
+• Todos ganham 3 dias grátis a partir de hoje; contas novas, 3 dias a partir do cadastro. O selo na tela inicial mostra quantos dias faltam.
+• Depois dos dias grátis, o Pro é necessário para criar ou entrar em rolês — um rolê em andamento sempre pode ser concluído.
+• Seu limite de motociclistas aparece ao planejar um rolê, e o lobby mostra o quanto o grupo está cheio.

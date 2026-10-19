@@ -1,2 +1,3 @@
-• El recálculo de la ruta es más rápido y preciso cuando te sales del recorrido.
-• Corregida la flecha de dirección en horizontal: con el teléfono de lado en el soporte, el mapa ahora apunta hacia donde realmente circulas.
+• Todos tenéis 3 días gratis desde hoy; las cuentas nuevas, 3 días desde el registro. La insignia de Inicio muestra los días que quedan.
+• Tras los días gratis, Pro es necesario para crear o unirse a rutas; una ruta en curso siempre se puede terminar.
+• Verás tu límite de moteros al planificar una ruta, y la sala muestra lo lleno que está el grupo.

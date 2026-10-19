@@ -1,2 +1,3 @@
-• Reitin uudelleenlaskenta on nopeampaa ja tarkempaa, kun poikkeat reitiltä.
-• Suuntanuoli korjattu vaakanäkymässä – kun puhelin on telineessä kyljellään, kartta osoittaa nyt siihen suuntaan, johon todella ajat.
+• Kaikki saavat tästä päivästä 3 ilmaista päivää; uudet tilit 3 päivää kirjautumisesta. Koti-näkymän merkki näyttää jäljellä olevat päivät.
+• Ilmaisten päivien jälkeen ajelujen luominen tai niihin liittyminen vaatii Pron – käynnissä olevan ajelun voi aina ajaa loppuun.
+• Kuljettajarajasi näkyy ajelua suunnitellessa, ja aula näyttää, kuinka täynnä ryhmä on.

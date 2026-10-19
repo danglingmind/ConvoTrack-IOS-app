@@ -1,2 +1,3 @@
-• El recàlcul de la ruta és més ràpid i precís quan et surts del recorregut.
-• S'ha corregit la fletxa de direcció en mode horitzontal: amb el telèfon de costat al suport, el mapa ara apunta cap a on condueixes realment.
+• Tothom té 3 dies gratis des d'avui; els comptes nous, 3 dies des del registre. La insígnia d'Inici mostra els dies que queden.
+• Després dels dies gratis, cal Pro per crear sortides o unir-s'hi; una sortida en curs sempre es pot acabar.
+• Veuràs el límit de motoristes en planificar una sortida, i la sala mostra com de ple és el grup.

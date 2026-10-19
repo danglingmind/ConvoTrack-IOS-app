@@ -1,2 +1,3 @@
-• Rerouting is faster and more accurate when you go off route.
-• Fixed the direction arrow in landscape — with the phone sideways on the mount, the map now points the way you're actually riding.
+• Everyone gets 3 days free from today; new accounts get 3 days from sign-in. Your badge on Home shows how many days are left.
+• After the free days, ConvoTrack Pro is needed to create or join rides — rides already in progress can always be finished.
+• Your rider limit is shown while you plan a ride, and the lobby shows how full the pack is.

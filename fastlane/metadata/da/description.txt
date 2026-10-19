@@ -26,10 +26,13 @@ Når turen slutter, får alle de rigtige tal: den faktiske tid på vejen, den ti
 TURHISTORIK
 Alle ture, du har ført eller kørt med på, samlet ét sted.
 
-CONVOTRACK PRO
-Større grupper, ingen månedlig turgrænse, livestatistik og synkroniseringsscorer samt et komplet turarkiv på 365 dage.
+3 DAGE GRATIS, DEREFTER CONVOTRACK PRO
+Alle nye konti starter med 3 dage gratis – op til 3 ture med op til 5 kørere hver, uden betalingsoplysninger. Derefter kræver det Pro at oprette eller deltage i ture. En igangværende tur kan altid køres færdig.
 
-ConvoTrack Pro er et abonnement, der fornyes automatisk. Betalingen trækkes fra din Apple Account ved bekræftelse af købet. Det fornyes automatisk, medmindre det opsiges senest 24 timer før udgangen af den aktuelle periode. Administrer eller opsig dit abonnement i indstillingerne for din Apple Account.
+CONVOTRACK PRO
+Ubegrænsede ture, grupper på op til 25 kørere, live-statistik og sync-score samt et komplet turarkiv på 365 dage.
+
+ConvoTrack Pro er et abonnement, der fornyes automatisk. Betalingen trækkes fra din Apple Account ved bekræftelse af købet. Det fornyes automatisk, medmindre det opsiges senest 24 timer før udgangen af den aktuelle periode. Administrer eller opsig dit abonnement i indstillingerne for din Apple Account. Et abonnement i de gratis dage starter det betalte abonnement med det samme.
 
 Privatlivspolitik: https://convotrack.in/privacy
 Servicevilkår: https://convotrack.in/terms

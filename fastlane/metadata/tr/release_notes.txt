@@ -1,2 +1,3 @@
-• Rotadan çıktığınızda rota yeniden hesaplama artık daha hızlı ve daha isabetli.
-• Yatay moddaki yön oku düzeltildi — telefon tutucuda yan duruyorken harita artık gerçekten gittiğiniz yönü gösteriyor.
+• Bugünden itibaren herkese 3 gün ücretsiz; yeni hesaplara girişten itibaren 3 gün. Ana sayfadaki rozet kalan günleri gösterir.
+• Ücretsiz günlerden sonra sürüş oluşturmak veya katılmak için Pro gerekir — devam eden sürüş her zaman tamamlanabilir.
+• Sürüş planlarken sürücü sınırınız görünür, lobi de grubun ne kadar dolu olduğunu gösterir.

@@ -1,2 +1,3 @@
-• Ponovno izračunavanje rute brže je i točnije kada skrenete s rute.
-• Ispravljena je strelica smjera u vodoravnom prikazu – kad je telefon položen bočno na nosaču, karta sada pokazuje smjer u kojem stvarno vozite.
+• Svi od danas dobivaju 3 besplatna dana; novi računi 3 dana od prijave. Značka na Početnoj pokazuje koliko je dana ostalo.
+• Nakon besplatnih dana za stvaranje vožnji i pridruživanje treba Pro – vožnju u tijeku uvijek možete završiti.
+• Tijekom planiranja vidite ograničenje vozača, a predvorje pokazuje koliko je grupa puna.

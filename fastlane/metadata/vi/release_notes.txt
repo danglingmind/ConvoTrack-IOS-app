@@ -1,2 +1,3 @@
-• Việc tính lại lộ trình nhanh hơn và chính xác hơn khi bạn đi chệch tuyến.
-• Đã sửa mũi tên chỉ hướng ở chế độ ngang — khi điện thoại đặt ngang trên giá đỡ, bản đồ giờ chỉ đúng hướng bạn đang thực sự di chuyển.
+• Từ hôm nay mọi người có 3 ngày miễn phí; tài khoản mới có 3 ngày kể từ khi đăng nhập. Huy hiệu ở Trang chủ cho biết số ngày còn lại.
+• Sau những ngày miễn phí, tạo hoặc tham gia chuyến đi cần có Pro — chuyến đi đang diễn ra luôn có thể hoàn thành.
+• Giới hạn người lái hiển thị khi bạn lên kế hoạch, và sảnh chờ cho biết đoàn đã đầy đến đâu.

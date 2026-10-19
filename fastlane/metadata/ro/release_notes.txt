@@ -1,2 +1,3 @@
-• Recalcularea traseului este mai rapidă și mai precisă când ieși de pe traseu.
-• Am corectat săgeata de direcție în modul peisaj – cu telefonul așezat pe lat în suport, harta indică acum direcția în care mergi cu adevărat.
+• Toți primesc 3 zile gratuite de azi; conturile noi, 3 zile de la conectare. Insigna de pe Acasă arată câte zile au mai rămas.
+• După zilele gratuite, crearea turelor sau alăturarea necesită Pro — o tură în desfășurare poate fi mereu încheiată.
+• Limita de motocicliști apare când planifici o tură, iar lobby-ul arată cât de plin e grupul.

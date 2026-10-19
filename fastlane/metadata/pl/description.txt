@@ -26,10 +26,13 @@ Po zakończeniu każdy dostaje prawdziwe liczby: rzeczywisty czas w trasie, poko
 HISTORIA TRAS
 Wszystkie trasy, które poprowadziłeś lub w których jechałeś, w jednym miejscu.
 
-CONVOTRACK PRO
-Większe grupy, brak miesięcznego limitu tras, statystyki na żywo i wyniki zgrania oraz pełne archiwum historii tras z 365 dni.
+3 DNI ZA DARMO, POTEM CONVOTRACK PRO
+Każde nowe konto zaczyna od 3 darmowych dni – do 3 przejażdżek, każda do 5 motocyklistów, bez danych płatniczych. Potem tworzenie przejażdżek i dołączanie do nich wymaga Pro. Trwającą przejażdżkę zawsze można dokończyć.
 
-ConvoTrack Pro to subskrypcja odnawiana automatycznie. Płatność jest pobierana z konta Apple Account przy potwierdzeniu zakupu. Odnawia się automatycznie, o ile nie zostanie anulowana co najmniej 24 godziny przed końcem bieżącego okresu. Subskrypcją zarządzasz w ustawieniach konta Apple Account.
+CONVOTRACK PRO
+Nielimitowane przejażdżki, grupy do 25 motocyklistów, statystyki na żywo i wyniki synchronizacji oraz pełne archiwum z 365 dni.
+
+ConvoTrack Pro to subskrypcja odnawiana automatycznie. Płatność jest pobierana z konta Apple Account przy potwierdzeniu zakupu. Odnawia się automatycznie, o ile nie zostanie anulowana co najmniej 24 godziny przed końcem bieżącego okresu. Subskrypcją zarządzasz w ustawieniach konta Apple Account. Wykupienie subskrypcji w darmowe dni od razu uruchamia płatną subskrypcję.
 
 Polityka prywatności: https://convotrack.in/privacy
 Regulamin: https://convotrack.in/terms

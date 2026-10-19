@@ -1,2 +1,3 @@
-• Přepočet trasy je rychlejší a přesnější, když sjedete z trasy.
-• Opravili jsme šipku směru v režimu na šířku – když je telefon otočený v držáku na bok, mapa teď ukazuje směr, kterým skutečně jedete.
+• Všichni mají ode dneška 3 dny zdarma; nové účty 3 dny od přihlášení. Odznak na Domů ukazuje, kolik dní zbývá.
+• Po dnech zdarma je k vytváření jízd a připojování potřeba Pro – probíhající jízdu lze vždy dokončit.
+• Při plánování jízdy vidíte svůj limit jezdců a lobby ukazuje, jak je skupina plná.

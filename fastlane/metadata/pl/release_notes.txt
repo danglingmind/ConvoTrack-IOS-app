@@ -1,2 +1,3 @@
-• Przeliczanie trasy jest szybsze i dokładniejsze, gdy zjedziesz z trasy.
-• Naprawiliśmy strzałkę kierunku w widoku poziomym – gdy telefon leży bokiem w uchwycie, mapa wskazuje teraz kierunek, w którym naprawdę jedziesz.
+• Od dziś każdy dostaje 3 darmowe dni; nowe konta – 3 dni od rejestracji. Odznaka na ekranie głównym pokazuje, ile dni zostało.
+• Po darmowych dniach tworzenie przejażdżek i dołączanie do nich wymaga Pro – trwającą przejażdżkę zawsze można dokończyć.
+• Podczas planowania widzisz swój limit motocyklistów, a lobby pokazuje, jak pełna jest grupa.
