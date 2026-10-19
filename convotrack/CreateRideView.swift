@@ -11,9 +11,9 @@ struct CreateRideView: View {
 
     @State private var rideTitle = ""
     @State private var maxRiders = 5
-    @State private var showMembership = false
+    @EnvironmentObject private var paywall: PaywallPresenter
 
-    private var riderCap: Int { membershipStore.isPremium ? 25 : 5 }
+    private var riderCap: Int { membershipStore.riderCap }
 
     // Route stops — start + optional middle waypoints + destination
     @State private var startStop = RouteStop()
@@ -33,6 +33,8 @@ struct CreateRideView: View {
     // API state
     @State private var isCreating = false
     @State private var errorMessage: String?
+    /// The last create was refused for a plan reason (trial over / monthly rides used up).
+    @State private var createBlockedByPlan = false
     @State private var showError = false
 
     @State private var scrollTarget: String? = nil
@@ -85,7 +87,7 @@ struct CreateRideView: View {
                         durationSeconds: routeDuration,
                         onStopsChanged: { Task { await recalculateRoute() } },
                         onSelectRoute: { selectRoute($0) },
-                        onUpgrade: { showMembership = true }
+                        onUpgrade: { paywall.present(.riderCap) }
                     )
                     .padding(.horizontal, DS.Space.screenInset)
                     .padding(.top, proxy.safeAreaInsets.top + DS.Space.p4)
@@ -130,12 +132,14 @@ struct CreateRideView: View {
             }
         }
         .alert("Failed to Create Ride", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
+            if createBlockedByPlan {
+                Button("See Pro plans") { paywall.present(.createBlocked) }
+                Button("Not now", role: .cancel) {}
+            } else {
+                Button("OK", role: .cancel) {}
+            }
         } message: {
             Text(errorMessage ?? "An unknown error occurred.")
-        }
-        .sheet(isPresented: $showMembership) {
-            MembershipView().environmentObject(membershipStore)
         }
         .onAppear {
             // Clamp to plan limit in case default exceeds it (e.g. free tier = 5)
@@ -287,6 +291,7 @@ struct CreateRideView: View {
             appState.currentRideId = response.rideId
         } catch {
             errorMessage = error.riderMessage
+            createBlockedByPlan = error.isPlanLimit
             showError = true
         }
     }
@@ -296,4 +301,6 @@ struct CreateRideView: View {
     CreateRideView()
         .environmentObject(AppState())
         .environmentObject(RideRealtimeSession())
+        .environmentObject(MembershipStore())
+        .environmentObject(PaywallPresenter())
 }

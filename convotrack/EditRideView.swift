@@ -18,7 +18,7 @@ struct EditRideView: View {
     @State private var rideTitle: String
     @State private var maxRiders: Int
 
-    private var riderCap: Int { membershipStore.isPremium ? 25 : 5 }
+    private var riderCap: Int { membershipStore.riderCap }
 
     @State private var startStop: RouteStop
     @State private var middleStops: [RouteStop]
@@ -36,7 +36,7 @@ struct EditRideView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showError = false
-    @State private var showMembership = false
+    @EnvironmentObject private var paywall: PaywallPresenter
 
     @State private var isDeleting = false
     @State private var showDeleteConfirm = false
@@ -139,7 +139,7 @@ struct EditRideView: View {
                             durationSeconds: routeDuration,
                             onStopsChanged: { Task { await recalculateRoute() } },
                             onSelectRoute: { selectRoute($0) },
-                            onUpgrade: { showMembership = true }
+                            onUpgrade: { paywall.present(.riderCap) }
                         )
                         deleteRideButton
                     }
@@ -203,9 +203,6 @@ struct EditRideView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(deleteErrorMessage ?? "An unknown error occurred.")
-        }
-        .sheet(isPresented: $showMembership) {
-            MembershipView().environmentObject(membershipStore)
         }
         .task {
             // Show the currently-saved route instantly, then load alternatives and

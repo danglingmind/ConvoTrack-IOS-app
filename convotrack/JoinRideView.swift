@@ -4,6 +4,7 @@ struct JoinRideView: View {
     var prefillCode: String? = nil
 
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var paywall: PaywallPresenter
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -14,6 +15,8 @@ struct JoinRideView: View {
     @State private var errorMessage: String? = nil
     @State private var showError = false
     @State private var showScanner = false
+    /// The last join was refused for a plan reason (trial over / monthly rides used up).
+    @State private var joinBlockedByPlan = false
 
     private var normalizedCode: String {
         String(inviteCode.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
@@ -52,6 +55,9 @@ struct JoinRideView: View {
 
                         if let errorMessage {
                             DSInlineError(message: LocalizedStringKey(errorMessage))
+                        }
+                        if joinBlockedByPlan {
+                            DSPrimaryButton(title: "See Pro plans", systemImage: "rosette") { openPaywall() }
                         }
 
                         codeInputSection
@@ -176,6 +182,7 @@ struct JoinRideView: View {
                 .onChange(of: inviteCode) { _, newValue in
                     ridePreview = nil
                     errorMessage = nil
+                    joinBlockedByPlan = false
                     // Sanitize: uppercase, alphanumeric only, max 6
                     let cleaned = String(newValue.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(6))
                     if cleaned != newValue { inviteCode = cleaned }
@@ -246,6 +253,15 @@ struct JoinRideView: View {
         isLookingUp = false
     }
 
+    /// The paywall is a sibling sheet on `MainTabView`, and a view can't present a second sheet
+    /// while this one is up — so close this sheet first and open the paywall once it has gone.
+    private func openPaywall() {
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            paywall.present(.joinBlocked)
+        }
+    }
+
     private func joinRide() async {
         guard let preview = ridePreview else { return }
 
@@ -276,6 +292,7 @@ struct JoinRideView: View {
                 // Everything else takes its wording from the central map, so a code this switch
                 // hasn't heard of can no longer reach the rider as "Couldn't join: QUOTA_EXCEEDED".
                 errorMessage = error.riderMessage
+                joinBlockedByPlan = error.isPlanLimit
                 showError = true
             default:
                 errorMessage = error.riderMessage
@@ -341,4 +358,5 @@ struct QRCornerBrackets: View {
 #Preview {
     JoinRideView()
         .environmentObject(AppState())
+        .environmentObject(PaywallPresenter())
 }

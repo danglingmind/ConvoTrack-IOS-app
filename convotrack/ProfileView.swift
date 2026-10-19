@@ -11,7 +11,7 @@ struct ProfileView: View {
     @State private var userProfile: UserMeResponse? = nil
     @State private var completedRides: [HistoryRide]? = nil
     @State private var isSigningOut = false
-    @State private var showMembership = false
+    @EnvironmentObject private var paywall: PaywallPresenter
     @State private var showDeleteAccountConfirm = false
     @State private var isDeletingAccount = false
     @State private var deleteError: String?
@@ -57,13 +57,13 @@ struct ProfileView: View {
                         message: store.isPremium ? "Your membership is active" : "Unlimited rides & advanced telemetry",
                         actionTitle: store.isPremium ? "Active" : "Upgrade",
                         isSubscribed: store.isPremium
-                    ) { showMembership = true }
+                    ) { paywall.present(.profile) }
 
                     DSSettingsGroup {
                         DSSettingsRow(systemImage: "bell", title: "Notifications", trailing: .externalLink) {
                             if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                         }
-                        DSSettingsRow(systemImage: "creditcard", title: "Membership & Billing") { showMembership = true }
+                        DSSettingsRow(systemImage: "creditcard", title: "Membership & Billing") { paywall.present(.profile) }
                         DSSettingsRow(systemImage: "hand.raised", title: "Privacy Policy", trailing: .externalLink) {
                             if let url = URL(string: AppURLs.privacyPolicy) { openURL(url) }
                         }
@@ -116,9 +116,6 @@ struct ProfileView: View {
             async let history = try? await APIClient.shared.getMyRides(statuses: APIClient.RideStatusFilter.completed)
             if let p = await me { userProfile = p }
             if let h = await history { completedRides = h.filter { $0.status == "COMPLETED" } }
-        }
-        .sheet(isPresented: $showMembership) {
-            MembershipView().environmentObject(store)
         }
         .sheet(isPresented: $showEditProfile) {
             EditProfileSheet(
@@ -407,4 +404,6 @@ struct EditProfileSheet: View {
     ProfileView()
         .environmentObject(AppState())
         .environmentObject(RideRealtimeSession())
+        .environmentObject(MembershipStore())
+        .environmentObject(PaywallPresenter())
 }

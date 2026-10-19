@@ -21,6 +21,15 @@ final class MembershipStore: ObservableObject {
     /// Eligibility is per group, not per product, so one entry covers both plans.
     @Published private(set) var introEligibleGroupIDs: Set<String> = []
 
+    /// Server view of the rider's plan, trial and usage (`GET /users/me`). nil until loaded.
+    @Published private(set) var plan: MembershipPlanInfo? = nil
+    @Published private(set) var trial: TrialInfo? = nil
+    @Published private(set) var usage: UsageInfo? = nil
+
+    /// Premium according to the server (e.g. bought on Android with the same account). Kept
+    /// separately so a local entitlement refresh can't wipe it.
+    private var serverSaysPremium = false
+
     private var transactionListener: Task<Void, Never>?
     private var storefrontListener: Task<Void, Never>?
 
@@ -133,7 +142,7 @@ final class MembershipStore: ObservableObject {
             let transaction = try checkVerified(verification)
             let confirmed = await activateOnServer(jws: jws)
             if confirmed { await transaction.finish() }
-            await refreshEntitlements()
+            await refreshServerState()
             await refreshIntroEligibility()
 
         case .userCancelled:
@@ -178,8 +187,60 @@ final class MembershipStore: ObservableObject {
             }
         }
 
-        isPremium = foundPremium
+        // OR: local StoreKit is authoritative for this device, but the server may know of a
+        // purchase made elsewhere. Neither can downgrade the other.
+        isPremium = foundPremium || serverSaysPremium
         premiumEndsAt = latestExpiry
+    }
+
+    // MARK: - Server State
+
+    /// Refreshes plan, trial and usage from the server, alongside the local entitlement check.
+    /// Called on launch and whenever the app returns to the foreground. Failures keep the last
+    /// known values — offline must never look like "trial ended".
+    func refreshServerState() async {
+        async let local: () = refreshEntitlements()
+        async let remote = try? APIClient.shared.fetchMe()
+        let (_, me) = await (local, remote)
+        guard let me else { return }
+        plan = me.plan
+        trial = me.trial
+        usage = me.usage
+        serverSaysPremium = me.plan.isPremium
+        isPremium = isPremium || me.plan.isPremium
+    }
+
+    /// Where the rider stands, most important first.
+    enum Access: Equatable {
+        case pro
+        /// Free rider inside the app-level trial.
+        case trial(endsAt: Date)
+        /// Free rider whose trial is over and enforced: creating and joining are blocked.
+        case trialExpired
+        /// Free rider with no enforced trial (enforcement off, or server state not loaded yet).
+        case free
+    }
+
+    var access: Access {
+        if isPremium { return .pro }
+        guard let trial, trial.enforced, let endsAt = trial.endDate else { return .free }
+        return endsAt > Date() ? .trial(endsAt: endsAt) : .trialExpired
+    }
+
+    /// Whole days left in the trial, rounded up ("2 days left" until the last 24 h, then 1).
+    /// nil outside an active trial.
+    var trialDaysLeft: Int? {
+        guard case .trial(let endsAt) = access else { return nil }
+        return max(1, Int((endsAt.timeIntervalSinceNow / 86_400).rounded(.up)))
+    }
+
+    /// Riders per ride the plan allows, from the server; falls back to the known plan sizes
+    /// until `/users/me` has loaded.
+    var riderCap: Int {
+        // Only trust the server's number when it describes the plan the rider is on right now —
+        // a just-purchased Pro rider may still hold the free plan's response.
+        if let plan, plan.isPremium == isPremium { return plan.maxRidersPerRide }
+        return isPremium ? 25 : 5
     }
 
     // MARK: - Introductory Offers

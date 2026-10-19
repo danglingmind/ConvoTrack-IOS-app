@@ -108,6 +108,7 @@ final class ConvoTrackSceneDelegate: NSObject, UIWindowSceneDelegate {
 struct ConvoTrackApp: App {
     @UIApplicationDelegateAdaptor(ConvoTrackAppDelegate.self) var delegate
     @StateObject private var membershipStore = MembershipStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         GoogleMapsConfig.initialize()
@@ -125,16 +126,12 @@ struct ConvoTrackApp: App {
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     DeepLinkRouter.handle(activity)
                 }
-                .task {
-                    // Both run in parallel: local StoreKit (works offline) + server plan
-                    async let localCheck: () = membershipStore.refreshEntitlements()
-                    async let remoteCheck = try? APIClient.shared.fetchMe()
-                    let (_, me) = await (localCheck, remoteCheck)
-                    // OR logic: local StoreKit is authoritative — server can only upgrade,
-                    // not downgrade a valid local entitlement.
-                    if let me {
-                        membershipStore.isPremium = membershipStore.isPremium || me.plan.isPremium
-                    }
+                // Local StoreKit + server plan/trial/usage, in parallel. Again on every return to
+                // the foreground: a trial can run out while the app sits in the background.
+                .task { await membershipStore.refreshServerState() }
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active else { return }
+                    Task { await membershipStore.refreshServerState() }
                 }
         }
     }

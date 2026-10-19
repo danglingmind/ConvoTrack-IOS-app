@@ -266,6 +266,30 @@ struct MembershipPlanInfo: Codable {
     let endsAt: String?
 }
 
+/// App-level free trial from `GET /users/me`. Display only — the server's 403 `TRIAL_EXPIRED` is
+/// what actually decides whether a rider may create or join.
+struct TrialInfo: Codable, Equatable {
+    /// ISO-8601 end of the trial; nil = not started (enforcement off, or a Pro rider).
+    let endsAt: String?
+    let isActive: Bool
+    /// false = the trial is informational only and rides aren't blocked when it ends.
+    let enforced: Bool
+
+    var endDate: Date? { endsAt.flatMap(Self.parse) }
+
+    private static func parse(_ string: String) -> Date? {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return withFraction.date(from: string) ?? ISO8601DateFormatter().date(from: string)
+    }
+}
+
+struct UsageInfo: Codable, Equatable {
+    let ridesUsedThisMonth: Int
+    /// nil = unlimited.
+    let monthlyLimit: Int?
+}
+
 struct UserMeResponse: Codable {
     let userId: String
     let name: String
@@ -277,6 +301,9 @@ struct UserMeResponse: Codable {
     let emailContactVisible: Bool
     let notifyNearbyRides: Bool
     let plan: MembershipPlanInfo
+    /// nil from servers that predate the app-level trial.
+    let trial: TrialInfo?
+    let usage: UsageInfo?
 
     // Default values for Bool fields so older API responses decode gracefully
     init(from decoder: Decoder) throws {
@@ -291,6 +318,8 @@ struct UserMeResponse: Codable {
         emailContactVisible  = try c.decodeIfPresent(Bool.self,   forKey: .emailContactVisible)  ?? false
         notifyNearbyRides    = try c.decodeIfPresent(Bool.self,   forKey: .notifyNearbyRides)    ?? true
         plan                 = try c.decode(MembershipPlanInfo.self, forKey: .plan)
+        trial                = try c.decodeIfPresent(TrialInfo.self, forKey: .trial)
+        usage                = try c.decodeIfPresent(UsageInfo.self, forKey: .usage)
     }
 }
 

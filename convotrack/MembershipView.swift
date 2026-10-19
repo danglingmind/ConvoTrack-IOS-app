@@ -15,11 +15,17 @@ struct MembershipView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private let presentation: MembershipPresentation
+    private let source: PaywallSource
     private let onFinish: (() -> Void)?
 
-    /// - Parameter onFinish: called instead of `dismiss()` when the host isn't a sheet.
-    init(presentation: MembershipPresentation = .sheet, onFinish: (() -> Void)? = nil) {
+    /// - Parameters:
+    ///   - source: the surface that opened the paywall; picks its headline.
+    ///   - onFinish: called instead of `dismiss()` when the host isn't a sheet.
+    init(presentation: MembershipPresentation = .sheet,
+         source: PaywallSource = .profile,
+         onFinish: (() -> Void)? = nil) {
         self.presentation = presentation
+        self.source = source
         self.onFinish = onFinish
     }
 
@@ -39,8 +45,11 @@ struct MembershipView: View {
     }
     private func close() { if let onFinish { onFinish() } else { dismiss() } }
 
-    /// Free-plan limits as the server reports them. nil until loaded (or if the call fails).
-    @State private var freePlan: MembershipPlanInfo?
+    /// Free-plan limits as the server reports them. nil until loaded, if the call failed, or for
+    /// a rider who is already Pro.
+    private var freePlan: MembershipPlanInfo? {
+        store.plan.flatMap { $0.isPremium ? nil : $0 }
+    }
 
     @State private var selectedPlan: String = "danglingmind.convotrack.membership.yearly"
     @State private var showSuccess = false
@@ -80,9 +89,8 @@ struct MembershipView: View {
             await store.refreshIfStorefrontChanged()
         }
         .task {
-            if let me = try? await APIClient.shared.fetchMe(), !me.plan.isPremium {
-                freePlan = me.plan
-            }
+            // Usually already loaded at launch; refreshed here so the limits shown are current.
+            if store.plan == nil { await store.refreshServerState() }
         }
     }
 

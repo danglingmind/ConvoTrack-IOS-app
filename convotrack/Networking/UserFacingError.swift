@@ -22,6 +22,8 @@ enum UserFacingError {
         switch code {
 
         // MARK: Plan limits
+        case "TRIAL_EXPIRED":
+            return "Your free trial has ended. Go Pro to keep creating and joining rides."
         case "QUOTA_EXCEEDED":
             return "You've hit your plan's ride limit. Your enthusiasm is outriding your subscription — upgrade to keep the convoys coming."
 
@@ -138,6 +140,15 @@ extension Error {
     }
 }
 
+extension Error {
+    /// True when the server refused a create/join because of the rider's plan — the trial ended
+    /// or the monthly rides ran out. Callers offer the paywall instead of a dead-end alert.
+    var isPlanLimit: Bool {
+        guard case .serverError(let code)? = self as? APIClientError else { return false }
+        return code.contains("TRIAL_EXPIRED") || code.contains("QUOTA_EXCEEDED")
+    }
+}
+
 private extension NSError {
     /// Connectivity gets its own wording — "check your connection" is actionable in a way that
     /// the generic message isn't.
@@ -159,7 +170,7 @@ extension UserFacingError {
     /// Every code we have wording for, used for substring matching when a code arrives wrapped
     /// in other text. Kept next to `message(forCode:)` so the two can't drift.
     static let knownCodes = [
-        "QUOTA_EXCEEDED", "NOT_LEADER", "NOT_AUTHORIZED", "UNAUTHORIZED", "INVALID_TOKEN",
+        "TRIAL_EXPIRED", "QUOTA_EXCEEDED", "NOT_LEADER", "NOT_AUTHORIZED", "UNAUTHORIZED", "INVALID_TOKEN",
         "NOT_IN_RIDE", "NOT_A_PARTICIPANT", "CANNOT_REMOVE_LEADER", "RIDE_FULL", "ALREADY_JOINED",
         "INVITE_CODE_NOT_FOUND", "RIDE_NOT_FOUND", "RIDE_ENDED", "RIDE_NOT_COMPLETED",
         "RIDE_NOT_ACTIVE_OR_PAUSED", "RIDE_NOT_ACTIVE", "RIDE_NOT_IN_LOBBY", "RIDE_NOT_LOBBY",
