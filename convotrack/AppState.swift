@@ -21,6 +21,10 @@ class AppState: ObservableObject {
     // Set when the app is opened via a convotrack://join/CODE deep link
     @Published var pendingInviteCode: String? = nil
 
+    /// Set by the Live Activity deep link; the lobby consumes it by pushing navigation once the
+    /// ride is known to be ACTIVE.
+    @Published var openNavigationRideId: String? = nil
+
     @Published var inviteCode: String? = nil {
         didSet {
             if let code = inviteCode {

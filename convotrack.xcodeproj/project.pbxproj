@@ -10,10 +10,36 @@
 		9C47705E2FECD25500056F38 /* GoogleMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 9C47705D2FECD25500056F38 /* GoogleMaps */; };
 		9CF0CB9C2FD0954300B3CF92 /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9CF0CB9B2FD0954300B3CF92 /* ClerkKit */; };
 		9CF0CB9F2FD095A100B3CF92 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = 9CF0CB9E2FD095A100B3CF92 /* SocketIO */; };
+		BB0000000000000000000001 /* ConvoTrackWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* ConvoTrackWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		BB0000000000000000000003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9CF0CB5C2FC7603A00B3CF92 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB0000000000000000000004;
+			remoteInfo = ConvoTrackWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		BB0000000000000000000005 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				BB0000000000000000000001 /* ConvoTrackWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		9CF0CB642FC7603A00B3CF92 /* convotrack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = convotrack.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB0000000000000000000002 /* ConvoTrackWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ConvoTrackWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -24,6 +50,13 @@
 			);
 			target = 9CF0CB632FC7603A00B3CF92 /* convotrack */;
 		};
+		BB0000000000000000000006 /* Exceptions for "ConvoTrackWidgets" folder in "ConvoTrackWidgets" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = BB0000000000000000000004 /* ConvoTrackWidgets */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -33,6 +66,19 @@
 				AA0011223344556677889900 /* Exceptions for "convotrack" folder in "convotrack" target */,
 			);
 			path = convotrack;
+			sourceTree = "<group>";
+		};
+		BB0000000000000000000007 /* ConvoTrackWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BB0000000000000000000006 /* Exceptions for "ConvoTrackWidgets" folder in "ConvoTrackWidgets" target */,
+			);
+			path = ConvoTrackWidgets;
+			sourceTree = "<group>";
+		};
+		BB0000000000000000000008 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -48,6 +94,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BB0000000000000000000009 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -55,6 +108,8 @@
 			isa = PBXGroup;
 			children = (
 				9CF0CB662FC7603A00B3CF92 /* convotrack */,
+				BB0000000000000000000007 /* ConvoTrackWidgets */,
+				BB0000000000000000000008 /* Shared */,
 				9CF0CB652FC7603A00B3CF92 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -63,6 +118,7 @@
 			isa = PBXGroup;
 			children = (
 				9CF0CB642FC7603A00B3CF92 /* convotrack.app */,
+				BB0000000000000000000002 /* ConvoTrackWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -77,13 +133,16 @@
 				9CF0CB602FC7603A00B3CF92 /* Sources */,
 				9CF0CB612FC7603A00B3CF92 /* Frameworks */,
 				9CF0CB622FC7603A00B3CF92 /* Resources */,
+				BB0000000000000000000005 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				BB000000000000000000000A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				9CF0CB662FC7603A00B3CF92 /* convotrack */,
+				BB0000000000000000000008 /* Shared */,
 			);
 			name = convotrack;
 			packageProductDependencies = (
@@ -94,6 +153,29 @@
 			productName = convotrack;
 			productReference = 9CF0CB642FC7603A00B3CF92 /* convotrack.app */;
 			productType = "com.apple.product-type.application";
+		};
+		BB0000000000000000000004 /* ConvoTrackWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB000000000000000000000B /* Build configuration list for PBXNativeTarget "ConvoTrackWidgets" */;
+			buildPhases = (
+				BB000000000000000000000C /* Sources */,
+				BB0000000000000000000009 /* Frameworks */,
+				BB000000000000000000000D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				BB0000000000000000000007 /* ConvoTrackWidgets */,
+				BB0000000000000000000008 /* Shared */,
+			);
+			name = ConvoTrackWidgets;
+			packageProductDependencies = (
+			);
+			productName = ConvoTrackWidgets;
+			productReference = BB0000000000000000000002 /* ConvoTrackWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -106,6 +188,9 @@
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					9CF0CB632FC7603A00B3CF92 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					BB0000000000000000000004 = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
@@ -130,12 +215,20 @@
 			projectRoot = "";
 			targets = (
 				9CF0CB632FC7603A00B3CF92 /* convotrack */,
+				BB0000000000000000000004 /* ConvoTrackWidgets */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		9CF0CB622FC7603A00B3CF92 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB000000000000000000000D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -152,7 +245,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BB000000000000000000000C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BB000000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB0000000000000000000004 /* ConvoTrackWidgets */;
+			targetProxy = BB0000000000000000000003 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		9CF0CB6D2FC7603B00B3CF92 /* Debug */ = {
@@ -336,6 +444,56 @@
 			};
 			name = Release;
 		};
+		BB000000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 6;
+				DEVELOPMENT_TEAM = NJ5P2B5WZJ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ConvoTrackWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.3;
+				PRODUCT_BUNDLE_IDENTIFIER = danglingmind.convotrack.ConvoTrackWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		BB000000000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 6;
+				DEVELOPMENT_TEAM = NJ5P2B5WZJ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ConvoTrackWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.3;
+				PRODUCT_BUNDLE_IDENTIFIER = danglingmind.convotrack.ConvoTrackWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -353,6 +511,15 @@
 			buildConfigurations = (
 				9CF0CB702FC7603B00B3CF92 /* Debug */,
 				9CF0CB712FC7603B00B3CF92 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BB000000000000000000000B /* Build configuration list for PBXNativeTarget "ConvoTrackWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB000000000000000000000E /* Debug */,
+				BB000000000000000000000F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

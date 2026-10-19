@@ -43,12 +43,34 @@ struct HomeView: View {
             guard newId != nil else { return }
             navPath = NavigationPath([HomeRoute.rideLobby])
         }
+        .onReceive(NotificationCenter.default.publisher(for: .convotrackOpenRide)) { note in
+            guard let id = note.userInfo?["rideId"] as? String else { return }
+            DeepLinkRouter.pendingOpenRideId = nil
+            openRideNavigation(id)
+        }
+        .onAppear {
+            // Cold launch from the Live Activity: the link arrived before this view listened.
+            if let id = DeepLinkRouter.pendingOpenRideId {
+                DeepLinkRouter.pendingOpenRideId = nil
+                openRideNavigation(id)
+            }
+        }
         .onChange(of: appState.popToRoot) { _, shouldPop in
             if shouldPop {
                 navPath = NavigationPath()
                 appState.popToRoot = false
             }
         }
+    }
+
+    /// Live Activity tap. Only the ride the rider is currently in is honoured; an unknown or ended
+    /// ride is ignored. The lobby pushes navigation itself once the ride is loaded and ACTIVE.
+    private func openRideNavigation(_ rideId: String) {
+        guard appState.currentRideId == rideId else { return }
+        activeTab = .home
+        appState.openNavigationRideId = rideId
+        // Already inside the ride (lobby or navigation on the stack): leave the stack alone.
+        if navPath.isEmpty { navPath.append(HomeRoute.rideLobby) }
     }
 
     private var homeRoot: some View {
