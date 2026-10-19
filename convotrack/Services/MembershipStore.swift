@@ -222,10 +222,27 @@ final class MembershipStore: ObservableObject {
     }
 
     var access: Access {
+        #if DEBUG
+        if let forced = Self.debugAccessOverride { return forced }
+        #endif
         if isPremium { return .pro }
         guard let trial, trial.enforced, let endsAt = trial.endDate else { return .free }
         return endsAt > Date() ? .trial(endsAt: endsAt) : .trialExpired
     }
+
+    #if DEBUG
+    /// `-paywallState trial|lastday|expired|pro|free` forces an access state for design review.
+    private static var debugAccessOverride: Access? {
+        switch UserDefaults.standard.string(forKey: "paywallState") {
+        case "trial":   return .trial(endsAt: Date().addingTimeInterval(2 * 86_400 - 60))
+        case "lastday": return .trial(endsAt: Date().addingTimeInterval(5 * 3_600))
+        case "expired": return .trialExpired
+        case "pro":     return .pro
+        case "free":    return .free
+        default:        return nil
+        }
+    }
+    #endif
 
     /// Whole days left in the trial, rounded up ("2 days left" until the last 24 h, then 1).
     /// nil outside an active trial.

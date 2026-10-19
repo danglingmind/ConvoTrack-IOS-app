@@ -135,7 +135,7 @@ struct MembershipView: View {
                 .background(DS.Accent.tint, in: Circle())
                 .accessibilityHidden(true)
 
-            Text("ConvoTrack Pro")
+            Text(heroTitle)
                 .dsText(.heroTitleCompact)
                 .foregroundStyle(DS.Text.primary)
                 .multilineTextAlignment(.center)
@@ -149,10 +149,48 @@ struct MembershipView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// Only talks about the rider cap when the rider told us their pack is bigger than it.
+    /// The trial leads: while it runs the headline is the countdown, once it ends it's the wall.
+    /// Monthly rides and the rider cap are secondary and only surface through the subtitle.
+    private var heroTitle: LocalizedStringKey {
+        switch store.access {
+        case .trial:
+            if isOnboarding { return "Your free trial has started" }
+            guard let days = store.trialDaysLeft, days > 1 else { return "Your free trial ends today" }
+            return "\(days) days left in your free trial"
+        case .trialExpired:
+            return "Your free trial has ended"
+        case .pro, .free:
+            return "ConvoTrack Pro"
+        }
+    }
+
     private var heroSubtitle: LocalizedStringKey {
+        let cap = freePlan?.maxRidersPerRide ?? store.riderCap
+        // A limit the rider just ran into explains itself better than the generic pitch.
+        switch source {
+        case .riderCap:
+            return "Pro lifts the \(cap)-rider limit. Bring your whole crew."
+        case .quotaExceeded:
+            if let monthly = freePlan?.monthlyLimit {
+                return "You've used your \(monthly) rides this month. Pro has no monthly limit."
+            }
+        default:
+            break
+        }
+        switch store.access {
+        case .trial:
+            guard isOnboarding else { return "Go Pro to keep creating and joining rides after your trial." }
+            if let days = store.trialDaysLeft, days > 1 {
+                return "\(days) days of ConvoTrack, on us. Go Pro any time to keep riding after it ends."
+            }
+            return "ConvoTrack is free while it lasts. Go Pro any time to keep riding after it ends."
+        case .trialExpired:
+            return "Go Pro to keep creating and joining rides with your crew."
+        case .pro, .free:
+            break
+        }
+        // Only talks about the rider cap when the rider told us their pack is bigger than it.
         guard isOnboarding else { return "Your rides. No limits." }
-        let cap = freePlan?.maxRidersPerRide ?? 5
         if let pack = OnboardingState.packSize, pack.exceedsFreeCap(cap) {
             return pack == .large ? "Up to 25 riders on one map." : "Your pack is bigger than \(cap)."
         }
@@ -186,12 +224,27 @@ struct MembershipView: View {
 
     // MARK: - Free plan terms
 
+    /// The rider is on (or past) the enforced app-level trial, so the free plan's terms are the
+    /// trial's terms and nothing is free once it ends.
+    private var isAppTrial: Bool {
+        switch store.access {
+        case .trial, .trialExpired: return true
+        case .pro, .free: return false
+        }
+    }
+
     /// What the free plan includes, from the server — never hardcoded, never omitted. When a trial
     /// is on offer it is framed as what applies after the trial.
     @ViewBuilder private var freePlanTerms: some View {
         if !store.isPremium {
             Group {
-                if let plan = freePlan, let monthly = plan.monthlyLimit {
+                if store.access == .trialExpired {
+                    Text("Creating and joining rides needs Pro now that your free trial has ended.")
+                } else if isAppTrial, let plan = freePlan, let monthly = plan.monthlyLimit {
+                    Text("The free trial includes up to \(monthly) rides and \(plan.maxRidersPerRide) riders per ride. Creating and joining rides needs Pro once it ends.")
+                } else if isAppTrial {
+                    Text("Creating and joining rides needs Pro once the free trial ends.")
+                } else if let plan = freePlan, let monthly = plan.monthlyLimit {
                     if trialLength != nil {
                         Text("After the trial, the free plan includes \(monthly) rides a month and up to \(plan.maxRidersPerRide) riders per ride.")
                     } else {
@@ -390,7 +443,8 @@ struct MembershipView: View {
             }
 
             if isOnboarding {
-                DSTextButton(title: "Continue with Free", role: .dismiss) { close() }
+                DSTextButton(title: isAppTrial ? "Continue with free trial" : "Continue with Free",
+                             role: .dismiss) { close() }
                     .frame(maxWidth: .infinity)
                     .padding(.top, DS.Space.p2)
             }
