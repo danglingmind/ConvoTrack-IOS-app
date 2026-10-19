@@ -108,7 +108,6 @@ final class ConvoTrackSceneDelegate: NSObject, UIWindowSceneDelegate {
 struct ConvoTrackApp: App {
     @UIApplicationDelegateAdaptor(ConvoTrackAppDelegate.self) var delegate
     @StateObject private var membershipStore = MembershipStore()
-    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         GoogleMapsConfig.initialize()
@@ -126,13 +125,10 @@ struct ConvoTrackApp: App {
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     DeepLinkRouter.handle(activity)
                 }
-                // Local StoreKit + server plan/trial/usage, in parallel. Again on every return to
-                // the foreground: a trial can run out while the app sits in the background.
+                // Local StoreKit + server plan/trial/usage, in parallel. Signed-in riders are
+                // refreshed again on every foreground by `MainTabView`, which also decides the
+                // app-open nudge from the fresh state.
                 .task { await membershipStore.refreshServerState() }
-                .onChange(of: scenePhase) { _, phase in
-                    guard phase == .active else { return }
-                    Task { await membershipStore.refreshServerState() }
-                }
         }
     }
 }

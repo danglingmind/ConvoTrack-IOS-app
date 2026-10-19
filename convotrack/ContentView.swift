@@ -50,6 +50,8 @@ struct ContentView: View {
         // Clerk restores its session asynchronously; routing before it finishes would send a
         // signed-in rider to the sign-in screen. Bounded so a dead network can't hang launch.
         #if DEBUG
+        // `-resetUpsell YES` clears app-open / nudge / Home-card bookkeeping.
+        if UserDefaults.standard.bool(forKey: "resetUpsell") { UpsellState.reset() }
         // `-onboardingStage splash|onboarding|auth|paywall` jumps straight to a stage for design review.
         if let raw = UserDefaults.standard.string(forKey: "onboardingStage") {
             switch raw {
@@ -85,6 +87,7 @@ struct ContentView: View {
         let firstTime = !OnboardingState.hasCompleted
         OnboardingState.hasCompleted = true
         if firstTime && !membershipStore.isPremium {
+            UpsellState.recordOnboardingPaywall()
             go(.paywall)
         } else {
             go(.main)

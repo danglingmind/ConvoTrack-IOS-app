@@ -103,6 +103,8 @@ struct RideSummaryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .dsTransparentNavigationBar()
         .task { await loadSummary() }
+        // A finished ride is the free-plan nudge's best moment (see `UpsellPolicy`).
+        .onAppear { if isPostRide { UpsellState.recordRideCompleted() } }
         .task { await loadRoute() }
         .sheet(isPresented: $showShareSheet) {
             SummaryShareSheet(items: shareSheetItems)

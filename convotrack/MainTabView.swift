@@ -23,6 +23,10 @@ struct MainTabView: View {
     @StateObject private var rideSession = RideRealtimeSession()
     @StateObject private var paywall = PaywallPresenter()
     @EnvironmentObject private var membershipStore: MembershipStore
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showNudge = false
+    /// Set by the nudge's "See plans"; read when the nudge finishes dismissing.
+    @State private var nudgeWantsPlans = false
     @Environment(Clerk.self) private var clerk
 
     var body: some View {
@@ -65,6 +69,17 @@ struct MainTabView: View {
             MembershipView(source: request.source)
                 .environmentObject(membershipStore)
         }
+        .sheet(isPresented: $showNudge, onDismiss: nudgeDismissed) {
+            ProNudgeSheet { wantsPlans in nudgeWantsPlans = wantsPlans }
+                .environmentObject(membershipStore)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active: handleForeground()
+            case .background: UpsellState.recordBackground()
+            default: break
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .convotrackJoinRide)) { note in
             guard let code = note.userInfo?["code"] as? String else { return }
             DeepLinkRouter.pendingJoinCode = nil   // consumed live; don't let onAppear replay it
@@ -90,6 +105,8 @@ struct MainTabView: View {
                 }
             }
         }
+        // `scenePhase` doesn't report the launch itself, so the first foreground is handled here.
+        .task { handleForeground() }
         .task {
             guard let user = clerk.user else { return }
             let name = [user.firstName, user.lastName]
@@ -98,6 +115,60 @@ struct MainTabView: View {
                 .trimmingCharacters(in: .whitespaces)
             let displayName = name.isEmpty ? (user.username ?? "Rider") : name
             try? await APIClient.shared.syncProfile(name: displayName, avatarUrl: user.imageUrl.isEmpty ? nil : user.imageUrl)
+        }
+    }
+
+    // MARK: - App-open nudge
+
+    /// Refreshes plan/trial state on every foreground; on a real app open (not a quick hop out and
+    /// back) it then considers the nudge, once the tab view and any deep link have settled.
+    private func handleForeground() {
+        let isAppOpen = UpsellState.recordForeground()
+        Task {
+            await membershipStore.refreshServerState()
+            guard isAppOpen else { return }
+            try? await Task.sleep(for: .milliseconds(1500))
+            maybeShowNudge()
+        }
+    }
+
+    private func maybeShowNudge() {
+        // Never over something the rider is doing: another sheet, a pending deep link, a ride.
+        guard !showNudge, joinSheet == nil, paywall.request == nil,
+              DeepLinkRouter.pendingJoinCode == nil, DeepLinkRouter.pendingOpenRideId == nil else { return }
+        #if DEBUG
+        // `-forceNudge YES` shows it on every open for design review (sheets/deep links still win).
+        let forced = UserDefaults.standard.bool(forKey: "forceNudge")
+        #else
+        let forced = false
+        #endif
+        if !forced {
+            guard appState.currentRideId == nil else { return }
+            let inputs = UpsellPolicy.Inputs(
+                access: membershipStore.access,
+                now: Date(),
+                appOpenCount: UpsellState.appOpenCount,
+                firstOpenAt: UpsellState.firstOpenAt,
+                lastNudgeAt: UpsellState.lastNudgeAt,
+                nudgeDismissCount: UpsellState.nudgeDismissCount,
+                onboardingPaywallAt: UpsellState.onboardingPaywallAt,
+                rideCompletedAt: UpsellState.rideCompletedAt
+            )
+            guard UpsellPolicy.shouldShowAppOpenNudge(inputs) else { return }
+        } else if membershipStore.access == .pro {
+            return
+        }
+        UpsellState.recordNudgeShown()
+        nudgeWantsPlans = false
+        showNudge = true
+    }
+
+    private func nudgeDismissed() {
+        if nudgeWantsPlans {
+            // Same reason as the join sheet: one sheet has to finish leaving before the next.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { paywall.present(.appOpen) }
+        } else {
+            UpsellState.recordNudgeDismissed()
         }
     }
 

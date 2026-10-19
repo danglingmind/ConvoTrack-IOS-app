@@ -26,6 +26,7 @@ struct HomeView: View {
     @State private var recentRides: [HistoryRide] = []
     @State private var recentLoading = true
     @State private var selectedHistoryRide: HistoryRide? = nil
+    @State private var homeCardSnoozed = UpsellState.isHomeCardSnoozed()
 
     // Nearby Rides discovery is temporarily hidden on the client. Backend support
     // stays fully intact — flip this to `true` to re-enable the entire section.
@@ -51,6 +52,7 @@ struct HomeView: View {
             openRideNavigation(id)
         }
         .onAppear {
+            homeCardSnoozed = UpsellState.isHomeCardSnoozed()
             // Cold launch from the Live Activity: the link arrived before this view listened.
             if let id = DeepLinkRouter.pendingOpenRideId {
                 DeepLinkRouter.pendingOpenRideId = nil
@@ -92,6 +94,16 @@ struct HomeView: View {
                             .padding(.top, 28)
                         } else {
                             VStack(alignment: .leading, spacing: 0) {
+                                if let card = homeCard {
+                                    DSPromoBanner(
+                                        eyebrow: "ConvoTrack Pro",
+                                        message: card.message,
+                                        actionTitle: card.actionTitle,
+                                        onDismiss: card.dismissible ? { dismissHomeCard() } : nil
+                                    ) { paywall.present(.homeCard) }
+                                    .padding(.bottom, DS.Space.sectionGap)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
                                 if appState.currentRideId != nil {
                                     ActiveRideSection(
                                         ride: appState.currentRide,
@@ -145,6 +157,44 @@ struct HomeView: View {
             RidePreviewSheet(ride: ride)
                 .environmentObject(appState)
         }
+    }
+
+    // MARK: - Home Pro card
+
+    private struct HomeCard {
+        let message: LocalizedStringKey
+        let actionTitle: LocalizedStringKey
+        let dismissible: Bool
+    }
+
+    /// One quiet card under the hero. The trial countdown leads; the last day and the ended trial
+    /// can't be hidden, everything else can be snoozed. Never during a ride, never for Pro.
+    private var homeCard: HomeCard? {
+        guard appState.currentRideId == nil else { return nil }
+        switch membershipStore.access {
+        case .pro:
+            return nil
+        case .trial:
+            if let days = membershipStore.trialDaysLeft, days > 1 {
+                guard !homeCardSnoozed else { return nil }
+                return HomeCard(message: "\(days) days left in your free trial", actionTitle: "Go Pro", dismissible: true)
+            }
+            return HomeCard(message: "Your free trial ends today", actionTitle: "Go Pro", dismissible: false)
+        case .trialExpired:
+            return HomeCard(message: "Your free trial has ended. Go Pro to keep riding.", actionTitle: "See plans", dismissible: false)
+        case .free:
+            guard !homeCardSnoozed else { return nil }
+            return HomeCard(message: "Bigger packs and no monthly ride limit", actionTitle: "Upgrade", dismissible: true)
+        }
+    }
+
+    private func dismissHomeCard() {
+        if case .trial = membershipStore.access {
+            UpsellState.snoozeHomeCard(inTrial: true)
+        } else {
+            UpsellState.snoozeHomeCard(inTrial: false)
+        }
+        withAnimation(DS.Motion.emphasized) { homeCardSnoozed = true }
     }
 
     private var connectionState: DSConnectionState {

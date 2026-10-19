@@ -527,6 +527,8 @@ struct DSPromoBanner: View {
     let message: LocalizedStringKey
     let actionTitle: LocalizedStringKey
     var isSubscribed = false
+    /// Shows a close button when set. Leave nil for banners the rider shouldn't hide.
+    var onDismiss: (() -> Void)? = nil
     var action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -539,6 +541,17 @@ struct DSPromoBanner: View {
             }
             if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
             DSPillButton(title: actionTitle, variant: isSubscribed ? .tonal : .primary, action: action)
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .dsIcon(12, weight: .bold)
+                        .foregroundStyle(DS.Text.muted)
+                        .frame(width: 28, height: DS.Target.minimum)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Hide"))
+            }
         }
         .padding(DS.Space.p4)
         .frame(maxWidth: .infinity, alignment: .leading)
