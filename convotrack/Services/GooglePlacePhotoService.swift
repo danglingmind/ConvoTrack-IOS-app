@@ -167,6 +167,13 @@ actor GooglePlacePhotoService {
         return photo
     }
 
+    /// Sign-out / account switch: drops the memory tier, the "known empty" set and every file.
+    func clearAll() {
+        memory.removeAllObjects()
+        knownEmpty.removeAll()
+        DiskCache.removeAll()
+    }
+
     private func decodeAndRemember(data: Data, attribution: String?, key: String) -> DestinationPhoto? {
         guard let image = Self.downsampled(data: data, maxPixelSize: Self.maxDecodedPixelSize) else { return nil }
         let photo = DestinationPhoto(image: image, attribution: attribution)
@@ -325,6 +332,11 @@ actor GooglePlacePhotoService {
             for entry in live.sorted(by: { $0.date < $1.date }).prefix(live.count - maxEntries) {
                 removeFiles(base: entry.base, in: dir)
             }
+        }
+
+        static func removeAll() {
+            guard let dir = directory else { return }
+            try? FileManager.default.removeItem(at: dir)
         }
 
         private static func removeFiles(base: String, in dir: URL) {

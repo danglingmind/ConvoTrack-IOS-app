@@ -3148,12 +3148,10 @@ struct LiveRiderPin: View {
 
                 // Profile photo fills the circle; letter fallback shown while loading or if no URL
                 if let url = rider.avatarUrl.flatMap(URL.init) {
-                    AsyncImage(url: url) { phase in
-                        if let img = phase.image {
-                            img.resizable().scaledToFill()
-                        } else {
-                            letterFallback
-                        }
+                    CachedImage(url: url, pointSize: size - 4) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        letterFallback
                     }
                     .frame(width: size - 4, height: size - 4)
                     .clipShape(Circle())

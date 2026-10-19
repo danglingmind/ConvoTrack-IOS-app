@@ -20,6 +20,10 @@ struct RideSummaryShareCard: View {
     let dateText: String
     let qrImage: UIImage?
 
+    /// Part of the cached share image's key. Bump whenever this card's layout, fonts or colours
+    /// change, so previously rendered PNGs are not served in the old design.
+    static let styleVersion = 1
+
     private let cardSize = CGSize(width: 390, height: 700)
     // Static Maps free-tier cap (640pt tall); the map is a top-anchored hero and the
     // dark tail below it sits under the meta block.

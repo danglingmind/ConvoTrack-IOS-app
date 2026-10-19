@@ -161,6 +161,7 @@ final class LobbyViewModel: ObservableObject {
         defer { isLeaving = false }
         do {
             try await APIClient.shared.leaveRide(rideId)
+            await ImageCache.shared.purge(tag: rideId)
             return true
         } catch APIClientError.serverError(let code)
                     where code == "PARTICIPANT_NOT_FOUND" || APIClient.isNotFound(code) {

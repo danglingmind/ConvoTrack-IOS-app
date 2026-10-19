@@ -185,6 +185,7 @@ struct ProfileView: View {
             appState.inviteCode = nil
             appState.currentRide = nil
             try? await Clerk.shared.auth.signOut()
+            await ImageCache.clearEverything()
             // Signing out is the one moment we know the rider may want a different
             // account next time; it arms the cookie-free web session that lets
             // Google ask which one. See `WebSignInSession`.
@@ -202,6 +203,7 @@ extension ProfileView {
         deleteError = nil
         do {
             try await clerk.user?.delete()
+            await ImageCache.clearEverything()
             appState.currentRideId = nil
             appState.inviteCode = nil
             appState.currentRide = nil

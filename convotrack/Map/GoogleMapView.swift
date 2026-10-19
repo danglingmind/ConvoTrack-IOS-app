@@ -1021,16 +1021,16 @@ extension GoogleMapView {
             if let cached = avatarImages[urlString] { return cached }
             guard !avatarInFlight.contains(urlString) else { return nil }
             avatarInFlight.insert(urlString)
-            URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-                let image = data.flatMap { UIImage(data: $0) }
-                DispatchQueue.main.async {
+            Task { [weak self] in
+                let image = await ImageCache.shared.image(url: url, category: .avatar, maxPixel: 192)
+                await MainActor.run {
                     guard let self else { return }
                     self.avatarInFlight.remove(urlString)
                     guard let image else { return }
                     self.avatarImages[urlString] = image
                     self.rebakeRiders(withAvatarURL: urlString)
                 }
-            }.resume()
+            }
             return nil   // photo will arrive asynchronously and trigger a re-bake
         }
 

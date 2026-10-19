@@ -327,6 +327,8 @@ struct EditRideView: View {
         defer { isDeleting = false }
         do {
             try await APIClient.shared.deleteRide(ride.id)
+            await ImageCache.shared.purge(tag: ride.id)   // its map snapshot and share card
+            RideThumbnail.forgetDestination(rideId: ride.id)
             onDeleted()
             dismiss()
         } catch {
@@ -373,6 +375,10 @@ struct EditRideView: View {
 
         do {
             try await APIClient.shared.updateRide(ride.id, request)
+            // New route/destination: drop the ride's cached map and card, and the remembered
+            // destination so history thumbnails re-resolve the photo for the new place.
+            await ImageCache.shared.purge(tag: ride.id)
+            RideThumbnail.forgetDestination(rideId: ride.id)
             dismiss()
         } catch {
             errorMessage = error.riderMessage

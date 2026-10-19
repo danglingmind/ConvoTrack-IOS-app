@@ -41,7 +41,7 @@ struct RiderDetailDrawer: View {
                 .frame(width: 60, height: 60)
                 .overlay(Circle().stroke(DS.Accent.base, lineWidth: 2))
                 .overlay(
-                    AsyncImage(url: URL(string: "https://lh3.googleusercontent.com/aida-public/AB6AXuBlmttXTE0DMZ6BI0povBo7xzU813jzXL1XHG-dsBPoXXG-lUy3hEobK63F01CeBrI3qU7ccatWJoZZqf3VZSyIRORTX_8WCufPD0m471Hl6ef3-Pnlmy2uNCz2DV_MNTqqYvCHHxXQpEjjpFtO6l4cRPoT__c308QFkNUaGHbVDeuUP3FUBIXbQymlu8UOr5ETXl1l6VTtDPFob4iSalAQQgAcHZc3TmI8s-fRjUHGYkuntrVbaqjUOmrSB8le-GRLmmOjK4RVMsQ")) { img in
+                    CachedImage(url: URL(string: "https://lh3.googleusercontent.com/aida-public/AB6AXuBlmttXTE0DMZ6BI0povBo7xzU813jzXL1XHG-dsBPoXXG-lUy3hEobK63F01CeBrI3qU7ccatWJoZZqf3VZSyIRORTX_8WCufPD0m471Hl6ef3-Pnlmy2uNCz2DV_MNTqqYvCHHxXQpEjjpFtO6l4cRPoT__c308QFkNUaGHbVDeuUP3FUBIXbQymlu8UOr5ETXl1l6VTtDPFob4iSalAQQgAcHZc3TmI8s-fRjUHGYkuntrVbaqjUOmrSB8le-GRLmmOjK4RVMsQ"), pointSize: 60) { img in
                         img.resizable().scaledToFill()
                     } placeholder: { DS.Surface.avatar }
                     .clipShape(Circle())

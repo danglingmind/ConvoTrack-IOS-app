@@ -29,7 +29,8 @@ enum GoogleStaticMapsService {
         routeCoordinates: [CLLocationCoordinate2D],
         waypoints: [Waypoint],
         size: CGSize = CGSize(width: 390, height: 640),
-        scale: Int = 2
+        scale: Int = 2,
+        rideId: String? = nil
     ) async -> StaticMapSnapshot? {
         guard !routeCoordinates.isEmpty else { return nil }
 
@@ -69,12 +70,21 @@ enum GoogleStaticMapsService {
             URLQueryItem(name: "key",     value: GoogleMapsConfig.apiKey)
         ]
 
-        guard let url = components.url,
-              let (data, urlResponse) = try? await URLSession.shared.data(from: url),
-              (urlResponse as? HTTPURLResponse).map({ (200...299).contains($0.statusCode) }) != false,
-              let image = UIImage(data: data) else {
-            return nil
-        }
+        guard let url = components.url else { return nil }
+
+        // The key is the full request minus the API key, so it covers center, zoom, size, scale,
+        // maptype, every style rule and the path (route edit -> new polyline -> new key). Editing
+        // the map style below therefore also invalidates old snapshots without a version bump.
+        // `rideId` only tags the entry so deleting/leaving the ride can purge it.
+        var keyComponents = components
+        keyComponents.queryItems = components.queryItems?.filter { $0.name != "key" }
+        let cacheKey = "staticmap|" + ImageCache.digest(keyComponents.string ?? url.absoluteString)
+
+        guard let image = await ImageCache.shared.image(
+            key: cacheKey, category: .staticMap,
+            maxPixel: Int(max(size.width, size.height)) * scale, tag: rideId,
+            fetch: ImageCache.httpFetch(url)
+        ) else { return nil }
         return StaticMapSnapshot(image: image, center: center, zoom: zoom, size: size)
     }
 }

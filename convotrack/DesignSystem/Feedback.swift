@@ -28,9 +28,9 @@ struct DSAvatar: View {
                 .font(.system(size: size * 0.4, weight: .semibold))
                 .foregroundStyle(DS.Text.primary)
             if let imageURL {
-                AsyncImage(url: imageURL) { phase in
-                    if let image = phase.image { image.resizable().scaledToFill() }
-                }
+                CachedImage(url: imageURL, pointSize: size) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: { Color.clear }
                 .clipShape(Circle())
             }
         }

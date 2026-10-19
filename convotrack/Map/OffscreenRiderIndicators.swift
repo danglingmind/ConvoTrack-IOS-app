@@ -232,7 +232,7 @@ struct EdgeChip: View {
     private var avatar: some View {
         Group {
             if let url = model.avatarUrl.flatMap(URL.init) {
-                AsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                CachedImage(url: url, pointSize: size) { img in img.resizable().scaledToFill() }
                 placeholder: { Circle().fill(DS.Surface.avatar) }
             } else {
                 Circle().fill(DS.Surface.avatar)

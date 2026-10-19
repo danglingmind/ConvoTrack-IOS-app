@@ -282,9 +282,6 @@ struct RideSummaryView: View {
         isGeneratingShare = true
         defer { isGeneratingShare = false }
 
-        let snapshot = await generateMapSnapshot(waypoints: mapWaypoints)
-        let qrImg = generateQRCode(from: "https://convotrack.in")
-
         let distStr: String
         let durStr: String
         let durUnitStr: String
@@ -308,6 +305,28 @@ struct RideSummaryView: View {
             distStr = "--"; durStr = "--"; durUnitStr = ""; speedStr = "--"; count = 0; dateStr = ""
         }
 
+        // Everything the poster renders feeds the key, so a recomputed summary, an edited route
+        // or waypoint, or a changed card design/scale can never be served a stale image. The
+        // previous card for this ride is superseded on store rather than left to age out.
+        let scale = UIScreen.main.scale
+        let cacheKey: String? = rideId.map { id in
+            let waypointSig = mapWaypoints.sorted { $0.order < $1.order }
+                .map { "\($0.order)|\($0.name)|\($0.type)|\($0.lat)|\($0.lng)" }.joined(separator: ";")
+            let content = [effectiveTitle, distStr, durStr, durUnitStr, speedStr, String(count), dateStr,
+                           waypointSig, GoogleDirectionsService.encodePolyline(routeCoordinates)].joined(separator: "\u{1F}")
+            return "summarycard|\(id)|v\(RideSummaryShareCard.styleVersion)|@\(scale)x|\(ImageCache.digest(content))"
+        }
+        if let cacheKey,
+           let data = await ImageCache.shared.storedData(key: cacheKey, category: .summaryCard),
+           let cached = UIImage(data: data, scale: scale) {
+            shareSheetItems = [cached]
+            showShareSheet = true
+            return
+        }
+
+        let snapshot = await generateMapSnapshot(waypoints: mapWaypoints)
+        let qrImg = generateQRCode(from: "https://convotrack.in")
+
         let card = RideSummaryShareCard(
             rideTitle: effectiveTitle,
             snapshot: snapshot,
@@ -325,6 +344,12 @@ struct RideSummaryView: View {
         renderer.scale = UIScreen.main.scale
 
         guard let image = renderer.uiImage else { return }
+        // Only cache a complete card: a failed map fetch renders the placeholder tile, and that
+        // degraded image must not be served again once the network is back.
+        if let cacheKey, snapshot != nil, let png = image.pngData() {
+            await ImageCache.shared.store(data: png, key: cacheKey, category: .summaryCard,
+                                          tag: rideId, supersede: true)
+        }
         shareSheetItems = [image]
         showShareSheet = true
     }
@@ -334,7 +359,8 @@ struct RideSummaryView: View {
             routeCoordinates: routeCoordinates,
             waypoints:        waypoints,
             size:             CGSize(width: 390, height: 640),
-            scale:            2
+            scale:            2,
+            rideId:           rideId
         )
     }
 

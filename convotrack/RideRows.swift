@@ -54,7 +54,14 @@ struct RideThumbnail: View {
     let isCompleted: Bool
     @State private var photo: UIImage?
 
-    @MainActor private static var destinations: [String: (name: String, coordinate: CLLocationCoordinate2D)] = [:]
+    /// Remembered per ride so scrolling the list doesn't refetch the ride, but only for
+    /// `destinationTTL` and dropped on edit/delete/sign-out, so an edited destination
+    /// can't keep showing the old place's photo (the photo cache itself is keyed by place).
+    @MainActor private static var destinations: [String: (name: String, coordinate: CLLocationCoordinate2D, fetched: Date)] = [:]
+    private static let destinationTTL: TimeInterval = 600
+
+    @MainActor static func forgetDestination(rideId: String) { destinations[rideId] = nil }
+    @MainActor static func forgetAllDestinations() { destinations.removeAll() }
 
     var body: some View {
         ZStack {
@@ -72,9 +79,11 @@ struct RideThumbnail: View {
 
     @MainActor
     private func load() async {
-        var destination = Self.destinations[rideId]
+        var destination = Self.destinations[rideId].flatMap {
+            -$0.fetched.timeIntervalSinceNow < Self.destinationTTL ? $0 : nil
+        }
         if destination == nil, let ride = try? await APIClient.shared.getRide(rideId), !ride.destinationName.isEmpty {
-            destination = (ride.destinationName, CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng))
+            destination = (ride.destinationName, CLLocationCoordinate2D(latitude: ride.destinationLat, longitude: ride.destinationLng), Date())
             Self.destinations[rideId] = destination
         }
         guard let destination, !Task.isCancelled else { return }
