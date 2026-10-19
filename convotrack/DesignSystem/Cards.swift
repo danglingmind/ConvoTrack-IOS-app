@@ -527,20 +527,29 @@ struct DSPromoBanner: View {
     let message: LocalizedStringKey
     let actionTitle: LocalizedStringKey
     var isSubscribed = false
+    /// The Go Pro treatment (gold rim, glint, breathing glow, gold type) — Profile's Pro card for
+    /// riders who aren't Pro yet. Never for subscribers.
+    var goProStyle = false
     /// Shows a close button when set. Leave nil for banners the rider shouldn't hide.
     var onDismiss: (() -> Void)? = nil
     var action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    private var gold: Bool { goProStyle && !isSubscribed }
+
     var body: some View {
-        DSAdaptiveStack(spacing: DS.Space.p3) {
-            DSIconDisc(systemImage: "rosette", size: 40, iconSize: DS.IconSize.lg, fill: DS.Accent.tonal)
+        let card = DSAdaptiveStack(spacing: DS.Space.p3) {
+            DSIconDisc(systemImage: "rosette", size: 40, iconSize: DS.IconSize.lg,
+                       fill: gold ? DS.Pro.gold.opacity(0.16) : DS.Accent.tonal,
+                       tint: gold ? DS.Pro.gold : DS.Accent.base)
             VStack(alignment: .leading, spacing: 2) {
-                Text(eyebrow).dsText(.fieldLabel).foregroundStyle(DS.Accent.base).lineLimit(1).minimumScaleFactor(0.75)
+                Text(eyebrow).dsText(.fieldLabel)
+                    .foregroundStyle(gold ? AnyShapeStyle(DS.Pro.gradient) : AnyShapeStyle(DS.Accent.base))
+                    .lineLimit(1).minimumScaleFactor(0.75)
                 Text(message).dsText(.bodySmall).foregroundStyle(DS.Text.primary)
             }
             if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
-            DSPillButton(title: actionTitle, variant: isSubscribed ? .tonal : .primary, action: action)
+            DSPillButton(title: actionTitle, variant: isSubscribed ? .tonal : (gold ? .gold : .primary), action: action)
             if let onDismiss {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
@@ -555,8 +564,15 @@ struct DSPromoBanner: View {
         }
         .padding(DS.Space.p4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.Accent.tint, in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).stroke(DS.Accent.border, lineWidth: DS.BorderWidth.default))
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+        if gold {
+            // Content, not chrome: the card surface, not glass.
+            card.dsGoProShine(in: shape, glass: false)
+        } else {
+            card
+                .background(DS.Accent.tint, in: shape)
+                .overlay(shape.stroke(DS.Accent.border, lineWidth: DS.BorderWidth.default))
+        }
     }
 }
 
@@ -564,10 +580,14 @@ struct DSBenefitTile: View {
     let systemImage: String
     let title: LocalizedStringKey
     let detail: LocalizedStringKey
+    /// Pro benefits (the paywall) use the gold.
+    var gold = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            DSIconDisc(systemImage: systemImage, iconSize: 18, fill: DS.Accent.tint)
+            DSIconDisc(systemImage: systemImage, iconSize: 18,
+                       fill: gold ? DS.Pro.gold.opacity(0.14) : DS.Accent.tint,
+                       tint: gold ? DS.Pro.gold : DS.Accent.base)
             Text(title).dsText(.fieldLabel).foregroundStyle(DS.Text.primary)
             Text(detail).dsText(.helper).foregroundStyle(DS.Text.muted)
         }

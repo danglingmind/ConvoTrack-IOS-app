@@ -99,6 +99,7 @@ struct HomeView: View {
                                         eyebrow: "ConvoTrack Pro",
                                         message: card.message,
                                         actionTitle: card.actionTitle,
+                                        goProStyle: true,
                                         onDismiss: card.dismissible ? { dismissHomeCard() } : nil
                                     ) { paywall.present(.homeCard) }
                                     .padding(.bottom, DS.Space.sectionGap)

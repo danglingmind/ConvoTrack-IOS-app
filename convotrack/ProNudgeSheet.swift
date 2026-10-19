@@ -48,11 +48,11 @@ struct ProNudgeSheet: View {
                 if let bigNumber {
                     Text("\(bigNumber)")
                         .dsText(.heroTitle)
-                        .foregroundStyle(DS.Accent.base)
+                        .foregroundStyle(DS.Pro.gradient)
                         .accessibilityHidden(true)
                 } else {
                     DSIconDisc(systemImage: store.access == .trialExpired ? "lock.fill" : "rosette",
-                               size: 56, iconSize: 24, fill: DS.Accent.tint)
+                               size: 56, iconSize: 24, fill: DS.Pro.gold.opacity(0.14), tint: DS.Pro.gold)
                 }
                 Text(headline)
                     .dsText(.titleLarge)
@@ -74,7 +74,7 @@ struct ProNudgeSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(spacing: DS.Space.p2) {
-                DSPrimaryButton(title: "See plans", systemImage: "rosette") { finish(wantsPlans: true) }
+                DSGoProButton(title: "See plans") { finish(wantsPlans: true) }
                 DSTextButton(title: "Not now", role: .dismiss) { finish(wantsPlans: false) }
             }
         }
@@ -90,7 +90,7 @@ struct ProNudgeSheet: View {
 
     private func benefit(_ systemImage: String, _ text: LocalizedStringKey) -> some View {
         HStack(spacing: DS.Space.p3) {
-            DSIconDisc(systemImage: systemImage, size: 32, iconSize: 15, fill: DS.Accent.tint)
+            DSIconDisc(systemImage: systemImage, size: 32, iconSize: 15, fill: DS.Pro.gold.opacity(0.14), tint: DS.Pro.gold)
             Text(text).dsText(.bodySmall).foregroundStyle(DS.Text.primary)
         }
         .accessibilityElement(children: .combine)

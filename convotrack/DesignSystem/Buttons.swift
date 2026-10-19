@@ -74,6 +74,47 @@ struct DSPrimaryButtonStyle: ButtonStyle {
     }
 }
 
+/// Full-width Pro button: clear glass, gold text, gold rim, steady gold glow — the paywall's
+/// purchase button and any "Go Pro" call to action. Still on purpose: the sheet carries no motion.
+struct DSGoProButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(DS.Pro.gradient)
+            .frame(maxWidth: .infinity, minHeight: DS.Target.button)
+            .padding(.horizontal, DS.Space.p4)
+            .dsGoProShine(in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous), animated: false)
+            .opacity(isEnabled ? 1 : DS.Opacity.disabled)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .animation(DS.Motion.quick, value: configuration.isPressed)
+    }
+}
+
+struct DSGoProButton: View {
+    let title: LocalizedStringKey
+    var systemImage: String? = "rosette"
+    var isLoading = false
+    var action: () -> Void
+
+    var body: some View {
+        Button {
+            DSHaptic.primary()
+            action()
+        } label: {
+            ZStack {
+                DSButtonLabel(title: title, systemImage: systemImage, spacing: DS.Space.p4)
+                    .opacity(isLoading ? 0 : 1)
+                if isLoading { ProgressView().tint(DS.Pro.gold) }
+            }
+        }
+        .buttonStyle(DSGoProButtonStyle())
+        .disabled(isLoading)
+        .accessibilityLabel(Text(title))
+        .accessibilityValue(isLoading ? Text("Loading") : Text(""))
+    }
+}
+
 // MARK: - SecondaryButton
 
 struct DSSecondaryButton: View {
@@ -164,7 +205,7 @@ struct DSGhostButton: View {
 // MARK: - PillButton / TonalPill
 
 struct DSPillButton: View {
-    enum Variant { case primary, tonal, neutral, danger }
+    enum Variant { case primary, tonal, neutral, danger, gold }
 
     let title: LocalizedStringKey
     var systemImage: String? = nil
@@ -179,6 +220,7 @@ struct DSPillButton: View {
         case .tonal: DS.Accent.base
         case .neutral: DS.Text.secondary.base
         case .danger: DS.Status.danger
+        case .gold: DS.Pro.gold
         }
     }
 
@@ -188,6 +230,7 @@ struct DSPillButton: View {
         case .tonal: DS.Accent.tint
         case .neutral: DS.Surface.card.base
         case .danger: DS.Status.dangerTint
+        case .gold: DS.Pro.gold.opacity(0.14)
         }
     }
 
@@ -197,6 +240,7 @@ struct DSPillButton: View {
         case .tonal: DS.Accent.border
         case .neutral: DS.Border.default.base
         case .danger: DS.Status.dangerBorder
+        case .gold: DS.Pro.goldLight.opacity(0.6)
         }
     }
 
@@ -206,7 +250,7 @@ struct DSPillButton: View {
             action()
         } label: {
             DSButtonLabel(title: title, systemImage: systemImage, style: .buttonPill, iconSize: DS.IconSize.sm, spacing: 6)
-                .foregroundStyle(foreground)
+                .foregroundStyle(variant == .gold ? AnyShapeStyle(DS.Pro.gradient) : AnyShapeStyle(foreground))
                 .padding(.horizontal, DS.Space.p4)
                 .frame(minHeight: large ? DS.Target.minimum : 36)
                 .background(fill, in: Capsule())

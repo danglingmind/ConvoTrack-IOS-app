@@ -126,7 +126,7 @@ struct MembershipView: View {
                     .ignoresSafeArea()
                     .accessibilityHidden(true)
             }
-            DS.Gradient.accentAura(endRadius: 340).ignoresSafeArea()
+            DS.Gradient.goldAura(endRadius: 340).ignoresSafeArea()
         }
     }
 
@@ -147,9 +147,10 @@ struct MembershipView: View {
         VStack(spacing: DS.Space.p3) {
             Image(systemName: "rosette")
                 .dsIcon(32, weight: .medium)
-                .foregroundStyle(DS.Accent.base)
+                .foregroundStyle(DS.Pro.gradient)
                 .frame(width: 72, height: 72)
-                .background(DS.Accent.tint, in: Circle())
+                .background(DS.Pro.gold.opacity(0.14), in: Circle())
+                .overlay(Circle().stroke(DS.Pro.goldLight.opacity(0.55), lineWidth: 1))
                 .accessibilityHidden(true)
 
             Text(heroTitle)
@@ -240,7 +241,7 @@ struct MembershipView: View {
     private var benefitsGrid: some View {
         LazyVGrid(columns: benefitColumns, spacing: 10) {
             ForEach(benefits, id: \.icon) { b in
-                DSBenefitTile(systemImage: b.icon, title: b.title, detail: b.detail)
+                DSBenefitTile(systemImage: b.icon, title: b.title, detail: b.detail, gold: true)
             }
         }
     }
@@ -312,7 +313,7 @@ struct MembershipView: View {
                                 .foregroundStyle(DS.Text.onAccent)
                                 .padding(.horizontal, 9)
                                 .padding(.vertical, 5)
-                                .background(DS.Accent.base, in: RoundedRectangle(cornerRadius: DS.Radius.xs, style: .continuous))
+                                .background(DS.Pro.gradient, in: RoundedRectangle(cornerRadius: DS.Radius.xs, style: .continuous))
                                 .offset(x: -14, y: -10)
                         }
                     }
@@ -336,11 +337,11 @@ struct MembershipView: View {
                 // Radio
                 ZStack {
                     Circle()
-                        .stroke(isSelected ? DS.Accent.base : DS.Border.strong.base,
+                        .stroke(isSelected ? DS.Pro.gold : DS.Border.strong.base,
                                 lineWidth: isSelected ? DS.BorderWidth.focus : DS.BorderWidth.emphasis)
                         .frame(width: 22, height: 22)
                     if isSelected {
-                        Circle().fill(DS.Accent.base).frame(width: 11, height: 11)
+                        Circle().fill(DS.Pro.gold).frame(width: 11, height: 11)
                     }
                 }
                 .accessibilityHidden(true)
@@ -381,9 +382,9 @@ struct MembershipView: View {
                 .layoutPriority(1)
             }
             .padding(DS.Space.p4 + 2)
-            .background(isSelected ? DS.Accent.tint.opacity(isBestValue ? 1 : 0.6) : .clear,
+            .background(isSelected ? DS.Pro.gold.opacity(isBestValue ? 0.12 : 0.08) : .clear,
                         in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-            .dsSurfaceCard(.card, radius: DS.Radius.lg, border: isSelected ? DS.Accent.border : nil)
+            .dsSurfaceCard(.card, radius: DS.Radius.lg, border: isSelected ? DS.Pro.goldLight.opacity(0.6) : nil)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -395,7 +396,7 @@ struct MembershipView: View {
     /// "Rp 210.000,00" would otherwise wrap or clip.
     @ViewBuilder
     private func priceBlock(_ product: Product, period: PlanPeriod?, isSelected: Bool, isBestValue: Bool) -> some View {
-        let color: Color = isSelected && isBestValue ? DS.Accent.base : DS.Text.primary.base
+        let color: Color = isSelected && isBestValue ? DS.Pro.gold : DS.Text.primary.base
         let price = Text(product.displayPrice)
 
         Group {
@@ -441,7 +442,7 @@ struct MembershipView: View {
             } label: {
                 HStack(spacing: DS.Space.p2) {
                     if isPurchasing {
-                        ProgressView().tint(DS.Text.onAccent)
+                        ProgressView().tint(DS.Pro.gold)
                     } else {
                         Image(systemName: "rosette").dsIcon(DS.IconSize.sm, weight: .semibold)
                     }
@@ -458,7 +459,7 @@ struct MembershipView: View {
                     .dsText(.button)
                 }
             }
-            .buttonStyle(DSPrimaryButtonStyle())
+            .buttonStyle(DSGoProButtonStyle())
             .disabled(isPurchasing || store.products.isEmpty)
 
             if let line = trialLine {
@@ -547,7 +548,7 @@ struct MembershipView: View {
     private var loadingPlaceholders: some View {
         // Never a placeholder price: just a quiet loading card.
         HStack(spacing: DS.Space.p3) {
-            ProgressView().tint(DS.Accent.base)
+            ProgressView().tint(DS.Pro.gold)
             Text("Loading plans…").dsText(.body).foregroundStyle(DS.Text.muted)
         }
         .frame(maxWidth: .infinity, minHeight: 96)
@@ -577,7 +578,7 @@ struct MembershipView: View {
             VStack(spacing: DS.Space.p2) {
                 Text("You're in")
                     .dsText(.heroTitle)
-                    .foregroundStyle(DS.Accent.base)
+                    .foregroundStyle(DS.Pro.gradient)
                     .padding(.top, DS.Space.p6)
                     .accessibilityAddTraits(.isHeader)
 
@@ -593,7 +594,7 @@ struct MembershipView: View {
 
             Spacer()
 
-            DSPrimaryButton(title: "Let's ride") { close() }
+            DSGoProButton(title: "Let's ride", systemImage: nil) { close() }
                 .padding(.horizontal, DS.Space.screenInset)
                 .padding(.bottom, DS.Space.p10)
         }

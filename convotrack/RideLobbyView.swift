@@ -757,7 +757,7 @@ struct RideLobbyView: View {
                     Text("\(count)/\(cap) riders")
                 }
                 .dsText(.badge)
-                .foregroundStyle(nearCap ? DS.Accent.base : DS.Text.muted.base)
+                .foregroundStyle(nearCap ? DS.Pro.gold : DS.Text.muted.base)
                 .frame(minHeight: DS.Target.minimum)
                 .contentShape(Rectangle())
             }

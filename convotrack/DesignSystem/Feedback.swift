@@ -171,7 +171,7 @@ struct DSPlanBadge: View {
         switch kind {
         case .pro: DS.Accent.base
         case .trial: isLastDay ? DS.Status.warning : DS.Text.primary.base
-        case .goPro: DS.Text.onAccent
+        case .goPro: DS.Pro.gold   // unused: GO PRO draws with the gold gradient
         }
     }
 
@@ -200,18 +200,111 @@ struct DSPlanBadge: View {
         }
     }
 
-    var body: some View {
+    private var label: some View {
         HStack(spacing: 5) {
             Image(systemName: systemImage).dsIcon(12, weight: .bold)
             Text(title).dsText(.badgeSmall).lineLimit(1).fixedSize()
         }
-        .foregroundStyle(ink)
+        // GO PRO's text and icon carry the gold; everything else uses its flat ink.
+        .foregroundStyle(kind == .goPro ? AnyShapeStyle(DS.Pro.gradient) : AnyShapeStyle(ink))
         .padding(.horizontal, 10)
         .frame(minHeight: 26)
-        .background(fill, in: Capsule())
-        .overlay(Capsule().stroke(stroke, lineWidth: DS.BorderWidth.default))
+    }
+
+    var body: some View {
+        Group {
+            if kind == .goPro {
+                label.dsGoProShine(in: Capsule())
+            } else {
+                label
+                    .background(fill, in: Capsule())
+                    .overlay(Capsule().stroke(stroke, lineWidth: DS.BorderWidth.default))
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
+    }
+}
+
+/// The Go Pro treatment (design option A): gold rim light, a glint that sweeps under the content
+/// about every 3.2 s and a gold glow that breathes on a 2.4 s cycle. On chrome (the GO PRO chip) it
+/// sits on clear interactive Liquid Glass; on content (the Profile Pro card) it sits on the normal
+/// card surface instead, since glass is for the floating control layer only (`dsGlass`).
+/// Reduce Motion: no sweep, steady glow. Reduce Transparency / Increase Contrast: `dsGlass`'s
+/// opaque fallback, keeping the gold rim.
+struct DSGoProShine<S: Shape>: ViewModifier {
+    let shape: S
+    /// true for chrome (chips, pills); false for cards.
+    var glass = true
+    /// false for still surfaces (the paywall): same gold, no glint, steady glow.
+    var animated = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// One full cycle; the glint takes the first ~35% of it, then it rests.
+    private let cycle: Double = 3.2
+    private let sweepShare: Double = 0.35
+
+    func body(content: Content) -> some View {
+        if reduceMotion || !animated {
+            styled(content, sweep: nil, breathe: 0.5)
+        } else {
+            // 30 fps is plenty for a glint and keeps an always-on element cheap.
+            TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                let phase = t.truncatingRemainder(dividingBy: cycle) / cycle
+                styled(content,
+                       sweep: phase < sweepShare ? phase / sweepShare : nil,
+                       breathe: 0.5 + 0.5 * sin(t * 2 * .pi / 2.4))
+            }
+        }
+    }
+
+    /// - Parameters:
+    ///   - sweep: 0…1 progress of the glint across; nil while it rests.
+    ///   - breathe: 0…1 glow strength.
+    @ViewBuilder
+    private func styled(_ content: Content, sweep: Double?, breathe: Double) -> some View {
+        let glinted = content
+            // The glint is drawn on the surface but under the content, so it never washes out text.
+            .background {
+                if let sweep {
+                    GeometryReader { geo in
+                        LinearGradient(
+                            colors: [.white.opacity(0), .white.opacity(glass ? 0.5 : 0.14), .white.opacity(0)],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                        .frame(width: max(geo.size.width * 0.38, 60), height: geo.size.height * 2.4)
+                        .rotationEffect(.degrees(20))
+                        .offset(x: -geo.size.width * 0.5 + sweep * geo.size.width * 1.5,
+                                y: -geo.size.height * 0.7)
+                    }
+                    .clipShape(shape)
+                    .allowsHitTesting(false)
+                }
+            }
+        Group {
+            if glass {
+                glinted.dsGlass(in: shape, interactive: true)
+            } else {
+                glinted.background(DS.Surface.card, in: shape)
+            }
+        }
+        .overlay(
+            shape.stroke(
+                LinearGradient(colors: [DS.Pro.goldLight.opacity(0.85), DS.Pro.goldDeep.opacity(0.45)],
+                               startPoint: .top, endPoint: .bottom),
+                lineWidth: 1.2
+            )
+        )
+        .shadow(color: DS.Pro.glow.opacity((glass ? 0.22 : 0.12) + (glass ? 0.3 : 0.18) * breathe),
+                radius: (glass ? 5 : 8) + (glass ? 5 : 8) * breathe)
+    }
+}
+
+extension View {
+    /// Gold rim, glint and breathing glow for the Go Pro invitation. `glass` only on chrome.
+    func dsGoProShine<S: Shape>(in shape: S, glass: Bool = true, animated: Bool = true) -> some View {
+        modifier(DSGoProShine(shape: shape, glass: glass, animated: animated))
     }
 }
 

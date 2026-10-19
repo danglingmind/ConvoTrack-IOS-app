@@ -403,7 +403,7 @@ struct RideRouteForm: View {
                 HStack(spacing: 6) {
                     Image(systemName: "lock.fill").dsIcon(11, weight: .semibold)
                     Text("Up to \(riderCap) riders on your plan").foregroundStyle(DS.Text.muted)
-                    Text("Bigger packs with Pro").foregroundStyle(DS.Accent.base)
+                    Text("Bigger packs with Pro").foregroundStyle(DS.Pro.gradient)
                 }
                 .dsText(.helper)
                 .frame(minHeight: DS.Target.minimum, alignment: .leading)
@@ -430,7 +430,7 @@ struct RideRouteForm: View {
                 onDecrement: { if maxRiders > 2 { maxRiders -= 1 } }
             )
             if atRiderCap {
-                DSPromoBanner(eyebrow: "ConvoTrack Pro", message: "Pro unlocks bigger packs", actionTitle: "Go Pro", action: onUpgrade)
+                DSPromoBanner(eyebrow: "ConvoTrack Pro", message: "Pro unlocks bigger packs", actionTitle: "Go Pro", goProStyle: true, action: onUpgrade)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
                 riderPlanLine

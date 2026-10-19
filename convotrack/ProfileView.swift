@@ -56,7 +56,8 @@ struct ProfileView: View {
                         eyebrow: "ConvoTrack Pro",
                         message: promoMessage,
                         actionTitle: store.isPremium ? "Active" : "Go Pro",
-                        isSubscribed: store.isPremium
+                        isSubscribed: store.isPremium,
+                        goProStyle: true
                     ) { paywall.present(.profile) }
 
                     DSSettingsGroup {
@@ -173,12 +174,6 @@ struct ProfileView: View {
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
                 DSSquareIconButton(systemImage: "pencil", label: "Edit profile") { showEditProfile = true }
-            }
-            HStack(spacing: DS.Space.p2) {
-                PlanBadgeButton(source: .profile)
-                Text("\(rideCount) rides")
-                    .dsText(.statLabel)
-                    .foregroundStyle(DS.Text.muted)
             }
         }
         .frame(maxWidth: .infinity)

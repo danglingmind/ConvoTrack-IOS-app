@@ -114,6 +114,18 @@ extension DS {
         static let focusBorder = Color(rgb: 0xB8D71B)
     }
 
+    /// The Go Pro invitation only: gold text, rim and glow on clear glass, so it can't be mistaken
+    /// for a lime action button (Create ride) or the amber *tint* of the last-day trial badge.
+    enum Pro {
+        static let goldLight = Color(rgb: 0xFFE38A)
+        static let gold = Color(rgb: 0xFFC247)
+        static let goldDeep = Color(rgb: 0xF29A1F)
+        static let glow = Color(rgb: 0xFFB22E)
+        static var gradient: LinearGradient {
+            LinearGradient(colors: [goldLight, gold, goldDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+    }
+
     enum Status {
         static let success = Color(rgb: 0x5EF7A6)
         static let successTint = success.opacity(0.12)
@@ -245,6 +257,14 @@ extension DS {
         static func accentAura(endRadius: CGFloat) -> RadialGradient {
             RadialGradient(
                 colors: [Accent.base.opacity(0.12), Accent.base.opacity(0)],
+                center: .top, startRadius: 0, endRadius: endRadius
+            )
+        }
+
+        /// The paywall's warm wash from the top (the Pro gold, not the lime accent).
+        static func goldAura(endRadius: CGFloat) -> RadialGradient {
+            RadialGradient(
+                colors: [Pro.glow.opacity(0.16), Pro.glow.opacity(0)],
                 center: .top, startRadius: 0, endRadius: endRadius
             )
         }

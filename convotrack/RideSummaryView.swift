@@ -80,7 +80,8 @@ struct RideSummaryView: View {
                                 DSPromoBanner(
                                     eyebrow: "ConvoTrack Pro",
                                     message: summaryPromoMessage,
-                                    actionTitle: "Go Pro"
+                                    actionTitle: "Go Pro",
+                                    goProStyle: true
                                 ) { paywall.present(.rideSummary) }
                             }
                         }
