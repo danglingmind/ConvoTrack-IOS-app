@@ -618,9 +618,9 @@ struct MembershipView: View {
                               comment: "Subscription disclosure; first argument is a pre-formatted, locale-correct price string, second is a period noun such as 'year'")
     }
 
-    /// Empty unless an introductory offer is both configured and this account is
-    /// eligible (the 3-day free trial is configured as an introductory offer in App Store
-    /// Connect). Must fail closed rather than imply a trial when no offer applies.
+    /// Empty unless an introductory offer is both configured and this account is eligible.
+    /// No store offer is configured today — the free trial is app-level and server-side — so
+    /// this normally stays empty. Must fail closed rather than imply a trial when no offer applies.
     private func introOfferSentence(for product: Product) -> String {
         guard let offer = store.introductoryOffer(for: product) else { return "" }
         let length = PlanPeriod(offer.period).longLabel

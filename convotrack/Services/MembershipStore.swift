@@ -184,8 +184,9 @@ final class MembershipStore: ObservableObject {
 
     // MARK: - Introductory Offers
 
-    /// Eligibility for the introductory offer (the 3-day free trial, configured in App Store
-    /// Connect). Eligibility is per subscription group, and false once the account has used one.
+    /// Eligibility for an App Store introductory offer, if one is ever configured again (the free
+    /// trial is app-level and server-side, not a store offer). Eligibility is per subscription
+    /// group, and false once the account has used one.
     private func refreshIntroEligibility() async {
         var eligible: Set<String> = []
         for product in products {
