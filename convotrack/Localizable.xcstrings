@@ -4,19 +4,204 @@
     "" : {
 
     },
+    "…" : {
+
+    },
+    "·" : {
+
+    },
+    "· %@" : {
+
+    },
+    "· FULL" : {
+
+    },
+    "**%@** is **%@** behind the leader." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "**%1$@** is **%2$@** behind the leader."
+          }
+        }
+      }
+    },
+    "/ %@" : {
+
+    },
+    "#%lld" : {
+
+    },
     "%@ · %@ rides" : {
 
     },
-    "--" : {
+    "%@ / %@" : {
 
     },
-    "." : {
+    "%@ ahead" : {
+
+    },
+    "%@ behind" : {
+
+    },
+    "%@ free trial, then %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ free trial, then %2$@"
+          }
+        }
+      }
+    },
+    "%@ free trial, then %@ / %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ free trial, then %2$@ / %3$@"
+          }
+        }
+      }
+    },
+    "%@ km · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ km · %2$@"
+          }
+        }
+      }
+    },
+    "%@ left" : {
+
+    },
+    "%@ needs help — head to their location" : {
+
+    },
+    "%@ Payment is charged to your Apple Account at confirmation of purchase. The subscription automatically renews unless it is canceled at least 24 hours before the end of the current period, and your account is charged for renewal within 24 hours prior to the end of the period. Manage or cancel anytime in App Store account settings." : {
+
+    },
+    "%@, %@ away" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@ away"
+          }
+        }
+      }
+    },
+    "%@, %@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, %3$@"
+          }
+        }
+      }
+    },
+    "%@%@%@%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@%2$@%3$@%4$@"
+          }
+        }
+      }
+    },
+    "%lld" : {
+
+    },
+    "%lld days" : {
+      "comment" : "Billing period noun, plural\nCompact billing period, plural days"
+    },
+    "%lld mo" : {
+      "comment" : "Compact billing period, plural months"
+    },
+    "%lld months" : {
+      "comment" : "Billing period noun, plural"
+    },
+    "%lld more alerts" : {
+
+    },
+    "%lld rider%@" : {
+
+    },
+    "%lld riders" : {
+
+    },
+    "%lld riders, closest %@ away" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld riders, closest %2$@ away"
+          }
+        }
+      }
+    },
+    "%lld weeks" : {
+      "comment" : "Billing period noun, plural"
+    },
+    "%lld wks" : {
+      "comment" : "Compact billing period, plural weeks"
+    },
+    "%lld years" : {
+      "comment" : "Billing period noun, plural"
+    },
+    "%lld yrs" : {
+      "comment" : "Compact billing period, plural years"
+    },
+    "%lld/%lld" : {
+
+    },
+    "+%lld" : {
+
+    },
+    "+%lld more" : {
+
+    },
+    "≈ %@ / %@" : {
+
+    },
+    "000000" : {
+
+    },
+    "3–5 riders" : {
+
+    },
+    "6 ACTIVE • 1 BEHIND" : {
+
+    },
+    "6-character code shared by the Ride Leader. Case-insensitive." : {
+
+    },
+    "6–12 riders" : {
+
+    },
+    "13 or more riders" : {
 
     },
     "25 riders" : {
 
     },
-    "365 days" : {
+    "365 DAYS" : {
+
+    },
+    "A rider" : {
+
+    },
+    "A1B2C3" : {
+
+    },
+    "Accessibility 3 text" : {
+
+    },
+    "Active" : {
 
     },
     "Active ride" : {
@@ -28,7 +213,26 @@
     "Add stop" : {
 
     },
-    "Analytics" : {
+    "After the trial, the free plan has monthly ride and rider limits." : {
+
+    },
+    "After the trial, the free plan includes %lld rides a month and up to %lld riders per ride." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "After the trial, the free plan includes %1$lld rides a month and up to %2$lld riders per ride."
+          }
+        }
+      }
+    },
+    "ANALYTICS" : {
+
+    },
+    "Arrival" : {
+
+    },
+    "ARRIVAL" : {
 
     },
     "Avg speed" : {
@@ -40,16 +244,55 @@
     "Back" : {
 
     },
+    "Best value" : {
+
+    },
+    "Bigger packs" : {
+
+    },
+    "BIGGER PACKS" : {
+
+    },
+    "Bigger packs · Unlimited rides" : {
+
+    },
+    "Billed every %@" : {
+      "comment" : "Plan card subtitle; argument is a period such as 'month' or '6 months'"
+    },
+    "BMW R 1250 GS" : {
+
+    },
+    "Bring your whole crew along" : {
+
+    },
     "Calculating route…" : {
+
+    },
+    "Call a regroup and every phone knows where to wait. One tap for emergencies." : {
+
+    },
+    "Camera Access Denied" : {
+
+    },
+    "Camera Access Required" : {
+
+    },
+    "Cancel" : {
 
     },
     "Cancel request" : {
 
     },
-    "Check your connection and try again." : {
+    "Check your connection." : {
 
     },
     "Clear place" : {
+
+    },
+    "Close" : {
+
+    },
+    "Code" : {
 
     },
     "Code complete" : {
@@ -64,6 +307,9 @@
     "Connection status" : {
 
     },
+    "Continue" : {
+
+    },
     "Continue with Free" : {
 
     },
@@ -73,25 +319,70 @@
     "ConvoTrack" : {
 
     },
+    "CONVOTRACK" : {
+
+    },
+    "ConvoTrack needs camera access to scan QR codes." : {
+
+    },
     "ConvoTrack Pro" : {
 
     },
-    "convotrack.qr.session" : {
-
+    "ConvoTrack Pro is a %@ auto-renewable subscription." : {
+      "comment" : "Subscription disclosure; argument is a pre-formatted, locale-correct price string that must not be reformatted"
+    },
+    "ConvoTrack Pro is a %@/%@ auto-renewable subscription." : {
+      "comment" : "Subscription disclosure; first argument is a pre-formatted, locale-correct price string, second is a period noun such as 'year'"
+    },
+    "ConvoTrack Pro is an auto-renewable subscription." : {
+      "comment" : "Subscription disclosure when no plan is loaded"
     },
     "Copy code" : {
 
     },
-    "Couldn't load rides" : {
+    "Couldn't End Ride" : {
+
+    },
+    "Couldn't join. Check the code and try again." : {
+
+    },
+    "Couldn't Leave Ride" : {
+
+    },
+    "Couldn't load plans" : {
+
+    },
+    "Couldn't Remove Rider" : {
+
+    },
+    "Couldn't Start Ride" : {
+
+    },
+    "Create a ride or join one with an invite code." : {
 
     },
     "Create ride" : {
 
     },
+    "DAILY" : {
+      "comment" : "Plan card title"
+    },
+    "day" : {
+      "comment" : "Billing period noun, singular\nCompact billing period: one day"
+    },
     "Delete" : {
 
     },
+    "Delete account" : {
+
+    },
+    "Delete Account" : {
+
+    },
     "Delete ride" : {
+
+    },
+    "Delete Ride" : {
 
     },
     "Delete This Ride?" : {
@@ -101,6 +392,9 @@
 
     },
     "Deleting…" : {
+
+    },
+    "Design system" : {
 
     },
     "Destination" : {
@@ -118,6 +412,9 @@
     "Dist" : {
 
     },
+    "DIST" : {
+
+    },
     "Dist (km)" : {
 
     },
@@ -133,25 +430,46 @@
     "Duration" : {
 
     },
+    "e.g. Midnight Canyon Run" : {
+
+    },
+    "e.g., Midnight Canyon Run" : {
+
+    },
     "Edit profile" : {
 
     },
-    "Edit Ride" : {
+    "Edit Profile" : {
 
     },
     "Edit ride" : {
 
     },
+    "Edit Ride" : {
+
+    },
     "Emergency" : {
 
     },
-    "Enable location to discover rides starting near you." : {
+    "Emergency. %@ needs help" : {
+
+    },
+    "Enable camera access in Settings to scan QR codes." : {
 
     },
     "End ride" : {
 
     },
+    "End Ride" : {
+
+    },
     "Enter invite code" : {
+
+    },
+    "Enter the 6-character code from your Ride Leader" : {
+
+    },
+    "EST. 2024 — CONVOTRACK PROTOCOL V4.2" : {
 
     },
     "Est. time" : {
@@ -160,7 +478,31 @@
     "Estimated time" : {
 
     },
+    "ETA" : {
+
+    },
+    "Every rider. One map." : {
+
+    },
     "Everyone arrived" : {
+
+    },
+    "Exit closes navigation on your phone — the ride keeps running and you can resume from the lobby. End Ride stops location sharing for every rider and generates the summary; that can't be undone." : {
+
+    },
+    "Exit navigation" : {
+
+    },
+    "Exit Navigation" : {
+
+    },
+    "Failed to Create Ride" : {
+
+    },
+    "Failed to Delete Ride" : {
+
+    },
+    "Failed to Save Ride" : {
 
     },
     "Fastest" : {
@@ -172,22 +514,57 @@
     "Food stop" : {
 
     },
-    "Food Stop" : {
-
-    },
     "Formation rider" : {
 
     },
     "Free plan" : {
 
     },
+    "Free plan: %lld rides a month, up to %lld riders per ride." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Free plan: %1$lld rides a month, up to %2$lld riders per ride."
+          }
+        }
+      }
+    },
+    "Free plan: up to %lld riders per ride." : {
+
+    },
     "Fuel stop" : {
 
     },
-    "Fuel Stop" : {
+    "Full ride history archive" : {
+
+    },
+    "GET CONVOTRACK PRO" : {
+
+    },
+    "GET PRO" : {
+
+    },
+    "GET PRO  ·  %@" : {
+
+    },
+    "GET PRO  ·  %@ / %@" : {
 
     },
     "Group split" : {
+
+    },
+    "Group split. %@ is %@ behind the leader" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Group split. %1$@ is %2$@ behind the leader"
+          }
+        }
+      }
+    },
+    "Head to the %@" : {
 
     },
     "History" : {
@@ -196,8 +573,20 @@
     "Home" : {
 
     },
+    "How big is your usual group?" : {
+
+    },
     "In lobby" : {
 
+    },
+    "Includes a free %@ trial, then " : {
+      "comment" : "Introductory offer prefix; argument is a period such as '7 days'"
+    },
+    "Includes an introductory %@ for %@, then " : {
+      "comment" : "Introductory offer prefix; first argument is a pre-formatted price, second a period"
+    },
+    "Includes an introductory %@ per period for %@, then " : {
+      "comment" : "Introductory offer prefix; first argument is a pre-formatted price, second a period"
     },
     "Invite code" : {
 
@@ -208,10 +597,19 @@
     "Join ride" : {
 
     },
+    "JOIN RIDE" : {
+
+    },
     "Joining code" : {
 
     },
+    "Just me and one other" : {
+
+    },
     "km" : {
+
+    },
+    "KM" : {
 
     },
     "km/h" : {
@@ -220,19 +618,34 @@
     "Leader" : {
 
     },
+    "Leave navigation or end the ride?" : {
+
+    },
+    "Leave Ride" : {
+
+    },
     "Leave This Ride?" : {
 
     },
-    "Led by" : {
+    "Let's ride" : {
 
     },
-    "Let's ride" : {
+    "Level" : {
+
+    },
+    "level with you" : {
 
     },
     "Live" : {
 
     },
     "Live · connected to ride" : {
+
+    },
+    "Live stats & sync scores" : {
+
+    },
+    "LIVE TRACKING" : {
 
     },
     "Loading" : {
@@ -244,7 +657,13 @@
     "Loading…" : {
 
     },
-    "Location access needed" : {
+    "Map showing a new rider joining the group." : {
+
+    },
+    "Map showing four riders moving along a route." : {
+
+    },
+    "Map showing riders converging on a regroup point." : {
 
     },
     "Mark as arrived" : {
@@ -268,28 +687,61 @@
     "min" : {
 
     },
+    "mo" : {
+      "comment" : "Compact billing period: one month"
+    },
+    "month" : {
+      "comment" : "Billing period noun, singular"
+    },
+    "Monthly" : {
+
+    },
+    "MONTHLY" : {
+      "comment" : "Plan card title"
+    },
     "More" : {
 
     },
     "Multiplayer navigation" : {
 
     },
+    "Mute voice guidance" : {
+
+    },
     "New Ride" : {
 
     },
-    "No rides nearby" : {
+    "No monthly ride cap, ever" : {
 
     },
-    "No rides starting within 20 km. Be the first to plan one!" : {
+    "No ride cap" : {
+
+    },
+    "No rides yet" : {
+
+    },
+    "Nobody gets left behind." : {
+
+    },
+    "Not sure yet" : {
 
     },
     "Notifications" : {
 
     },
-    "Off route" : {
+    "Off route · rerouting…" : {
 
     },
     "Offline" : {
+
+    },
+    "OK" : {
+
+    },
+    "ONE LINK" : {
+
+    },
+    "One link. Everyone's in." : {
 
     },
     "Open in Maps" : {
@@ -298,25 +750,80 @@
     "Open lobby" : {
 
     },
+    "Open Settings" : {
+
+    },
     "Or" : {
+
+    },
+    "Page %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Page %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Pause background animation" : {
+
+    },
+    "Photo: %@ · Google" : {
+
+    },
+    "PLAN" : {
+      "comment" : "Plan card title when the billing period is unknown"
+    },
+    "Plan it. Ride it. Together." : {
 
     },
     "Plan, join and track rides with your tribe." : {
 
     },
+    "Play background animation" : {
+
+    },
+    "Point at a ConvoTrack QR code" : {
+
+    },
+    "Privacy" : {
+
+    },
+    "Privacy policy" : {
+
+    },
     "Privacy Policy" : {
+
+    },
+    "Pro unlocks bigger packs" : {
 
     },
     "Profile" : {
 
     },
+    "QR code for invite %@" : {
+
+    },
     "Ready" : {
+
+    },
+    "Ready to Connect" : {
 
     },
     "Recent rides" : {
 
     },
+    "Recentres the map on you" : {
+
+    },
     "Reconnecting…" : {
+
+    },
+    "Regroup" : {
+
+    },
+    "REGROUP" : {
 
     },
     "Regroup called" : {
@@ -325,7 +832,22 @@
     "Regroup complete" : {
 
     },
+    "Regroup complete. Everyone arrived" : {
+
+    },
     "Remove from ride" : {
+
+    },
+    "Remove stop %lld" : {
+
+    },
+    "Removed From Ride" : {
+
+    },
+    "REPORT ISSUE" : {
+
+    },
+    "Restore purchases" : {
 
     },
     "Resume" : {
@@ -334,22 +856,31 @@
     "Resume navigation" : {
 
     },
+    "Retry" : {
+
+    },
     "Ride" : {
 
     },
-    "Ride Complete" : {
+    "Ride bigger. Keep every ride." : {
+
+    },
+    "Ride Cancelled" : {
 
     },
     "Ride complete" : {
 
     },
+    "RIDE COMPLETED" : {
+
+    },
     "Ride details" : {
 
     },
-    "Ride distance" : {
+    "Ride history" : {
 
     },
-    "Ride history" : {
+    "RIDE IS FULL" : {
 
     },
     "Ride leader" : {
@@ -367,13 +898,13 @@
     "Ride together in real time" : {
 
     },
-    "Riders" : {
+    "RIDER #2" : {
 
     },
     "riders" : {
 
     },
-    "Riders live" : {
+    "Riders" : {
 
     },
     "Rides" : {
@@ -397,16 +928,25 @@
     "Route preview map" : {
 
     },
+    "SAM" : {
+
+    },
+    "Save" : {
+
+    },
+    "Save %@" : {
+
+    },
     "Save ride" : {
 
     },
     "Scan QR code" : {
 
     },
-    "Scenic stop" : {
+    "SCAN TO\nDOWNLOAD" : {
 
     },
-    "Scenic Stop" : {
+    "Scenic stop" : {
 
     },
     "Search destination…" : {
@@ -424,22 +964,49 @@
     "See all" : {
 
     },
-    "Share Invite" : {
+    "See where your whole pack is, second by second — even the ones you can't see." : {
+
+    },
+    "Share a link. They're on the map. No group chat chaos." : {
 
     },
     "Share invite" : {
 
     },
+    "Share Invite" : {
+
+    },
     "Share summary" : {
 
     },
-    "Show QR Code" : {
+    "Show" : {
+
+    },
+    "Show emergency on map" : {
 
     },
     "Show QR code" : {
 
     },
+    "Show QR Code" : {
+
+    },
+    "Shows it on the map" : {
+
+    },
+    "Shows rider on map" : {
+
+    },
+    "Shows the next alert" : {
+
+    },
+    "Shows the riders" : {
+
+    },
     "Sign in to keep your rides and ride with others." : {
+
+    },
+    "Sign Out" : {
 
     },
     "Signing out…" : {
@@ -448,16 +1015,31 @@
     "Skip" : {
 
     },
+    "So we can set up your first ride." : {
+
+    },
+    "Solo" : {
+
+    },
     "Something went wrong" : {
 
     },
     "Speed" : {
 
     },
+    "SPEED" : {
+
+    },
     "Speed (km/h)" : {
 
     },
     "Squad roster" : {
+
+    },
+    "Squad Status" : {
+
+    },
+    "START" : {
 
     },
     "Start location" : {
@@ -472,10 +1054,16 @@
     "Start ride" : {
 
     },
-    "Starts" : {
+    "Stop" : {
 
     },
-    "Stop" : {
+    "Stop %lld" : {
+
+    },
+    "Stop 1" : {
+
+    },
+    "Summary unavailable" : {
 
     },
     "Sync" : {
@@ -487,10 +1075,49 @@
     "System: Standby" : {
 
     },
+    "Tap a reason to broadcast instantly" : {
+
+    },
     "Tap to scan" : {
 
     },
+    "Terms" : {
+
+    },
     "Terms of Service" : {
+
+    },
+    "the food stop" : {
+
+    },
+    "The free plan has monthly ride and rider limits." : {
+
+    },
+    "the fuel stop" : {
+
+    },
+    "the meeting point" : {
+
+    },
+    "The ride leader cancelled this ride." : {
+
+    },
+    "The ride leader removed you from this ride." : {
+
+    },
+    "the scenic stop" : {
+
+    },
+    "Then" : {
+
+    },
+    "Then %@" : {
+
+    },
+    "This permanently deletes the ride for everyone. This can't be undone." : {
+
+    },
+    "This will permanently delete your account and all ride history. Active subscriptions must be cancelled separately in Settings > Apple ID > Subscriptions. This cannot be undone." : {
 
     },
     "Total distance" : {
@@ -499,16 +1126,25 @@
     "Total km" : {
 
     },
+    "Turn on voice guidance" : {
+
+    },
     "Unlimited" : {
+
+    },
+    "UNLIMITED" : {
+
+    },
+    "Unlimited rides & advanced telemetry" : {
+
+    },
+    "Up to 25 riders on one map." : {
 
     },
     "Upgrade" : {
 
     },
     "Verifying code…" : {
-
-    },
-    "Visible to other riders" : {
 
     },
     "Waiting" : {
@@ -521,646 +1157,6 @@
 
     },
     "Warning" : {
-
-    },
-    "You" : {
-
-    },
-    "You're in" : {
-
-    },
-    "You're ready" : {
-
-    },
-    "Your pack" : {
-
-    },
-    "Your ride" : {
-
-    },
-    "Your ride history will appear here after you create or join your first ride." : {
-
-    },
-    "Your rides will show up here once you create or join your first ride." : {
-
-    },
-    "·" : {
-
-    },
-    "· %@" : {
-
-    },
-    "· FULL" : {
-
-    },
-    "/ %@" : {
-
-    },
-    "#%lld" : {
-
-    },
-    "%@ / %@" : {
-
-    },
-    "%@ km · %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ km · %2$@"
-          }
-        }
-      }
-    },
-    "%@ needs help — head to their location" : {
-
-    },
-    "%@ Payment is charged to your Apple Account at confirmation of purchase. The subscription automatically renews unless it is canceled at least 24 hours before the end of the current period, and your account is charged for renewal within 24 hours prior to the end of the period. Manage or cancel anytime in App Store account settings." : {
-
-    },
-    "%lld" : {
-
-    },
-    "%lld days" : {
-      "comment" : "Billing period noun, plural\nCompact billing period, plural days"
-    },
-    "%lld mo" : {
-      "comment" : "Compact billing period, plural months"
-    },
-    "%lld months" : {
-      "comment" : "Billing period noun, plural"
-    },
-    "%lld rider%@" : {
-
-    },
-    "%lld Rider%@ · %@" : {
-
-    },
-    "%lld weeks" : {
-      "comment" : "Billing period noun, plural"
-    },
-    "%lld wks" : {
-      "comment" : "Compact billing period, plural weeks"
-    },
-    "%lld years" : {
-      "comment" : "Billing period noun, plural"
-    },
-    "%lld yrs" : {
-      "comment" : "Compact billing period, plural years"
-    },
-    "%lld/%lld" : {
-
-    },
-    "+%lld MIN" : {
-
-    },
-    "…" : {
-
-    },
-    "≈ %@ / %@" : {
-
-    },
-    "2.4 km behind" : {
-
-    },
-    "6 ACTIVE • 1 BEHIND" : {
-
-    },
-    "6-character code shared by the Ride Leader. Case-insensitive." : {
-
-    },
-    "365 DAYS" : {
-
-    },
-    "A1B2C3" : {
-
-    },
-    "ACTIVE RIDE" : {
-
-    },
-    "ADD START & DESTINATION" : {
-
-    },
-    "ADD STOP" : {
-
-    },
-    "ANALYTICS" : {
-
-    },
-    "BIGGER PACKS" : {
-
-    },
-    "Bigger packs · Unlimited rides" : {
-
-    },
-    "Billed every %@" : {
-      "comment" : "Plan card subtitle; argument is a period such as 'month' or '6 months'"
-    },
-    "BMW R 1250 GS" : {
-
-    },
-    "Bring your whole crew along" : {
-
-    },
-    "Camera Access Denied" : {
-
-    },
-    "Camera Access Required" : {
-
-    },
-    "Cancel" : {
-
-    },
-    "CANCEL" : {
-
-    },
-    "Cancel Request" : {
-
-    },
-    "Close" : {
-
-    },
-    "CODE VERIFIED" : {
-
-    },
-    "Continue" : {
-
-    },
-    "convotrack" : {
-
-    },
-    "CONVOTRACK" : {
-
-    },
-    "ConvoTrack needs camera access to scan QR codes." : {
-
-    },
-    "CONVOTRACK PRO" : {
-
-    },
-    "ConvoTrack Pro is a %@ auto-renewable subscription." : {
-      "comment" : "Subscription disclosure; argument is a pre-formatted, locale-correct price string that must not be reformatted"
-    },
-    "ConvoTrack Pro is a %@/%@ auto-renewable subscription." : {
-      "comment" : "Subscription disclosure; first argument is a pre-formatted, locale-correct price string, second is a period noun such as 'year'"
-    },
-    "ConvoTrack Pro is an auto-renewable subscription." : {
-      "comment" : "Subscription disclosure when no plan is loaded"
-    },
-    "Couldn't End Ride" : {
-
-    },
-    "Couldn't Join" : {
-
-    },
-    "Couldn't Leave Ride" : {
-
-    },
-    "Couldn't load plans" : {
-
-    },
-    "Couldn't Remove Rider" : {
-
-    },
-    "Couldn't Start Ride" : {
-
-    },
-    "CREATE RIDE" : {
-
-    },
-    "DAILY" : {
-      "comment" : "Plan card title"
-    },
-    "day" : {
-      "comment" : "Billing period noun, singular\nCompact billing period: one day"
-    },
-    "Delete Account" : {
-
-    },
-    "DELETE ACCOUNT" : {
-
-    },
-    "Delete Ride" : {
-
-    },
-    "DELETE RIDE" : {
-
-    },
-    "Delete this ride?" : {
-
-    },
-    "DELETING..." : {
-
-    },
-    "Deletion Failed" : {
-
-    },
-    "DONE" : {
-
-    },
-    "e.g., Midnight Canyon Run" : {
-
-    },
-    "Edit Profile" : {
-
-    },
-    "EDIT RIDE" : {
-
-    },
-    "EMERGENCY" : {
-
-    },
-    "Enable camera access in Settings to scan QR codes." : {
-
-    },
-    "End Ride" : {
-
-    },
-    "ENTER INVITE CODE" : {
-
-    },
-    "Enter the 6-character code from your Ride Leader" : {
-
-    },
-    "EST. 2024 — CONVOTRACK PROTOCOL V4.2" : {
-
-    },
-    "ETA" : {
-
-    },
-    "Exit closes navigation on your phone — the ride keeps running and you can resume from the lobby. End Ride stops location sharing for every rider and generates the summary; that can't be undone." : {
-
-    },
-    "Exit Navigation" : {
-
-    },
-    "Failed to Create Ride" : {
-
-    },
-    "Failed to Delete Ride" : {
-
-    },
-    "Failed to Save Ride" : {
-
-    },
-    "FASTEST" : {
-
-    },
-    "FINAL ORDER" : {
-
-    },
-    "FORMATION RIDER" : {
-
-    },
-    "Full ride history archive" : {
-
-    },
-    "GENERATING..." : {
-
-    },
-    "GET CONVOTRACK PRO" : {
-
-    },
-    "GET PRO" : {
-
-    },
-    "GET PRO  ·  %@" : {
-
-    },
-    "GET PRO  ·  %@ / %@" : {
-
-    },
-    "GROUP SPLIT" : {
-
-    },
-    "Head to the %@" : {
-
-    },
-    "Ignore" : {
-
-    },
-    "Includes a free %@ trial, then " : {
-      "comment" : "Introductory offer prefix; argument is a period such as '7 days'"
-    },
-    "Includes an introductory %@ for %@, then " : {
-      "comment" : "Introductory offer prefix; first argument is a pre-formatted price, second a period"
-    },
-    "Includes an introductory %@ per period for %@, then " : {
-      "comment" : "Introductory offer prefix; first argument is a pre-formatted price, second a period"
-    },
-    "INVITE CODE" : {
-
-    },
-    "JOIN CONVOTRACK" : {
-
-    },
-    "JOIN RIDE" : {
-
-    },
-    "KM" : {
-
-    },
-    "Last rider is" : {
-
-    },
-    "LEADER" : {
-
-    },
-    "LEAVE" : {
-
-    },
-    "Leave navigation or end the ride?" : {
-
-    },
-    "Leave Ride" : {
-
-    },
-    "Leave this ride?" : {
-
-    },
-    "LET'S RIDE" : {
-
-    },
-    "LIFETIME STATS" : {
-
-    },
-    "LIVE" : {
-
-    },
-    "Live stats & sync scores" : {
-
-    },
-    "Loading roster..." : {
-
-    },
-    "LOGOUT" : {
-
-    },
-    "MARK AS ARRIVED" : {
-
-    },
-    "MARK AS READY" : {
-
-    },
-    "Max Riders" : {
-
-    },
-    "Maximum group size" : {
-
-    },
-    "MEET POINT" : {
-
-    },
-    "mo" : {
-      "comment" : "Compact billing period: one month"
-    },
-    "month" : {
-      "comment" : "Billing period noun, singular"
-    },
-    "MONTHLY" : {
-      "comment" : "Plan card title"
-    },
-    "MULTIPLAYER NAVIGATION" : {
-
-    },
-    "NEARBY RIDES" : {
-
-    },
-    "No monthly ride cap, ever" : {
-
-    },
-    "No rides yet" : {
-
-    },
-    "Notify nearby rides" : {
-
-    },
-    "OFF ROUTE" : {
-
-    },
-    "OK" : {
-
-    },
-    "OPEN LOBBY" : {
-
-    },
-    "Open Settings" : {
-
-    },
-    "OR" : {
-
-    },
-    "Photo: %@ · Google" : {
-
-    },
-    "PLAN" : {
-      "comment" : "Plan card title when the billing period is unknown"
-    },
-    "Point at a ConvoTrack QR code" : {
-
-    },
-    "PREFERENCES" : {
-
-    },
-    "Privacy" : {
-
-    },
-    "PRIVACY" : {
-
-    },
-    "PRO MEMBER" : {
-
-    },
-    "Pro unlocks bigger packs" : {
-
-    },
-    "READY FOR DEPARTURE" : {
-
-    },
-    "Ready to Connect" : {
-
-    },
-    "RECENT RIDES" : {
-
-    },
-    "RECONNECTING…" : {
-
-    },
-    "Regroup" : {
-
-    },
-    "REGROUP" : {
-
-    },
-    "REGROUP CALLED" : {
-
-    },
-    "Regroup complete · Everyone arrived" : {
-
-    },
-    "REMOVE FROM RIDE" : {
-
-    },
-    "Removed From Ride" : {
-
-    },
-    "REMOVING..." : {
-
-    },
-    "Renews %@" : {
-
-    },
-    "REPORT ISSUE" : {
-
-    },
-    "Restore purchases" : {
-
-    },
-    "RESUME" : {
-
-    },
-    "RESUME NAVIGATION" : {
-
-    },
-    "Retry" : {
-
-    },
-    "Ride Cancelled" : {
-
-    },
-    "RIDE COMPLETED" : {
-
-    },
-    "RIDE IS FULL" : {
-
-    },
-    "RIDE LEADER" : {
-
-    },
-    "RIDE SUMMARY" : {
-
-    },
-    "RIDE TITLE" : {
-
-    },
-    "RIDE TOGETHER IN REAL TIME" : {
-
-    },
-    "RIDER #2" : {
-
-    },
-    "ROUTE" : {
-
-    },
-    "ROUTE PREVIEW" : {
-
-    },
-    "SAM" : {
-
-    },
-    "Save" : {
-
-    },
-    "SAVE %@" : {
-
-    },
-    "SAVE CHANGES" : {
-
-    },
-    "SCAN QR CODE" : {
-
-    },
-    "SCAN TO\nDOWNLOAD" : {
-
-    },
-    "Secured by Apple  ·  Cancel anytime" : {
-
-    },
-    "SEE ALL" : {
-
-    },
-    "SHARE SUMMARY" : {
-
-    },
-    "Sign In Failed" : {
-
-    },
-    "Signal strength dropping rapidly." : {
-
-    },
-    "SIGNING OUT..." : {
-
-    },
-    "SQUAD ROSTER" : {
-
-    },
-    "Squad Status" : {
-
-    },
-    "START" : {
-
-    },
-    "START NAVIGATION" : {
-
-    },
-    "START RIDE" : {
-
-    },
-    "STARTING..." : {
-
-    },
-    "Summary unavailable" : {
-
-    },
-    "SYNC RANKING" : {
-
-    },
-    "SYSTEM: STANDBY" : {
-
-    },
-    "Tap a reason to broadcast instantly" : {
-
-    },
-    "TAP TO SCAN" : {
-
-    },
-    "Terms" : {
-
-    },
-    "TERMS" : {
-
-    },
-    "The ride leader cancelled this ride." : {
-
-    },
-    "The ride leader removed you from this ride." : {
-
-    },
-    "This permanently deletes the ride for everyone. This can't be undone." : {
-
-    },
-    "This will permanently delete your account and all ride history. Active subscriptions must be cancelled separately in Settings > Apple ID > Subscriptions. This cannot be undone." : {
-
-    },
-    "TO" : {
-
-    },
-    "UNLIMITED" : {
-
-    },
-    "UPGRADE" : {
-
-    },
-    "UPGRADE →" : {
-
-    },
-    "Verifying code..." : {
-
-    },
-    "WAITING FOR OTHERS" : {
-
-    },
-    "WAITING FOR RIDERS" : {
 
     },
     "week" : {
@@ -1178,10 +1174,13 @@
     "year" : {
       "comment" : "Billing period noun, singular"
     },
+    "Yearly" : {
+
+    },
     "YEARLY" : {
       "comment" : "Plan card title"
     },
-    "YOU" : {
+    "You" : {
 
     },
     "You'll join as a Formation Rider" : {
@@ -1190,19 +1189,31 @@
     "You'll stop sharing your location and drop off the roster. You can re-join later with the invite code." : {
 
     },
-    "YOU'RE IN" : {
+    "You're in" : {
 
     },
-    "YOU'RE READY" : {
+    "You're ready" : {
 
     },
     "You're the leader" : {
 
     },
-    "YOUR RIDE" : {
+    "Your membership is active" : {
 
     },
-    "Your ride history will appear here after you create or join your first convotrack." : {
+    "Your pack" : {
+
+    },
+    "Your pack is bigger than %lld." : {
+
+    },
+    "Your ride" : {
+
+    },
+    "Your ride history will appear here after you create or join your first ride." : {
+
+    },
+    "Your rides will show up here once you create or join your first ride." : {
 
     },
     "Your rides, no limits." : {
