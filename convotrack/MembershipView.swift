@@ -43,7 +43,13 @@ struct MembershipView: View {
     private var trialLength: String? {
         trialOffer.map { PlanPeriod($0.period).longLabel }
     }
-    private func close() { if let onFinish { onFinish() } else { dismiss() } }
+    private func close() {
+        if !store.isPremium { PaywallAnalytics.log(.paywallDismissed, source: analyticsSource, access: store.access) }
+        if let onFinish { onFinish() } else { dismiss() }
+    }
+
+    /// Onboarding has no presenter source of its own.
+    private var analyticsSource: PaywallSource? { isOnboarding ? nil : source }
 
     /// Free-plan limits as the server reports them. nil until loaded, if the call failed, or for
     /// a rider who is already Pro.
@@ -82,6 +88,7 @@ struct MembershipView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear { PaywallAnalytics.log(.paywallShown, source: analyticsSource, access: store.access) }
         .task {
             await store.loadProducts()
             // Catches a country change that happened while the app was suspended,
@@ -589,11 +596,13 @@ struct MembershipView: View {
 
     private func doPurchase() async {
         guard let product = selectedProduct else { return }
+        PaywallAnalytics.log(.purchaseStarted, source: analyticsSource, access: store.access)
         isPurchasing = true
         purchaseError = nil
         do {
             try await store.purchase(product)
             if store.isPremium {
+                PaywallAnalytics.log(.converted, source: analyticsSource)
                 withAnimation(.spring(response: 0.4)) { showSuccess = true }
             }
         } catch {

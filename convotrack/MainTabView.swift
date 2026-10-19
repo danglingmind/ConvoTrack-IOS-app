@@ -159,6 +159,7 @@ struct MainTabView: View {
             return
         }
         UpsellState.recordNudgeShown()
+        PaywallAnalytics.log(.nudgeShown, source: .appOpen, access: membershipStore.access)
         nudgeWantsPlans = false
         showNudge = true
     }
@@ -169,6 +170,7 @@ struct MainTabView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { paywall.present(.appOpen) }
         } else {
             UpsellState.recordNudgeDismissed()
+            PaywallAnalytics.log(.nudgeDismissed, source: .appOpen, access: membershipStore.access)
         }
     }
 

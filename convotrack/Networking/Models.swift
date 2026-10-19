@@ -341,6 +341,21 @@ struct ActivateMembershipResponse: Codable {
     let plan: MembershipPlanInfo
 }
 
+// MARK: - Events
+
+struct PaywallEventPayload: Encodable {
+    let name: String
+    let source: String?
+    let access: String?
+    let occurredAt: String
+}
+
+struct PaywallEventsRequest: Encodable {
+    let platform: String
+    let appVersion: String?
+    let events: [PaywallEventPayload]
+}
+
 // MARK: - Nearby Rides
 
 struct NearbyRide: Codable, Identifiable {

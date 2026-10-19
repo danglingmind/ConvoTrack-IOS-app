@@ -191,6 +191,7 @@ struct HomeView: View {
     }
 
     private func dismissHomeCard() {
+        PaywallAnalytics.log(.homeCardDismissed, source: .homeCard, access: membershipStore.access)
         if case .trial = membershipStore.access {
             UpsellState.snoozeHomeCard(inTrial: true)
         } else {

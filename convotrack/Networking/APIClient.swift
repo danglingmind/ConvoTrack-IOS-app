@@ -71,6 +71,8 @@ final class APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // One free trial per device (see `DeviceIdentity`); sent on every call, harmless elsewhere.
+        req.setValue(DeviceIdentity.id, forHTTPHeaderField: "X-Device-Id")
         if body != nil {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
@@ -235,5 +237,12 @@ final class APIClient {
     func activateMembership(signedTransaction: String) async throws -> ActivateMembershipResponse {
         let body = try encoder.encode(ActivateMembershipRequest(signedTransaction: signedTransaction))
         return try await fetch("/memberships/activate", method: "POST", body: body)
+    }
+
+    // MARK: - Events
+
+    func sendEvents(_ request: PaywallEventsRequest) async throws {
+        let body = try encoder.encode(request)
+        try await fetchVoid("/events", method: "POST", body: body)
     }
 }
