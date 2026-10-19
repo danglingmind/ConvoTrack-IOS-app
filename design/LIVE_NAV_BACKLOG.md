@@ -16,7 +16,7 @@ device/simulator · **decide** needs a product call.
 | 4c | Exit vs End: neutral "Exit navigation" for non-leaders | done, **verify** | |
 | 4d | Edge chips as real buttons, 44 pt (iOS) / 48 dp (Android) | done, **verify** | |
 | 5 | Live Activity (iOS) / ongoing notification with next turn (Android) | in progress | Needs a Widget Extension target and `NSSupportsLiveActivities`; add a `convotrack://ride/<id>` route to `DeepLinkRouter` |
-| 6 | Use DesignSystem HUD components; reduce glass; Reduce Motion | in progress | See also "Phase 3 leftovers" below |
+| 6 | Use DesignSystem HUD components; reduce glass; Reduce Motion | iOS done, **verify**; Android todo | iOS: one set of HUD components in `HUD.swift`, `CoordinationOverlayView` deleted, secondary labels on `DS.Text.secondary`, Reduce Motion honoured (alert slot, resume pill, bottom bar swap, camera). Landscape panel is now an opaque fill (no glass on glass) |
 
 ## Phase 4 leftovers
 
@@ -25,7 +25,7 @@ device/simulator · **decide** needs a product call.
 - **verify** Edge chips no longer collide with the turn card now that the strip left the top; hit areas at 44/48 dp.
 - Gap is derived from each rider's distance to the goal, so it is meaningless until a rider has posted a position (every rider is seeded with the full route distance, which reads as "Level").
 - Landscape still shows the strip in the side panel above the banners, not at the bottom; the plan asked for "same order" only.
-- iOS `DSLiveRiderCountPill` and Android `LiveRiderCountPill` were deleted; `liveRiderCount` on both view models is now unused.
+- iOS `DSLiveRiderCountPill` and Android `LiveRiderCountPill` were deleted; `liveRiderCount` is now removed on iOS, still unused on Android.
 - Android `BarStat`/iOS `barStat` gained a third line; the row is ~8 pt taller. Revisit if it crowds the Regroup/Exit buttons.
 
 ## Phase 1 leftovers
@@ -58,10 +58,9 @@ device/simulator · **decide** needs a product call.
 - **verify** Show / edge-chip peek: camera flies there, follow camera returns after about 10 s of riding, Resume works at any point. (Android future-dates `lastInteractionAt` by 7 s, iOS the equivalent; the 10 s is not tuned.)
 - **verify** Edge chips for the regroup point and emergency: appear only when off-screen, are never clustered, and clear when the regroup resolves.
 - **decide** The regroup banner now stays up for everyone including the rider who called it (previously the toast skipped the caller). Confirm that is wanted.
-- Banner and chip transitions still use springs; honour Reduce Motion (iOS) and the "Remove animations" setting (Android) — part of Phase 6.
+- iOS honours Reduce Motion (done, Phase 6: transitions fade, springs off, map camera jumps instead of flying). Android "Remove animations" still todo. The follow camera during riding still animates (it is continuous guidance, not a transition).
 - iOS shows the "Reconnecting…" banner only in route preview; during guidance it is the turn-card status line. Android has no preview-time indication.
-- iOS `landscapeTransientStack` is now a one-line wrapper around `alertSlot`; inline it. `DSBanner` tones `.connection` and `.split` are unused.
-- iOS `CoordinationOverlayView` is still a prototype holding `GroupSplitAlert`; move the alert into `HUD.swift` and delete the file (Phase 6).
+- iOS (done, Phase 6) `landscapeTransientStack` inlined, unused `DSBanner` tones removed, `GroupSplitAlert` moved to `HUD.swift`, `CoordinationOverlayView` deleted. The regroup banner now also posts a VoiceOver announcement (it went through DSBanner).
 - Android `HudBanner`-based banners and the new `RegroupAlertBanner` duplicate the frame styling; fold into one.
 
 ## Cross-cutting

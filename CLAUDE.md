@@ -71,7 +71,7 @@ MainTabView
 JoinRideView ────────────────────── (global sheet, any tab)
 ```
 
-`CoordinationOverlayView` exists as a standalone overlay screen (currently not wired into the main nav flow).
+The prototype `CoordinationOverlayView` is gone; `RegroupBottomSheet`/`RegroupReason` live in `RegroupSheet.swift` and `GroupSplitAlert` in `DesignSystem/HUD.swift`.
 
 ### State Management
 - `AppState` (`@StateObject` in `MainTabView`, injected via `@EnvironmentObject`): single boolean `isRideActive` that drives bottom nav visibility. `RideNavigationView` sets it on appear/disappear.

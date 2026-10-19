@@ -29,16 +29,11 @@ struct NavLeaderboardRow: Identifiable {
 
 /// The alerts that can claim the banner slot, in priority order: the first case that is active
 /// is the one shown. Off-route and reconnecting are NOT here; they are a status line on the turn
-/// card (`NavStatus`), because they describe the guidance itself rather than ask for a decision.
+/// card (`NavStatus`, in HUD.swift), because they describe the guidance itself rather than ask for a decision.
 enum NavAlert: Int, Comparable {
     case emergency, split, regroup, regroupResolved
 
     static func < (a: NavAlert, b: NavAlert) -> Bool { a.rawValue < b.rawValue }
-}
-
-/// What is wrong with the guidance right now, shown on the turn card. Off-route wins.
-enum NavStatus {
-    case offRoute, reconnecting
 }
 
 // MARK: - NavigationViewModel
@@ -183,15 +178,6 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     var canDismissEmergency: Bool {
         guard let e = activeEmergency else { return false }
         return e.userId == myUserId || amILeader
-    }
-
-    /// Live rider count for the top-bar dot. Uses the SAME presence rule as the leaderboard rows
-    /// (self is always live; every other rider must have a current heartbeat in `onlineUserIds`),
-    /// so the number can never disagree with the greyed-out rows. Derived from the roster +
-    /// presence rather than the fluctuating `ride:state_update` participant array, which only
-    /// carries riders that have posted a location tick.
-    var liveRiderCount: Int {
-        leaderboardRows.filter { $0.isMe || onlineUserIds.contains($0.id) }.count
     }
 
     /// Every alert that is live, most urgent first. The HUD shows `first` and a "+N" chip for the rest.
@@ -599,7 +585,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     ///   - coordinate: an explicit searched meet location; when set it wins outright.
     ///   - aheadMeters: when no explicit coordinate is given, offset the meet point this far ahead
     ///     along the route from the rider's current position (0 = right here).
-    func broadcastRegroup(reason: CoordinationOverlayView.RegroupReason?, at coordinate: CLLocationCoordinate2D? = nil, aheadMeters: Double = 0) {
+    func broadcastRegroup(reason: RegroupReason?, at coordinate: CLLocationCoordinate2D? = nil, aheadMeters: Double = 0) {
         guard let reason else { return }
         let target: CLLocationCoordinate2D?
         if let coordinate {
@@ -768,7 +754,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private func handleRegroupStarted(_ event: RegroupEvent) {
         activeRegroup = event
         hasMarkedArrived = false
-        // Alert riders who didn't broadcast it — toast + a bold two-tone siren that's clearly
+        // Alert riders who didn't broadcast it with a bold two-tone siren that's clearly
         // distinct from the emergency wail. The initiator already knows, so stays silent.
         if event.createdBy != myUserId {
             SirenPlayer.shared.play(.regroup)
@@ -972,7 +958,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// already — but only inside `if !update.leaderboard.isEmpty`, and the server's leaderboard is
     /// empty for the entire window between a ride starting and the first location tick landing.
     /// A rider leaving inside that window would otherwise stay in everyone else's leaderboard,
-    /// live-rider count, map pin set and off-screen indicators until somebody's GPS moved.
+    /// map pin set and off-screen indicators until somebody's GPS moved.
     ///
     /// Driven off `ride:participant_left`, which the server emits BEFORE the accompanying
     /// `ride:state_update` — so by the time a state update is applied, the departed rider is
@@ -2044,6 +2030,7 @@ struct RideNavigationView: View {
     @StateObject private var vm = NavigationViewModel()
 
     @Environment(\.verticalSizeClass) private var vSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var cameraCommand: MapCameraCommand? = nil
     @State private var selectedRiderId: String? = nil
@@ -2071,10 +2058,10 @@ struct RideNavigationView: View {
     // padding values, and any constant reproducing that would drift the moment one changes.
     // The map reserves exactly this much so it ends at the bar's top edge either way.
     @State private var bottomBarHeight: CGFloat = 0
-    // Bottom edge of the top chrome (back button row + leaderboard strip) in screen coords. The
-    // map's top edge is screen y=0, so this doubles as the map-space inset that off-screen rider
-    // chips must stay below. Measured rather than hardcoded so it follows the leaderboard growing
-    // with the convoy, and the landscape layout, on its own.
+    // Bottom edge of the top chrome (turn card, or back button row in the preview) in screen coords.
+    // The map's top edge is screen y=0, so this doubles as the map-space inset that off-screen
+    // rider chips must stay below. Measured rather than hardcoded so it follows the chrome
+    // growing (wrapped street names, status line) and the landscape layout on its own.
     @State private var topChromeBottom: CGFloat = 0
     /// Width the landscape side panel occupies; the map reserves it so nothing bleeds behind.
     @State private var measuredPanelWidth: CGFloat = 0
@@ -2363,17 +2350,17 @@ struct RideNavigationView: View {
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
-                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: true, framing: .roadAhead)
+                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: !reduceMotion, framing: .roadAhead)
         )
     }
 
     private func beginNavigation() {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { isNavigationActive = true }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85)) { isNavigationActive = true }
         guard let coord = vm.userLocation else { return }
         cameraCommand = MapCameraCommand(
             id: UUID(),
             action: .navigate(lat: coord.latitude, lng: coord.longitude,
-                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: true, framing: .roadAhead)
+                              zoom: navZoom, bearing: vm.userHeading, tilt: navTilt, animated: !reduceMotion, framing: .roadAhead)
         )
     }
 
@@ -2382,7 +2369,7 @@ struct RideNavigationView: View {
         if !vm.routeCoordinates.isEmpty {
             fitRoutePreview(vm.routeCoordinates)
         } else if let dest = vm.destinationCoordinate {
-            cameraCommand = MapCameraCommand.focus(lat: dest.latitude, lng: dest.longitude, zoom: 11)
+            cameraCommand = MapCameraCommand.focus(lat: dest.latitude, lng: dest.longitude, zoom: 11, animated: !reduceMotion)
         }
     }
 
@@ -2404,7 +2391,7 @@ struct RideNavigationView: View {
             // Clears the navigation preview bar, which floats over the map.
             bottom: max(bottomBarHeight, 200) + 8,
             right:  44,
-            animated: true
+            animated: !reduceMotion
         )
     }
 
@@ -2455,7 +2442,8 @@ struct RideNavigationView: View {
         lastInteractionDate = Date()
         selectedRiderId = id
         cameraCommand = MapCameraCommand.focus(
-            lat: rider.coordinate.latitude, lng: rider.coordinate.longitude, zoom: 16
+            lat: rider.coordinate.latitude, lng: rider.coordinate.longitude, zoom: 16,
+            animated: !reduceMotion
         )
     }
 
@@ -2466,7 +2454,7 @@ struct RideNavigationView: View {
         isFreeLooking = true
         // Future-dated so the "3 s since last touch" auto-resume doesn't cut the peek short.
         lastInteractionDate = Date().addingTimeInterval(peekSeconds - 3)
-        cameraCommand = MapCameraCommand.focus(lat: lat, lng: lng, zoom: zoom)
+        cameraCommand = MapCameraCommand.focus(lat: lat, lng: lng, zoom: zoom, animated: !reduceMotion)
     }
 
     // MARK: - HUD
@@ -2497,18 +2485,18 @@ struct RideNavigationView: View {
 
             if isFreeLooking && isNavigationActive {
                 DSResumePill(action: resumeNavigation)
-                    .transition(.scale.combined(with: .opacity))
-                    .animation(.spring(response: 0.35), value: isFreeLooking)
+                    .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+                    .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35), value: isFreeLooking)
                     .padding(.bottom, 8)
             }
 
             Group {
                 if isNavigationActive {
                     bottomControls(bottomInset: bottomInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 } else {
                     navigationPreviewBar
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 }
             }
             // Feeds the live height to `bottomBarHeight` so the map's reserve follows the
@@ -2536,7 +2524,7 @@ struct RideNavigationView: View {
             VStack(alignment: .trailing, spacing: 4) {
                 alertBanner(current)
                     .id(current)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 if alerts.count > 1 {
                     Button {
                         DSHaptic.selection()
@@ -2547,7 +2535,8 @@ struct RideNavigationView: View {
                             .foregroundStyle(DS.Text.primary)
                             .padding(.horizontal, DS.Space.p3)
                             .frame(minHeight: 28)
-                            .dsGlass(clear: true)
+                            // Opaque, not glass: a small chip sitting under a glass banner.
+                            .background(DS.Surface.glassPill, in: Capsule())
                             .frame(minHeight: DS.Target.minimum)
                             .contentShape(Rectangle())
                     }
@@ -2555,7 +2544,7 @@ struct RideNavigationView: View {
                     .accessibilityHint(Text("Shows the next alert"))
                 }
             }
-            .animation(.spring(response: 0.3), value: current)
+            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.3), value: current)
         }
     }
 
@@ -2564,33 +2553,60 @@ struct RideNavigationView: View {
         switch alert {
         case .emergency:
             if let emergency = vm.activeEmergency {
-                EmergencyAlertBanner(
-                    reporterName: vm.emergencyReporterName,
-                    message: emergency.message,
-                    onShow: { peek(lat: emergency.lat, lng: emergency.lng) },
-                    // Only the raiser or the leader can clear it; for everyone else the banner
-                    // has no dismiss control and persists (with the pin) until they do.
-                    onDismiss: vm.canDismissEmergency ? { vm.dismissEmergency() } : nil
+                let reporter = vm.emergencyReporterName
+                DSBanner(
+                    tone: .emergency,
+                    eyebrow: "Emergency",
+                    message: String(localized: "\(reporter) needs help — head to their location"),
+                    announcement: String(localized: "Emergency. \(reporter) needs help"),
+                    trailing: {
+                        DSBannerIconButton(systemImage: "scope", label: "Show emergency on map") {
+                            peek(lat: emergency.lat, lng: emergency.lng)
+                        }
+                        // Only the raiser or the leader can clear it; for everyone else the banner
+                        // has no dismiss control and persists (with the pin) until they do.
+                        if vm.canDismissEmergency {
+                            DSBannerIconButton(systemImage: "xmark", label: "Dismiss emergency", quiet: true) {
+                                vm.dismissEmergency()
+                            }
+                        }
+                    }
                 )
             }
         case .split:
             GroupSplitAlert(
                 riderName: vm.splitRiderName,
                 gapMeters: vm.splitGapMeters,
-                onIgnore: { withAnimation(.spring()) { vm.dismissSplitAlert() } },
+                onIgnore: { withAnimation(reduceMotion ? nil : .spring()) { vm.dismissSplitAlert() } },
                 onRegroup: { showRegroup = true }
             )
         case .regroup:
             if let regroup = vm.activeRegroup {
-                RegroupAlertBanner(
-                    type: regroup.type,
-                    hasArrived: vm.hasMarkedArrived,
-                    onShow: { peek(lat: regroup.lat, lng: regroup.lng, zoom: 15) },
-                    onArrived: { vm.markArrivedAtRegroup() }
+                let stop = DSRegroupKind.label(regroup.type)
+                DSBanner(
+                    tone: .regroup,
+                    eyebrow: "Regroup called",
+                    message: String(localized: "Head to the \(stop)"),
+                    icon: DSRegroupKind.icon(regroup.type),
+                    tint: DSRegroupKind.color(regroup.type),
+                    actions: {
+                        // Show is a peek, not a camera move: the map stays on the road until the rider asks.
+                        DSAdaptiveStack(spacing: DS.Space.p2) {
+                            DSPillButton(title: "Show", systemImage: "scope", variant: .tonal, large: true) {
+                                peek(lat: regroup.lat, lng: regroup.lng, zoom: 15)
+                            }
+                            DSRegroupArrivalControl(hasArrived: vm.hasMarkedArrived) { vm.markArrivedAtRegroup() }
+                        }
+                    }
                 )
             }
         case .regroupResolved:
-            RegroupResolvedBanner()
+            DSBanner(
+                tone: .complete,
+                eyebrow: "Regroup complete",
+                message: String(localized: "Everyone arrived"),
+                announcement: String(localized: "Regroup complete. Everyone arrived")
+            )
         }
     }
 
@@ -2621,7 +2637,7 @@ struct RideNavigationView: View {
         .padding(.bottom, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .ignoresSafeArea(edges: [.top, .horizontal])
-        .transition(.scale.combined(with: .opacity))
+        .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
     }
 
     /// Back button floating over the map, landscape only.
@@ -2646,16 +2662,15 @@ struct RideNavigationView: View {
     private func landscapePanel(safeArea: EdgeInsets) -> some View {
         VStack(spacing: 10) {
             if isNavigationActive {
-                // 1 — turn-by-turn, alone on its row. The rider count that used to share it moved
-                // into the leaderboard row below, which is what lets the banner run the full width
-                // of the panel at a size readable from a mount.
-                turnInstructionCard(expand: true)
+                // 1 — turn-by-turn, alone on its row so it can run the full width of the panel
+                // at a size readable from a mount.
+                turnInstructionCard
 
-                // 2 — leaderboard, horizontally scrolled, with the rider count pinned trailing.
+                // 2 — convoy strip, horizontally scrolled.
                 convoyStrip(compact: true)
 
-                // 3 — banners, directly under the leaderboard.
-                landscapeTransientStack
+                // 3 — the alert slot, directly under the strip.
+                alertSlot
 
                 Spacer(minLength: 0)
 
@@ -2679,14 +2694,18 @@ struct RideNavigationView: View {
         .padding(.top, safeArea.top + 10)
         .padding(.bottom, safeArea.bottom + 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Opaque rather than glass: the turn card and banners inside it are glass, and glass does
+        // not sit on glass.
         .background(
-            Rectangle().fill(.clear).dsGlass(in: Rectangle())
+            Rectangle().fill(DS.Surface.glassStrong)
                 .ignoresSafeArea()
         )
         .overlay(alignment: .leading) {
             Rectangle().fill(DS.Border.divider).frame(width: DS.BorderWidth.hairline)
         }
     }
+
+    private var buttonSize: CGFloat { DS.Target.hud }
 
     /// Regroup and end-ride, equal width across the panel. Portrait keeps its square icon buttons;
     /// here the panel is the only chrome, so the actions get the full width of it.
@@ -2751,29 +2770,28 @@ struct RideNavigationView: View {
         }
     }
 
-    /// Stats on their own row. Same `barStat`/`barDivider` the portrait bar uses; units are dropped
-    /// because a third of the width can't hold them beside three values.
+    /// Stats on their own row. Units are dropped because a third of the width can't hold them
+    /// beside three values; the arrival keeps its AM/PM.
     private var landscapeStatsRow: some View {
         HStack(spacing: 10) {
-            barStat(label: "SPEED", value: vm.hasSpeedFix ? String(format: "%.0f", vm.mySpeedKmh) : "--", unit: nil)
-            barDivider
-            arrivalStat(showUnits: true)
-            barDivider
-            barStat(label: "DIST", value: vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--", unit: nil)
+            DSBarStat(label: "SPEED", value: speedText, valueStyle: .hudEta)
+            DSBarDivider(height: 26)
+            DSBarStat(label: "ARRIVAL", value: vm.arrival?.time, unit: vm.arrival?.period,
+                      sub: vm.timeLeftString, spoken: vm.arrival?.spoken, valueStyle: .hudEta)
+            DSBarDivider(height: 26)
+            DSBarStat(label: "DIST", value: distanceText, valueStyle: .hudEta)
             Spacer(minLength: 0)
         }
     }
 
-    /// The same single alert slot as portrait, so the two orientations can't disagree about order.
-    private var landscapeTransientStack: some View {
-        alertSlot
-    }
+    private var speedText: String { vm.hasSpeedFix ? String(format: "%.0f", vm.mySpeedKmh) : "--" }
+    private var distanceText: String { vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--" }
 
     private var navigationPreviewBar: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Destination").dsText(.fieldLabel).foregroundStyle(DS.Text.muted)
+                    Text("Destination").dsText(.fieldLabel).foregroundStyle(DS.Text.secondary)
                     Text(destinationName)
                         .dsText(.cardTitle)
                         .foregroundStyle(DS.Text.primary)
@@ -2782,20 +2800,20 @@ struct RideNavigationView: View {
                          ? String(format: "%.1f km", vm.myDistanceToGoalKm) + (vm.timeLeftString.map { " · \($0)" } ?? "")
                          : String(localized: "Calculating route…"))
                         .dsText(.bodySmall)
-                        .foregroundStyle(DS.Text.muted)
+                        .foregroundStyle(DS.Text.secondary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
                         Text(vm.arrival?.time ?? "--").dsText(.hudEta).foregroundStyle(DS.Text.primary)
                         if let period = vm.arrival?.period {
-                            Text(period).dsText(.hudStatLabel).foregroundStyle(DS.Text.muted)
+                            Text(period).dsText(.hudStatLabel).foregroundStyle(DS.Text.secondary)
                         }
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(Text("Arrival"))
                     .accessibilityValue(Text(vm.arrival?.spoken ?? "--"))
-                    Text("ARRIVAL").dsText(.hudStatLabel).foregroundStyle(DS.Text.muted)
+                    Text("ARRIVAL").dsText(.hudStatLabel).foregroundStyle(DS.Text.secondary)
                 }
             }
             .padding(.horizontal, DS.Space.p5)
@@ -2840,12 +2858,11 @@ struct RideNavigationView: View {
     private var topBar: some View {
         VStack(spacing: 8) {
             if isNavigationActive {
-                // The turn banner has the row to itself. The back button and the rider-count pill
-                // that used to flank it are gone: exiting now happens through the end-ride
-                // confirmation, and the count moved into the leaderboard row below.
-                turnInstructionCard(expand: true)
+                // The turn banner has the row to itself: exiting happens through the end-ride
+                // confirmation.
+                turnInstructionCard
                     .padding(.horizontal, 20)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             } else {
                 // Route preview. There is no turn banner yet, and this back button is the only way
                 // back to the lobby before navigation starts — the end-ride control that replaces
@@ -2863,93 +2880,22 @@ struct RideNavigationView: View {
         .animation(.easeInOut(duration: 0.35), value: isNavigationActive)
     }
 
-    /// The turn-by-turn banner.
-    ///
-    /// It owns its whole row now in both orientations — the back button and the live-rider pill
-    /// moved out (exit lives in the end-ride confirmation, the count in the leaderboard row) — and
-    /// that reclaimed width is what pays for these sizes. Previously it was squeezed into ~241pt
-    /// of a 353pt row, leaving ~177pt for text, which is why the distance sat at 10pt and the
-    /// street name at 12pt: unreadable at road speed, which is the only speed it is read at.
-    ///
-    /// Landscape runs one step smaller across the board: the side panel is a third of the width
-    /// and the whole HUD has to fit in ~390pt of height, so the same numbers would crowd the
-    /// leaderboard and stats out of the panel.
-    private func turnInstructionCard(expand: Bool) -> some View {
-        let tile:  CGFloat = isLandscape ? 48 : 56
-        let glyph: CGFloat = isLandscape ? 24 : 28
-
-        return HStack(spacing: DS.Space.p3) {
-            Image(systemName: vm.currentInstruction.isEmpty
-                  ? "arrow.up"
-                  : maneuverIcon(for: vm.currentManeuver, instruction: vm.currentInstruction))
-                .dsIcon(glyph, weight: .bold)
-                .foregroundStyle(DS.Text.onAccent)
-                .frame(width: tile, height: tile)
-                .background(DS.Accent.base, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                .accessibilityHidden(true)
-
-            // No Spacer here on purpose: the icon is fixed-width, so the HStack hands ALL the
-            // remaining width to this column, which is what lets the street name wrap instead of
-            // truncating. A Spacer would compete for that same space and shrink it back.
-            VStack(alignment: .leading, spacing: 2) {
-                if let status = vm.navStatus { statusLine(status) }
-                let distText = Self.turnDistanceText(vm.distanceToNextTurnMeters)
-                if !distText.isEmpty {
-                    Text(distText)
-                        .dsText(isLandscape ? .hudEta : .hudTurnDistance)
-                        .foregroundStyle(DS.Accent.base)
-                        .lineLimit(1)
-                }
-                // Two lines rather than one: a truncated road name is worth less than a wrapped one.
-                Text(vm.currentInstruction.isEmpty ? String(localized: "Follow route") : vm.currentInstruction)
-                    .dsText(isLandscape ? .bodyStrong : .hudTurnInstruction)
-                    .foregroundStyle(DS.Text.primary)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-                    .fixedSize(horizontal: false, vertical: true)
-                // A quick double turn: show the second one too, so it isn't a surprise.
-                if let then = vm.thenManeuver {
-                    HStack(spacing: 4) {
-                        Text("Then").dsText(.bodySmall)
-                        Image(systemName: maneuverIcon(for: then, instruction: "")).dsIcon(DS.IconSize.sm, weight: .bold)
-                    }
-                    .foregroundStyle(DS.Text.secondary)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(Text("Then \(NavVoiceGuide.phrase(for: then) ?? "continue")"))
-                }
-            }
-        }
-        .padding(.horizontal, DS.Space.p3)
-        .padding(.vertical, 10)
-        .frame(maxWidth: expand ? .infinity : nil, alignment: .leading)
-        .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).stroke(statusBorder, lineWidth: DS.BorderWidth.default))
-        .dsShadow(DS.Shadow.floating)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var statusBorder: Color {
-        switch vm.navStatus {
-        case .offRoute:     DS.Status.dangerBorder
-        case .reconnecting: DS.Status.warning.opacity(0.5)
-        case nil:           DS.Accent.border
-        }
-    }
-
-    /// One line above the distance: the guidance is unreliable, and why.
-    private func statusLine(_ status: NavStatus) -> some View {
-        HStack(spacing: 6) {
-            switch status {
-            case .offRoute:
-                Image(systemName: "exclamationmark.triangle.fill").dsIcon(DS.IconSize.xs)
-                Text("Off route · rerouting…").dsText(.badge)
-            case .reconnecting:
-                ProgressView().controlSize(.mini).tint(DS.Status.warning)
-                Text("Reconnecting…").dsText(.badge)
-            }
-        }
-        .foregroundStyle(status == .offRoute ? DS.Status.danger : DS.Status.warning)
-        .lineLimit(1)
+    /// The turn-by-turn banner (`DSTurnInstructionCard`) fed from the view model. It owns its whole
+    /// row in both orientations; landscape runs one step smaller because the side panel is a third
+    /// of the width and the whole HUD has to fit in ~390pt of height.
+    private var turnInstructionCard: some View {
+        DSTurnInstructionCard(
+            systemImage: vm.currentInstruction.isEmpty
+                ? "arrow.up"
+                : maneuverIcon(for: vm.currentManeuver, instruction: vm.currentInstruction),
+            distance: Self.turnDistanceText(vm.distanceToNextTurnMeters),
+            instruction: vm.currentInstruction.isEmpty ? nil : vm.currentInstruction,
+            status: vm.navStatus,
+            // A quick double turn: show the second one too, so it isn't a surprise.
+            thenSystemImage: vm.thenManeuver.map { maneuverIcon(for: $0, instruction: "") },
+            thenSpoken: vm.thenManeuver.map { NavVoiceGuide.phrase(for: $0) ?? String(localized: "continue") },
+            isLandscape: isLandscape
+        )
     }
 
     /// Distance-to-maneuver, rounded the way Google Maps rounds it.
@@ -3010,9 +2956,8 @@ struct RideNavigationView: View {
     /// rider is ahead of or behind me. Tapping a card shows the rider on the map (mine recentres).
     ///
     /// Lives at the bottom of the screen, inside the control bar, so it is in thumb reach and the
-    /// top of the screen stays free for the road. Portrait gives the mute button the trailing slot
-    /// the rider-count pill used to hold: offline riders are already dimmed, so a separate count
-    /// repeated what the cards show.
+    /// top of the screen stays free for the road. Portrait puts the mute button in the trailing
+    /// slot; offline riders are dimmed on their cards.
     private func convoyStrip(compact: Bool) -> some View {
         HStack(spacing: compact ? 6 : 8) {
             ScrollViewReader { proxy in
@@ -3027,8 +2972,10 @@ struct RideNavigationView: View {
                             }
                         } else {
                             ForEach(vm.leaderboardRows) { row in
-                                LiveLeaderboardCard(
-                                    row: row,
+                                DSLeaderboardCard(
+                                    name: row.name, id: row.id,
+                                    imageURL: row.avatarUrl.flatMap(URL.init(string:)),
+                                    rank: row.rank, isMe: row.isMe,
                                     gapMeters: gap(to: row),
                                     isSelected: selectedRiderId == row.id,
                                     isOffline: !row.isMe && !vm.onlineUserIds.contains(row.id),
@@ -3044,7 +2991,7 @@ struct RideNavigationView: View {
                 .contentMargins(.trailing, 4, for: .scrollContent)
                 .onChange(of: selectedRiderId) { _, id in
                     if let id {
-                        withAnimation(.spring(response: 0.4)) { proxy.scrollTo(id, anchor: .center) }
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.4)) { proxy.scrollTo(id, anchor: .center) }
                     }
                 }
             }
@@ -3064,13 +3011,7 @@ struct RideNavigationView: View {
 
     // MARK: - Bottom Controls
 
-    /// Adaptive by construction rather than by tuned constants: `ViewThatFits`
-    /// measures each variant against the width SwiftUI actually proposes — any
-    /// device, orientation, split-screen or Dynamic Type setting — and picks the
-    /// first that fits. Roomiest first, so a wide screen keeps full spacing and a
-    /// narrow one degrades by shedding spacing, then unit labels, in that order.
-    /// `barStat`'s `minimumScaleFactor` remains only as the last-resort net for
-    /// widths narrower than even the tightest variant.
+    /// Convoy strip over the stats row (`DSNavBottomBar`, which is adaptive via `ViewThatFits`).
     /// `bottomInset` is the real bottom safe-area inset, read from inside the HUD. The
     /// map's `.ignoresSafeArea()` consumes the safe area for its ZStack siblings, so the
     /// HUD spans to the screen edge and this inset is the FULL clearance the content needs
@@ -3081,10 +3022,15 @@ struct RideNavigationView: View {
         VStack(spacing: 8) {
             // Full width: the cards scroll edge to edge and inset themselves.
             convoyStrip(compact: false)
-            ViewThatFits(in: .horizontal) {
-                controlRow(spacing: 16, showUnits: true)
-                controlRow(spacing: 10, showUnits: true)
-                controlRow(spacing: 8,  showUnits: false)
+            DSNavBottomBar(
+                speed: speedText,
+                arrival: vm.arrival?.time, arrivalPeriod: vm.arrival?.period,
+                arrivalSub: vm.timeLeftString, arrivalSpoken: vm.arrival?.spoken,
+                distance: distanceText,
+                isLandscape: isLandscape
+            ) {
+                regroupButton
+                endRideButton
             }
             .padding(.horizontal, 20)
         }
@@ -3110,89 +3056,6 @@ struct RideNavigationView: View {
     /// the indicator, but the last third of it reads as dead space under the bar. Giving 10pt back
     /// still leaves the buttons ~24pt above the screen edge, clear of the home-gesture strip.
     private var barBottomTrim: CGFloat   { isLandscape ? 0 : 10 }
-
-    /// One candidate layout for the bottom bar. `Spacer(minLength:)` keeps the
-    /// ideal width measurable so `ViewThatFits` can compare candidates.
-    private func controlRow(spacing: CGFloat, showUnits: Bool) -> some View {
-        HStack(spacing: spacing) {
-            barStat(
-                label: "SPEED",
-                value: vm.hasSpeedFix ? String(format: "%.0f", vm.mySpeedKmh) : "--",
-                unit: showUnits ? "KM/H" : nil
-            )
-            barDivider
-            arrivalStat(showUnits: showUnits)
-            barDivider
-            barStat(
-                label: "DIST",
-                value: vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--",
-                unit: showUnits ? "KM" : nil
-            )
-            Spacer(minLength: 6)
-            regroupButton
-            endRideButton
-        }
-    }
-
-    /// 48pt portrait — comfortably above the 44pt minimum touch target, and it stops
-    /// the buttons from setting a row height 21pt taller than the stats beside them.
-    private var buttonSize: CGFloat { isLandscape ? DS.Target.hud : DS.Target.hud }
-
-    // A single stat written directly on the bar — no card/pill. `lineLimit(1)` keeps multi-digit
-    // values (e.g. 3-digit speed) on one line; `minimumScaleFactor` lets them give up a little
-    // size when the row is full rather than forcing the HStack wider than the screen. Do NOT use
-    // `fixedSize` here: three stats plus both buttons need ~438pt at worst-case values, so on a
-    // 393pt screen a fixed-width row bleeds past both edges and clips the outermost glyphs.
-    private func barStat(label: LocalizedStringKey, value: String, unit: String?,
-                         sub: String? = nil, spoken: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .dsText(.hudStatLabel)
-                .foregroundStyle(DS.Text.muted)
-                .lineLimit(1)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value)
-                    .dsText(isLandscape ? .hudEta : .hudStatValue)
-                    .foregroundStyle(DS.Text.primary)
-                    .lineLimit(1)
-                if let unit {
-                    Text(unit)
-                        .dsText(.hudStatLabel)
-                        .foregroundStyle(DS.Text.muted)
-                        .lineLimit(1)
-                }
-            }
-            if let sub {
-                Text(sub)
-                    .dsText(.hudStatLabel)
-                    .foregroundStyle(DS.Text.muted)
-                    .lineLimit(1)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(label))
-        .accessibilityValue(Text(spoken.map { s in sub.map { "\(s), \($0)" } ?? s }
-                                 ?? (unit.map { "\(value) \($0)" } ?? value)))
-    }
-
-    /// Clock arrival with the time left beneath it. `showUnits: false` drops the AM/PM on the
-    /// narrowest layouts (the 12-hour period is the first thing to go).
-    private func arrivalStat(showUnits: Bool) -> some View {
-        let arrival = vm.arrival
-        return barStat(
-            label: "ARRIVAL",
-            value: arrival?.time ?? "--",
-            unit: showUnits ? arrival?.period : nil,
-            sub: vm.timeLeftString,
-            spoken: arrival?.spoken
-        )
-    }
-
-    private var barDivider: some View {
-        Rectangle()
-            .fill(DS.Border.divider)
-            .frame(width: DS.BorderWidth.hairline, height: isLandscape ? 26 : 30)
-    }
 
     private var regroupButton: some View {
         DSSquareIconButton(systemImage: "person.3.fill", label: "Regroup",
@@ -3308,86 +3171,6 @@ struct LiveRiderPin: View {
                     .font(.system(size: size * 0.32, weight: .bold))
                     .foregroundColor(rider.isMe ? DS.Accent.base : DS.Text.primary.base)
             )
-    }
-}
-
-// MARK: - Live Leaderboard Card
-
-struct LiveLeaderboardCard: View {
-    let row: NavLeaderboardRow
-    /// How far this rider is ahead of (+) or behind (−) me, in metres. Nil for my own card.
-    var gapMeters: Double? = nil
-    var isSelected: Bool = false
-    var isOffline: Bool = false
-    var onTap: () -> Void = {}
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var isHighlighted: Bool { row.rank == 1 || isSelected || row.isMe }
-    private var firstName: String { row.name.components(separatedBy: " ").first ?? row.name }
-
-    /// "+1.2 km" ahead, "−300 m" behind, "Level" within a few car lengths.
-    private var gapText: String? {
-        guard let gap = gapMeters else { return nil }
-        let distance = abs(gap)
-        if distance < 25 { return String(localized: "Level") }
-        let formatted = distance < 1000
-            ? "\(Int((distance / 10).rounded()) * 10) m"
-            : String(format: "%.1f km", distance / 1000)
-        return (gap > 0 ? "+" : "−") + formatted
-    }
-
-    private var spokenGap: String? {
-        guard let gap = gapMeters else { return nil }
-        let distance = abs(gap)
-        if distance < 25 { return String(localized: "level with you") }
-        let spoken = NavVoiceGuide.spokenDistance(distance)
-        return gap > 0 ? String(localized: "\(spoken) ahead") : String(localized: "\(spoken) behind")
-    }
-
-    var body: some View {
-        // No rank number: the strip is already ordered by position. `row.rank` still drives the
-        // leader highlight below.
-        Button(action: {
-            DSHaptic.selection()
-            onTap()
-        }) {
-            HStack(spacing: 7) {
-                DSAvatar(
-                    name: row.name, id: row.id,
-                    imageURL: row.avatarUrl.flatMap(URL.init(string:)),
-                    size: DS.AvatarSize.stack,
-                    isOnline: isOffline ? false : nil,   // grey dot = heartbeats lapsed
-                    highlightRing: isHighlighted ? DS.Accent.base : nil
-                )
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(firstName)
-                        .dsText(.navLabel)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DS.Text.primary)
-                        .lineLimit(1)
-                    // The gap is the point of the card: where is this rider relative to me?
-                    Text(row.isMe ? String(localized: "You") : (gapText ?? ""))
-                        .dsText(.dataMono)
-                        .foregroundStyle(row.isMe ? DS.Accent.base : DS.Text.secondary.base)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, 10)
-            .frame(minHeight: DS.Target.hud)
-            .background(DS.Surface.card, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(isHighlighted ? DS.Accent.base : DS.Border.default.base, lineWidth: isHighlighted ? DS.BorderWidth.emphasis : DS.BorderWidth.default))
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .opacity(isOffline ? DS.Opacity.offline : 1)
-        .animation(reduceMotion ? nil : .spring(response: 0.3), value: isSelected)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: isOffline)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("\(row.name)\(row.isMe ? ", you" : "")\(isOffline ? ", offline" : "")\(spokenGap.map { ", " + $0 } ?? "")"))
-        .accessibilityHint(Text(row.isMe ? "Recentres the map on you" : "Shows rider on map"))
-        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -3578,163 +3361,6 @@ struct EmergencyPin: View {
                 .padding(.horizontal, 8).padding(.vertical, 2)
                 .background(DS.Status.danger.opacity(0.92))
                 .clipShape(Capsule())
-        }
-    }
-}
-
-// MARK: - Regroup Toast Banner
-
-private extension String {
-    var regroupColor: Color {
-        switch self {
-        case "FUEL":   return DS.Category.fuel
-        case "FOOD":   return DS.Category.food
-        case "SCENIC": return DS.Category.scenic
-        default:       return DS.Category.other
-        }
-    }
-}
-
-struct RegroupAlertBanner: View {
-    let type: String
-    let hasArrived: Bool
-    let onShow: () -> Void
-    let onArrived: () -> Void
-
-    private var icon: String {
-        switch type {
-        case "FUEL":   return "fuelpump"
-        case "FOOD":   return "fork.knife"
-        case "SCENIC": return "camera"
-        default:       return "hand.raised.fill"
-        }
-    }
-
-    private var label: String {
-        switch type {
-        case "FUEL":   return String(localized: "Fuel stop")
-        case "FOOD":   return String(localized: "Food stop")
-        case "SCENIC": return String(localized: "Scenic stop")
-        default:       return String(localized: "Stop")
-        }
-    }
-
-    var body: some View {
-        let accent = type.regroupColor
-        VStack(alignment: .leading, spacing: DS.Space.p3) {
-            HStack(spacing: DS.Space.p3) {
-                Image(systemName: icon)
-                    .dsIcon(DS.IconSize.md, weight: .semibold)
-                    .foregroundStyle(accent)
-                    .frame(width: 36, height: 36)
-                    .background(accent.opacity(0.16), in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Regroup called").dsText(.badge).foregroundStyle(accent)
-                    Text("Head to the \(label)").dsText(.bodySmall).fontWeight(.semibold).foregroundStyle(DS.Text.primary)
-                }
-                Spacer(minLength: 0)
-            }
-            // Show is a peek, not a camera move: the map stays on the road until the rider asks.
-            DSAdaptiveStack(spacing: DS.Space.p2) {
-                DSPillButton(title: "Show", systemImage: "scope", variant: .tonal, large: true, action: onShow)
-                if hasArrived {
-                    DSPillButton(title: "Waiting for others", systemImage: "clock", variant: .neutral, large: true) {}
-                        .disabled(true)
-                } else {
-                    DSPillButton(title: "Mark as arrived", systemImage: "checkmark.circle.fill", variant: .primary, large: true, action: onArrived)
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, DS.Space.p3)
-        .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).stroke(accent.opacity(0.5), lineWidth: DS.BorderWidth.emphasis))
-        .accessibilityElement(children: .contain)
-    }
-}
-
-// MARK: - Regroup Resolved Banner
-
-struct RegroupResolvedBanner: View {
-    var body: some View {
-        HStack(spacing: DS.Space.p3) {
-            Image(systemName: "checkmark.circle.fill")
-                .dsIcon(DS.IconSize.md, weight: .semibold)
-                .foregroundStyle(DS.Status.success)
-                .frame(width: 36, height: 36)
-                .background(DS.Status.success.opacity(0.16), in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Regroup complete").dsText(.badge).foregroundStyle(DS.Status.success)
-                Text("Everyone arrived").dsText(.bodySmall).fontWeight(.semibold).foregroundStyle(DS.Text.primary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, DS.Space.p3)
-        .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).stroke(DS.Status.successBorder, lineWidth: DS.BorderWidth.emphasis))
-        .accessibilityElement(children: .combine)
-        .onAppear { AccessibilityNotification.Announcement(String(localized: "Regroup complete. Everyone arrived")).post() }
-    }
-}
-
-// MARK: - Emergency Alert Banner
-
-struct EmergencyAlertBanner: View {
-    let reporterName: String
-    let message: String
-    let onShow: () -> Void
-    /// nil for riders who aren't allowed to clear the emergency (only the raiser or leader can);
-    /// the dismiss control is hidden for them and the banner stays until an authorized rider clears it.
-    let onDismiss: (() -> Void)?
-
-    var body: some View {
-        HStack(spacing: DS.Space.p3) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .dsIcon(DS.IconSize.md, weight: .bold)
-                .foregroundStyle(DS.Status.danger)
-                .frame(width: 36, height: 36)
-                .background(DS.Status.danger.opacity(0.18), in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Emergency").dsText(.badge).foregroundStyle(DS.Status.danger)
-                Text("\(reporterName) needs help — head to their location")
-                    .dsText(.bodySmall).fontWeight(.semibold)
-                    .foregroundStyle(DS.Text.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 4)
-            Button(action: onShow) {
-                Image(systemName: "scope")
-                    .dsIcon(DS.IconSize.sm, weight: .bold)
-                    .foregroundStyle(DS.Status.danger)
-                    .frame(width: DS.Target.minimum, height: DS.Target.minimum)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(Text("Show emergency on map"))
-            if let onDismiss {
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .dsIcon(DS.IconSize.xs, weight: .bold)
-                        .foregroundStyle(DS.Text.secondary)
-                        .frame(width: 28, height: 28)
-                        .background(DS.Surface.raised, in: Circle())
-                        .frame(width: DS.Target.minimum, height: DS.Target.minimum)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(Text("Dismiss emergency"))
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, DS.Space.p3)
-        .background(DS.Surface.dangerContainer, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).stroke(DS.Status.danger, lineWidth: DS.BorderWidth.emphasis))
-        .accessibilityElement(children: .contain)
-        .onAppear {
-            // Emergency is announced at high priority and warns by haptic.
-            var text = AttributedString(String(localized: "Emergency. \(reporterName) needs help"))
-            text.accessibilitySpeechAnnouncementPriority = .high
-            AccessibilityNotification.Announcement(text).post()
-            DSHaptic.alert()
         }
     }
 }

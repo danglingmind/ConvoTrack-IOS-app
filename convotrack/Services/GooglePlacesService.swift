@@ -2,7 +2,7 @@ import Foundation
 import CoreLocation
 
 // Drop-in replacement for the MKMapItem/MKLocalSearch pattern used in CreateRideView
-// and CoordinationOverlayView. Uses Google Places Text Search REST API — no extra SDK.
+// and the old coordination prototype. Uses Google Places Text Search REST API — no extra SDK.
 
 struct PlaceResult: Identifiable, Equatable {
     let id: String
