@@ -21,6 +21,15 @@ final class SirenPlayer {
         case emergency   // urgent continuous siren wail
         case regroup     // bold two-tone "nee-naw" siren — distinct in character from the emergency wail
 
+        /// How long the sound plays at its natural repeat count, so a spoken cue can start just
+        /// after it ends instead of on a guessed delay. Matches the buffers built below.
+        var duration: TimeInterval {
+            switch self {
+            case .emergency: return 0.9 * Double(defaultRepeats)           // one wail = 0.9 s
+            case .regroup:   return 0.28 * 2 * Double(defaultRepeats)      // two 0.28 s tones per cycle
+            }
+        }
+
         /// Natural number of back-to-back repeats when the caller doesn't override it.
         var defaultRepeats: Int {
             switch self {

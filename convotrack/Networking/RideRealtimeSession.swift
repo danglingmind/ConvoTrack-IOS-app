@@ -266,7 +266,17 @@ final class RideRealtimeSession: ObservableObject {
             self?.updateParticipantStatus(userId: userId, status: "READY")
         }
         socket.onRideUpdated = { [weak self] event in self?.rideUpdated = event }
-        socket.onRideDeleted = { [weak self] in self?.wasDeleted = true }
+        socket.onRideDeleted = { [weak self] in
+            guard let self else { return }
+            self.wasDeleted = true
+            // The leader deleted the ride on their phone; drop this phone's copy of its map,
+            // summary card and remembered destination too, same as when we delete or leave.
+            let deletedId = self.rideId
+            Task {
+                await ImageCache.shared.purge(tag: deletedId)
+                await RideThumbnail.forgetDestination(rideId: deletedId)
+            }
+        }
 
         socket.onSplitDetected = { [weak self] dict in self?.split = SplitInfo(dict) }
         socket.onSplitResolved = { [weak self] in self?.split = nil }

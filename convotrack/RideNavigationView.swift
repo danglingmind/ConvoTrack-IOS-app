@@ -23,6 +23,9 @@ struct NavLeaderboardRow: Identifiable {
     let avatarUrl: String?
     let distanceToGoalKm: Double
     let isMe: Bool
+    /// False for a row seeded from the roster: that rider has not posted a location yet, so their
+    /// `distanceToGoalKm` is the full route length and means nothing about where they are.
+    var hasPosition = true
 }
 
 // MARK: - Alerts
@@ -162,6 +165,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// The maneuver after the one on the banner, set only when it follows within ~150 m.
     @Published private(set) var thenManeuver: String? = nil
     private var voiceGuide = NavVoiceGuide()
+    private var destinationName = ""
     @Published var activeRegroup: RegroupEvent? = nil
     @Published var hasMarkedArrived: Bool = false
     @Published var showRegroupResolvedToast: Bool = false
@@ -433,6 +437,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
     func setup(rideId: String, ride: Ride, myUserId: String, session: RideRealtimeSession) async {
         self.rideId = rideId
+        self.destinationName = ride.destinationName
         self.staticParticipants = ride.participants
         self.myUserId = myUserId
         self.leaderId = ride.leaderId
@@ -457,7 +462,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
                 id: p.userId, rank: index + 1, name: p.name,
                 avatarUrl: p.avatarUrl,
                 distanceToGoalKm: ride.distanceMeters / 1000,
-                isMe: p.userId == myUserId
+                isMe: p.userId == myUserId,
+                hasPosition: false
             )
         }
         if let myRow = leaderboardRows.first(where: { $0.isMe }) {
@@ -520,7 +526,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
                     self.splitDismissed = false
                 } else {
                     let gap = NavVoiceGuide.spokenDistance(self.splitGapMeters)
-                    VoiceAnnouncer.shared.announce("Group split. \(self.splitRiderName) is \(gap) behind the leader.", priority: .alert)
+                    // The rider who is behind hears it as a nudge, not as news about someone else.
+                    let sentence = info?.lastRiderId == self.myUserId
+                        ? "Group split. You're falling behind. The group is \(gap) ahead."
+                        : "Group split. \(self.splitRiderName) is \(gap) behind the leader."
+                    VoiceAnnouncer.shared.announce(sentence, priority: .alert)
                 }
             }
             .store(in: &cancellables)
@@ -797,7 +807,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             case "SCENIC": stop = String(localized: "the scenic stop")
             default:       stop = String(localized: "the meeting point")
             }
-            VoiceAnnouncer.shared.announce("Regroup called. Head to \(stop).", after: 1.8, priority: .alert)
+            VoiceAnnouncer.shared.announce("Regroup called. Head to \(stop).", after: SirenPlayer.Sound.regroup.duration + 0.2, priority: .alert)
         }
     }
 
@@ -834,7 +844,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
         // Attention siren, then a spoken cue once the siren has cleared the audio session.
         SirenPlayer.shared.play(.regroup)
-        VoiceAnnouncer.shared.announce("Ride updated, rerouting", after: 1.8)
+        VoiceAnnouncer.shared.announce("Ride updated, rerouting", after: SirenPlayer.Sound.regroup.duration + 0.2)
 
         Task { await calculateRoute(from: event.waypoints, polyline: event.routePolyline) }
     }
@@ -846,7 +856,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         activeEmergency = event
         pushLiveActivity()
         startEmergencySiren()
-        VoiceAnnouncer.shared.announce("Emergency. \(emergencyReporterName) needs help.", after: 1.8, priority: .emergency)
+        VoiceAnnouncer.shared.announce("Emergency. \(emergencyReporterName) needs help.", after: SirenPlayer.Sound.emergency.duration + 0.2, priority: .emergency)
     }
 
     /// Emergency siren repeats every 10s until the emergency is resolved — an unresolved emergency
@@ -1037,7 +1047,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
                     id: p.userId, rank: nextRank, name: p.name,
                     avatarUrl: p.avatarUrl,
                     distanceToGoalKm: totalDistanceMeters / 1000,
-                    isMe: p.userId == myUserId
+                    isMe: p.userId == myUserId,
+                    hasPosition: false
                 ))
                 nextRank += 1
             }
@@ -1264,7 +1275,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             speedKmh: mySpeedKmh,
             instruction: currentInstruction,
             maneuver: currentManeuver,
-            thenManeuver: then
+            thenManeuver: then,
+            destinationName: destinationName
         )
         if let sentence = voiceGuide.update(input) {
             VoiceAnnouncer.shared.announce(sentence, priority: .turn)
@@ -3048,7 +3060,9 @@ struct RideNavigationView: View {
     /// Metres this rider is ahead of me (+) or behind me (−), from each rider's distance to the
     /// goal. Nil for my own card.
     private func gap(to row: NavLeaderboardRow) -> Double? {
-        guard !row.isMe, let me = vm.leaderboardRows.first(where: { $0.isMe }) else { return nil }
+        // Until both riders have posted a position, the gap is two copies of the route length.
+        guard !row.isMe, row.hasPosition,
+              let me = vm.leaderboardRows.first(where: { $0.isMe }), me.hasPosition else { return nil }
         return (me.distanceToGoalKm - row.distanceToGoalKm) * 1000
     }
 

@@ -18,6 +18,8 @@ struct NavVoiceGuide {
         let maneuver: String
         /// The maneuver after this one, only when it follows closely (see `thenWithinMeters`).
         let thenManeuver: String?
+        /// Named in the arrival prompts ("You have arrived at Nandi Hills"); empty falls back to "your destination".
+        var destinationName: String = ""
     }
 
     private enum Level: Int { case far = 1, mid, near, now }
@@ -60,7 +62,7 @@ struct NavVoiceGuide {
         return Self.text(level: level, input)
     }
 
-    /// The current maneuver again, for when voice is switched back on. Always a full sentence.
+    /// The current maneuver again, for when voice is switched back on: at least the main prompt, never the bare far heads-up.
     func repeatCurrent() -> String? {
         guard let input = last else { return nil }
         let level = Self.level(for: input).rawValue < Level.mid.rawValue ? Level.mid : Self.level(for: input)
@@ -85,19 +87,21 @@ struct NavVoiceGuide {
 
     private static func text(level: Level, _ input: Input) -> String {
         let arriving = input.maneuver == "ARRIVE"
+        let place = input.destinationName.trimmingCharacters(in: .whitespaces).isEmpty
+            ? "your destination" : input.destinationName
         switch level {
         case .far, .mid:
             let lead = "In \(spokenDistance(input.distanceMeters)), "
-            return lead + (arriving ? "you will arrive at your destination" : lowerFirst(input.instruction))
+            return lead + (arriving ? "you will arrive at \(place)" : lowerFirst(input.instruction))
         case .near:
-            if arriving { return "Your destination is just ahead" }
+            if arriving { return "\(place) is just ahead" }
             var sentence = input.instruction
             if let then = input.thenManeuver, let phrase = phrase(for: then) {
                 sentence += ", then \(phrase)"
             }
             return sentence
         case .now:
-            if arriving { return "You have arrived at your destination" }
+            if arriving { return "You have arrived at \(place)" }
             return upperFirst(phrase(for: input.maneuver) ?? input.instruction)
         }
     }

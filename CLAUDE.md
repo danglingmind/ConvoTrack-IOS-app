@@ -144,6 +144,22 @@ The app is currently entirely hardcoded (dummy riders, coordinates, stats). Back
 - **Invite/join links** — shared links are HTTPS Universal Links (`https://convoy-backend-hx3c.onrender.com/convotrack/join/CODE` via `AppURLs.joinLink(code:)`), **not** the `convotrack://` custom scheme (kept only for legacy/QR back-compat). Custom schemes aren't tappable in messaging apps and have no not-installed fallback. The backend (`convoy-backend/src/routes/deeplink.ts`, registered public/unauth in `app.ts`) serves `/.well-known/apple-app-site-association`, `/.well-known/assetlinks.json`, and a fallback landing page at `/convotrack/join/:code`. iOS: `associated-domains` entitlement (`applinks:…`) + `ConvoTrackApp.handleDeepLink` parses both forms (host-validated). Android mirror in `convotrack-android` (App Link intent-filter `autoVerify=true`; `MainActivity` reads `intent.data` → `AppRoot`/`MainScreen` prefill join sheet). **Auto-open requires config, not code:** backend env `APPLE_APP_ID_PREFIX` (Apple Team ID) + `ANDROID_SHA256_FINGERPRINTS` (release cert SHA-256) must be set + redeployed, and the iOS App ID must have Associated Domains enabled; until then the link is tappable and lands on the fallback page but won't jump into the app.
 - **Ride summary stats** — computed 100% server-side (`convoy-backend` `summaryService.ts`); iOS `RideSummaryView` / Android `RideSummaryScreen` are thin renderers. Correct semantics: duration = actual wall-clock (`endedAt − startedAt`), NOT the planned ETA; distance = leader's `maxLeaderProgress` + jitter-guarded off-route `detourMeters`, NOT the planned route distance; `maxGroupSplitMeters` = running max tracked per-tick in `leaderboardEngine.ts`, NOT the final snapshot.
 
+### Live navigation: values that must match on both platforms
+These are implemented twice (iOS `RideNavigationView` / `Services/NavVoiceGuide.swift`, Android `ui/ride/*` / `data/audio/NavVoiceGuide.kt`). Change one, change the other. Android has unit tests for the voice guide and split-alert logic (`./gradlew testDebugUnitTest`).
+
+| What | Value |
+| --- | --- |
+| Spoken turn prompts | far heads-up only if the turn is ≥ 800 m away; main prompt at 500 m or speed × 20 s (whichever is larger); reminder at 100 m or speed × 6 s; "now" at 15 m (30 m for arrival). A level is spoken at most once per maneuver; a new route or step resets it |
+| "Then …" | appended to the reminder when the next maneuver is within 150 m |
+| Voice priority | turn < alert (regroup, split, reroute, off-route) < emergency. Higher interrupts lower; lower queues behind higher. Mute silences everything except emergencies |
+| Spoken after a siren | start after the siren's own length + 200 ms (`SirenPlayer.Sound.duration` / `durationMs`) |
+| Alert slot priority | emergency > group split > regroup called > regroup complete; "+N more" chip cycles the rest; off-route and reconnecting are a turn-card status line, not alerts |
+| Peek (Show / edge-chip tap) | camera flies to the point; follow camera returns after ~10 s of riding |
+| Convoy gap | (my distance to goal − their distance to goal); "Level" within 25 m; shown only when both riders have posted a position (`hasPosition`), otherwise "--" |
+| Arrival | device clock + time left; 12/24 h from the system setting (Android) / locale (iOS); "42m left" beneath |
+| Live Activity / notification updates | at most one per 5 s, immediately on a step change or an emergency start/end |
+| Image cache TTL | static map 30 days (iOS) / server max-age floored at 5 min (Android); avatars 24 h with ETag revalidation; place photos 30 days (7 days for "no photo"); disk cap 100 MB |
+
 ### Component Locations (not in ConvoTrackTheme.swift)
 - `Triangle` shape — defined in `RideNavigationView.swift`, used by map pins across lobby and navigation
 - `DrawerButtonStyle` — defined locally in `RiderDetailDrawer.swift`

@@ -36,6 +36,16 @@ final class VoiceAnnouncer: NSObject, AVSpeechSynthesizerDelegate {
         synth.delegate = self
     }
 
+    /// The prompts are English, so the voice is too — but in the rider's own accent when the device
+    /// has one (en-IN, en-GB, en-AU, ...), falling back to US English.
+    private static let englishVoice: AVSpeechSynthesisVoice? = {
+        if let region = Locale.current.region?.identifier,
+           let voice = AVSpeechSynthesisVoice(language: "en-\(region)") {
+            return voice
+        }
+        return AVSpeechSynthesisVoice(language: "en-US")
+    }()
+
     var isMuted: Bool { UserDefaults.standard.bool(forKey: Self.mutedKey) }
 
     /// Speak `text`, optionally after `delay` seconds (to let a leading chime finish first).
@@ -56,7 +66,7 @@ final class VoiceAnnouncer: NSObject, AVSpeechSynthesizerDelegate {
 
             let utterance = AVSpeechUtterance(string: text)
             utterance.rate  = AVSpeechUtteranceDefaultSpeechRate
-            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+            utterance.voice = Self.englishVoice
             self.priorities[ObjectIdentifier(utterance)] = priority
             self.synth.speak(utterance)
         }
