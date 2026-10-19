@@ -33,6 +33,10 @@
             </array>
         </dict>
     </array>
+    <key>NSSupportsLiveActivities</key>
+    <true/>
+    <key>NSSupportsLiveActivitiesFrequentUpdates</key>
+    <true/>
     <key>NSCameraUsageDescription</key>
     <string>ConvoTrack uses the camera to scan QR codes for joining rides.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

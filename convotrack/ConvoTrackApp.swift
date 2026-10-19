@@ -13,8 +13,19 @@ enum DeepLinkRouter {
     /// splash → auth). `MainTabView` drains this on appear; the live `NotificationCenter` post
     /// covers the warm/backgrounded case.
     static var pendingJoinCode: String?
+    /// Same buffering for the Live Activity tap (`convotrack://ride/<id>`).
+    static var pendingOpenRideId: String?
 
     static func handle(_ url: URL) {
+        // Live Activity tap: open navigation for the ride. Custom scheme only; it is never shared.
+        if url.scheme == "convotrack", url.host == "ride" {
+            let id = url.pathComponents.first(where: { $0 != "/" }) ?? ""
+            guard !id.isEmpty, id.count <= 64,
+                  id.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else { return }
+            pendingOpenRideId = id
+            NotificationCenter.default.post(name: .convotrackOpenRide, object: nil, userInfo: ["rideId": id])
+            return
+        }
         let rawSegment: String?
         if url.scheme == "convotrack", url.host == "join" {
             rawSegment = url.pathComponents.first(where: { $0 != "/" })
@@ -131,4 +142,5 @@ struct ConvoTrackApp: App {
 
 extension Notification.Name {
     static let convotrackJoinRide = Notification.Name("convotrackJoinRide")
+    static let convotrackOpenRide = Notification.Name("convotrackOpenRide")
 }

@@ -529,6 +529,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             .sink { [weak self] info in
                 guard let self else { return }
                 self.splitInfo = info
+                self.pushLiveActivity()
                 if info == nil {
                     self.splitDismissed = false
                 } else {
@@ -571,7 +572,38 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             .store(in: &cancellables)
     }
 
+    // MARK: - Live Activity
+
+    /// What the Lock Screen / Dynamic Island shows right now. Built from state the HUD already
+    /// computes (banner, ETA, split, emergency); no navigation logic is repeated here.
+    private var liveActivityState: RideActivityAttributes.ContentState {
+        let secs = timeLeftSeconds
+        let emergencyFirstName: String? = activeEmergency == nil ? nil
+            : (emergencyReporterName.components(separatedBy: " ").first ?? emergencyReporterName)
+        return RideActivityAttributes.ContentState(
+            maneuver: currentManeuver,
+            distanceText: currentInstruction.isEmpty ? "" : RideNavigationView.turnDistanceText(distanceToNextTurnMeters),
+            instruction: currentInstruction.isEmpty ? String(localized: "Follow route") : currentInstruction,
+            arrival: Date().addingTimeInterval(secs ?? 0),
+            arrivalText: arrival?.time ?? "--",
+            timeLeftText: secs.map { String(localized: "\(Self.formatDuration($0)) left") } ?? "",
+            convoyGapMeters: splitInfo == nil ? nil : splitGapMeters,
+            emergencyName: emergencyFirstName
+        )
+    }
+
+    func startLiveActivity(destinationName: String) {
+        RideLiveActivityController.shared.start(rideId: rideId, destinationName: destinationName, state: liveActivityState)
+    }
+
+    private func pushLiveActivity() {
+        let controller = RideLiveActivityController.shared
+        guard controller.isRunning else { return }
+        controller.update(liveActivityState)
+    }
+
     func teardown() {
+        RideLiveActivityController.shared.end()
         VoiceAnnouncer.shared.stop()
         voiceGuide.reset()
         regroupResolvedToastTask?.cancel()
@@ -826,6 +858,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // arriving after the live event) so we don't restart the siren cadence.
         guard activeEmergency?.emergencyId != event.emergencyId else { return }
         activeEmergency = event
+        pushLiveActivity()
         startEmergencySiren()
         VoiceAnnouncer.shared.announce("Emergency. \(emergencyReporterName) needs help.", after: 1.8, priority: .emergency)
     }
@@ -849,6 +882,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         guard activeEmergency?.emergencyId == emergencyId else { return }
         stopEmergencySiren()
         withAnimation { activeEmergency = nil }
+        pushLiveActivity()
     }
 
     /// Creator- or leader-initiated clear. The local state clears when the server echoes
@@ -1231,6 +1265,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         currentManeuver    = banner.maneuver
         thenManeuver       = banner.then?.maneuver
         speakNextManeuver(then: banner.then?.maneuver)
+        pushLiveActivity()
     }
 
     /// Feeds the voice guide the maneuver being approached. A new route (reroute, edited ride)
@@ -1523,6 +1558,7 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         if let base = etaBaseSeconds {
             etaSecondsRemaining = max(0, base - Date().timeIntervalSince(etaBaseDate))
         }
+        pushLiveActivity()
 
         guard !isEtaRefreshInFlight,
               Date().timeIntervalSince(lastEtaRefresh) >= Self.etaRefreshInterval,
@@ -2126,7 +2162,12 @@ struct RideNavigationView: View {
             }
             .onChange(of: vm.endError) { _, err in if err != nil { showEndError = true } }
             // Ride is over (ended by leader or COMPLETED broadcast) → tear down the shared session.
-            .onChange(of: vm.showSummary) { _, show in if show { rideSession.stop() } }
+            .onChange(of: vm.showSummary) { _, show in
+                if show {
+                    RideLiveActivityController.shared.end()
+                    rideSession.stop()
+                }
+            }
     }
 
     private var coreView: some View {
@@ -2368,6 +2409,7 @@ struct RideNavigationView: View {
     }
 
     private func beginNavigation() {
+        vm.startLiveActivity(destinationName: destinationName)
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { isNavigationActive = true }
         guard let coord = vm.userLocation else { return }
         cameraCommand = MapCameraCommand(

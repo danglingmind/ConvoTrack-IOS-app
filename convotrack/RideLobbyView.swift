@@ -425,6 +425,10 @@ struct RideLobbyView: View {
         }
         .modifier(lobbyAlerts)
         .task { await loadRideAndConnect() }
+        // Live Activity tap: push navigation as soon as the ride is loaded and ACTIVE.
+        .onAppear(perform: openNavigationIfRequested)
+        .onChange(of: appState.openNavigationRideId) { _, _ in openNavigationIfRequested() }
+        .onChange(of: appState.currentRide?.status) { _, _ in openNavigationIfRequested() }
         // Keyed on the destination so it runs once the ride lands (the lobby renders before
         // the fetch returns) and again if the leader edits the destination.
         .task(id: destinationPhotoKey) { await loadDestinationPhoto() }
@@ -761,6 +765,13 @@ struct RideLobbyView: View {
         } else {
             row
         }
+    }
+
+    private func openNavigationIfRequested() {
+        guard let id = appState.openNavigationRideId, id == vm.rideId || id == appState.currentRideId else { return }
+        guard let status = appState.currentRide?.status else { return }   // not loaded yet; retried on change
+        appState.openNavigationRideId = nil
+        if status == "ACTIVE" { showNavigation = true }
     }
 
     // MARK: - Sticky action

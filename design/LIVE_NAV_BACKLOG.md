@@ -15,8 +15,16 @@ device/simulator · **decide** needs a product call.
 | 4b | Convoy strip in the bottom bar, gap per card, tappable, count pill removed | done, **verify** | Portrait only: landscape keeps its side-panel order. The bar is taller; check the map still has enough room |
 | 4c | Exit vs End: neutral "Exit navigation" for non-leaders | done, **verify** | |
 | 4d | Edge chips as real buttons, 44 pt (iOS) / 48 dp (Android) | done, **verify** | |
-| 5 | Live Activity (iOS) / ongoing notification with next turn (Android) | in progress | Needs a Widget Extension target and `NSSupportsLiveActivities`; add a `convotrack://ride/<id>` route to `DeepLinkRouter` |
+| 5 | Live Activity (iOS) / ongoing notification with next turn (Android) | iOS done, **verify on device**; Android in progress | iOS: `ConvoTrackWidgets` extension, `RideLiveActivityController`, `convotrack://ride/<id>` route. See "Phase 5 iOS leftovers" |
 | 6 | Use DesignSystem HUD components; reduce glass; Reduce Motion | in progress | See also "Phase 3 leftovers" below |
+
+## Phase 5 iOS leftovers
+
+- Not verified on a device: Lock Screen / Dynamic Island rendering, background updates while locked, tap-to-open from the Lock Screen, Increase Contrast, StandBy. The simulator build and install were checked only.
+- Signing: the new App ID `danglingmind.convotrack.ConvoTrackWidgets` is registered on first signed device/archive build (automatic signing, team NJ5P2B5WZJ).
+- `isDynamicIslandLimitedInWidth` (HIG 28 pt limited-width layout) is not in the current SDK, so compact views rely on `minimumScaleFactor` rather than a dedicated layout; adopt it when available.
+- Logo mark is the SF Symbol `location.north.fill` (the shipped `AppLogo` asset is a circle, i.e. a container). Swap in a bare mark asset if one exists.
+- v2: push-token updates (APNs) so the activity survives the app being killed; `NSSupportsLiveActivitiesFrequentUpdates` is on because turn distance changes every few seconds (app throttles to one update per 5 s).
 
 ## Phase 4 leftovers
 
