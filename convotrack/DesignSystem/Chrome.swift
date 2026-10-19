@@ -115,27 +115,40 @@ struct DSFloatingButton: View {
 enum DSConnectionState { case connected, reconnecting, offline }
 
 /// Antenna button. Only show it while a ride session exists, or when the app is offline.
+/// State is the icon colour (plus a slashed glyph when offline, so it is not colour alone);
+/// tapping expands the button sideways to show the state name, then it collapses again.
 struct DSConnectionStatusButton: View {
     let state: DSConnectionState
-    /// In a navigation-bar toolbar iOS 26 already draws the glass circle, so skip our own.
-    var isToolbarItem = false
+    /// Draws its own glass, so in a toolbar hide the system background (`.sharedBackgroundVisibility(.hidden)`).
     var action: () -> Void = {}
+    @State private var expanded = false
+    @State private var fullWidth: CGFloat = DS.Target.minimum
+    @State private var textWidth: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulse = false
+    @State private var dismissTask: Task<Void, Never>?
+
+    /// The pill hugs the current state name; the item itself keeps the widest width.
+    private var pillWidth: CGFloat { textWidth + DS.Space.p3 + DS.Target.minimum }
 
     private var iconColor: Color {
         switch state {
-        case .connected: DS.Text.primary.base
+        case .connected: DS.Status.success
         case .reconnecting: DS.Status.warning
         case .offline: DS.Text.muted.base
         }
     }
 
-    private var dotColor: Color {
+    private var symbol: String {
+        state == .offline
+            ? "antenna.radiowaves.left.and.right.slash"
+            : "antenna.radiowaves.left.and.right"
+    }
+
+    private var stateName: LocalizedStringKey {
         switch state {
-        case .connected: DS.Status.success
-        case .reconnecting: DS.Status.warning
-        case .offline: DS.Text.subtle.base
+        case .connected: "Connected"
+        case .reconnecting: "Reconnecting…"
+        case .offline: "Offline"
         }
     }
 
@@ -148,38 +161,65 @@ struct DSConnectionStatusButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .dsIcon(DS.IconSize.default, weight: .medium)
-                .foregroundStyle(iconColor)
-                .frame(width: DS.Target.minimum, height: DS.Target.minimum)
-                .overlay(alignment: .topTrailing) {
-                    Circle()
-                        .fill(dotColor)
-                        .frame(width: 8, height: 8)
-                        .overlay(Circle().stroke(DS.Background.base, lineWidth: 2))
-                        .opacity(state == .reconnecting && pulse ? 0.35 : 1)
-                        .padding(10)
-                }
+        Button {
+            action()
+            setExpanded(true)
+        } label: {
+            // A nav-bar item clips anything drawn outside its bounds, and resizing the item makes
+            // the bar re-lay out (it snaps). So the item reserves its widest width and the pill
+            // animates inside that, with its trailing edge pinned to the icon.
+            ZStack(alignment: .trailing) {
+                Text(stateName)
+                    .dsText(.bodySmall)
+                    .foregroundStyle(DS.Text.primary.base)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { textWidth = $0 }
+                    .opacity(expanded ? 1 : 0)
+                    .padding(.leading, DS.Space.p3)
+                    .padding(.trailing, DS.Target.minimum)
+                    .frame(width: expanded ? pillWidth : DS.Target.minimum, alignment: .trailing)
+                    .clipped()
+                    .frame(height: DS.Target.minimum)
+                    .dsGlass(in: Capsule(), clear: true)
+                Image(systemName: symbol)
+                    .dsIcon(DS.IconSize.default, weight: .medium)
+                    .foregroundStyle(iconColor)
+                    .frame(width: DS.Target.minimum, height: DS.Target.minimum)
+            }
+            .frame(width: fullWidth, height: DS.Target.minimum, alignment: .trailing)
+            .background(alignment: .leading) { widestName }
         }
         .buttonStyle(DSPressStyle(scale: 0.95))
-        .modifier(OptionalGlass(enabled: !isToolbarItem))
+        .onDisappear { dismissTask?.cancel(); expanded = false }
         .accessibilityLabel(Text("Connection status"))
         .accessibilityValue(Text(stateWords))
-        .onAppear { updatePulse() }
-        .onChange(of: state) { _, _ in updatePulse() }
     }
 
-    private func updatePulse() {
-        guard state == .reconnecting, !reduceMotion else { pulse = false; return }
-        withAnimation(DS.Motion.livePulse) { pulse = true }
+    /// Hidden stack of every state name; its width is the widest pill the button can reach.
+    private var widestName: some View {
+        ZStack {
+            ForEach(["Connected", "Reconnecting…", "Offline"], id: \.self) { name in
+                Text(LocalizedStringKey(name)).dsText(.bodySmall).lineLimit(1).fixedSize()
+            }
+        }
+        .padding(.leading, DS.Space.p3)
+        .padding(.trailing, DS.Target.minimum)
+        .hidden()
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { fullWidth = $0 }
     }
-}
 
-private struct OptionalGlass: ViewModifier {
-    let enabled: Bool
-    @ViewBuilder func body(content: Content) -> some View {
-        if enabled { content.dsGlass(in: Circle(), clear: true, interactive: true) } else { content }
+    /// Expands to show the state name, then collapses itself after a moment.
+    private func setExpanded(_ on: Bool) {
+        dismissTask?.cancel()
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : .smooth(duration: 0.4)) {
+            expanded = on
+        }
+        guard on else { return }
+        dismissTask = Task {
+            try? await Task.sleep(for: .seconds(2))
+            if !Task.isCancelled { setExpanded(false) }
+        }
     }
 }
 

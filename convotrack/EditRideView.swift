@@ -184,8 +184,9 @@ struct EditRideView: View {
         .toolbar {
             // Editing happens inside a ride session, so the connection indicator applies.
             ToolbarItem(placement: .topBarTrailing) {
-                DSConnectionStatusButton(state: connectionState, isToolbarItem: true)
+                DSConnectionStatusButton(state: connectionState)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .alert("Failed to Save Ride", isPresented: $showError) {
             Button("OK", role: .cancel) {}

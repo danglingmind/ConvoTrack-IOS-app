@@ -106,8 +106,9 @@ struct ProfileView: View {
             // The connection indicator only means something while a ride session exists.
             if appState.currentRideId != nil {
                 ToolbarItem(placement: .topBarTrailing) {
-                    DSConnectionStatusButton(state: connectionState, isToolbarItem: true)
+                    DSConnectionStatusButton(state: connectionState)
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
         }
         .task {

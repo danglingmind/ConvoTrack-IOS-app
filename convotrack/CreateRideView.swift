@@ -124,8 +124,9 @@ struct CreateRideView: View {
         .toolbar {
             if appState.currentRideId != nil {
                 ToolbarItem(placement: .topBarTrailing) {
-                    DSConnectionStatusButton(state: connectionState, isToolbarItem: true)
+                    DSConnectionStatusButton(state: connectionState)
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
         }
         .alert("Failed to Create Ride", isPresented: $showError) {
