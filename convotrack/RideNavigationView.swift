@@ -247,28 +247,62 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             ?? "A rider"
     }
 
-    /// Remaining travel time (not clock arrival) to the NEXT stop on the route. On a single-stop
-    /// ride the next stop is the destination; on a multi-stop ride it's the upcoming waypoint.
-    /// Formatted in hours once ≥ 60 min, minutes below that.
-    var etaString: String {
+    /// Remaining travel time to the NEXT stop on the route, in seconds. On a single-stop ride the
+    /// next stop is the destination; on a multi-stop ride it's the upcoming waypoint. Nil until
+    /// there is enough to estimate from.
+    var timeLeftSeconds: TimeInterval? {
         // Live traffic-aware value when we have one; the planned-duration estimate below is only
         // the bootstrap for the seconds before the first refresh lands.
-        if let live = etaSecondsRemaining { return Self.formatDuration(live) }
-        guard routeExpectedTravelTime > 0, totalDistanceMeters > 0, myDistanceToGoalKm >= 0 else { return "--" }
+        if let live = etaSecondsRemaining { return live }
+        guard routeExpectedTravelTime > 0, totalDistanceMeters > 0, myDistanceToGoalKm >= 0 else { return nil }
         let remainingFraction = min(1, max(0, (myDistanceToGoalKm * 1000) / totalDistanceMeters))
         let elapsedSecs = routeExpectedTravelTime * (1 - remainingFraction)
 
-        let secsToNextStop: TimeInterval
         if !stopCumulativeDurations.isEmpty {
             // How many stops we've already passed → index of the next one.
             let passed = max(0, totalStopCount - remainingStops.count)
             let idx = min(passed, stopCumulativeDurations.count - 1)
-            secsToNextStop = max(0, stopCumulativeDurations[idx] - elapsedSecs)
-        } else {
-            secsToNextStop = routeExpectedTravelTime * remainingFraction
+            return max(0, stopCumulativeDurations[idx] - elapsedSecs)
         }
-        return Self.formatDuration(secsToNextStop)
+        return routeExpectedTravelTime * remainingFraction
     }
+
+    /// Time left as "42m" / "1h 15m"; "--" when unknown.
+    var etaString: String { timeLeftSeconds.map(Self.formatDuration) ?? "--" }
+
+    /// "42m left", for under the arrival time.
+    var timeLeftString: String? {
+        timeLeftSeconds.map { String(localized: "\(Self.formatDuration($0)) left") }
+    }
+
+    /// When the rider gets to the next stop, on the device clock: "10:42" plus "AM" in 12-hour
+    /// locales. Split so the period can be set small beside the digits.
+    var arrival: (time: String, period: String?, spoken: String)? {
+        guard let secs = timeLeftSeconds else { return nil }
+        let date = Date().addingTimeInterval(secs)
+        let spoken = Self.arrivalFullFormatter.string(from: date)
+        guard Self.arrivalFullFormatter.dateFormat.contains("a") else {
+            return (spoken, nil, spoken)
+        }
+        return (Self.arrivalDigitsFormatter.string(from: date).trimmingCharacters(in: .whitespaces),
+                Self.arrivalPeriodFormatter.string(from: date), spoken)
+    }
+
+    private static let arrivalFullFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("jmm")
+        return f
+    }()
+    private static let arrivalDigitsFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = arrivalFullFormatter.dateFormat.replacingOccurrences(of: "a", with: "")
+        return f
+    }()
+    private static let arrivalPeriodFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "a"
+        return f
+    }()
 
     /// "45m", "1h", "2h 15m" — hours once ≥ 60 min, minutes below.
     static func formatDuration(_ secs: TimeInterval) -> String {
@@ -2468,17 +2502,6 @@ struct RideNavigationView: View {
                     .padding(.bottom, 8)
             }
 
-            if isNavigationActive {
-                // Bottom-trailing, in thumb reach: the rider reaches for it with the hand that
-                // is already near the controls, not across the whole screen to the top.
-                HStack {
-                    Spacer()
-                    voiceButton
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
-            }
-
             Group {
                 if isNavigationActive {
                     bottomControls(bottomInset: bottomInset)
@@ -2629,7 +2652,7 @@ struct RideNavigationView: View {
                 turnInstructionCard(expand: true)
 
                 // 2 — leaderboard, horizontally scrolled, with the rider count pinned trailing.
-                landscapeLeaderboardStrip
+                convoyStrip(compact: true)
 
                 // 3 — banners, directly under the leaderboard.
                 landscapeTransientStack
@@ -2694,26 +2717,37 @@ struct RideNavigationView: View {
                     .contentShape(Rectangle())
             }
             .accessibilityLabel(Text(voiceMuted ? "Turn on voice guidance" : "Mute voice guidance"))
-            Button(action: {
-                // Same rule as portrait: the leader confirms, everyone else just leaves the screen.
-                if vm.amILeader { showEndConfirm = true } else { dismiss() }
-            }) {
-                Group {
-                    if vm.isEnding {
-                        ProgressView().controlSize(.small).tint(DS.Status.danger)
-                    } else {
-                        Image(systemName: "stop.fill").dsIcon(DS.IconSize.default, weight: .medium)
+            if vm.amILeader {
+                Button { showEndConfirm = true } label: {
+                    Group {
+                        if vm.isEnding {
+                            ProgressView().controlSize(.small).tint(DS.Status.danger)
+                        } else {
+                            Image(systemName: "stop.fill").dsIcon(DS.IconSize.default, weight: .medium)
+                        }
                     }
+                    .foregroundStyle(DS.Status.danger)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: buttonSize)
+                    .background(DS.Status.dangerTint, in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).stroke(DS.Status.dangerBorder, lineWidth: DS.BorderWidth.default))
+                    .contentShape(Rectangle())
                 }
-                .foregroundStyle(DS.Status.danger)
-                .frame(maxWidth: .infinity)
-                .frame(height: buttonSize)
-                .background(DS.Status.dangerTint, in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).stroke(DS.Status.dangerBorder, lineWidth: DS.BorderWidth.default))
-                .contentShape(Rectangle())
+                .disabled(vm.isEnding)
+                .accessibilityLabel(Text("End ride"))
+            } else {
+                Button { dismiss() } label: {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .dsIcon(DS.IconSize.default, weight: .medium)
+                        .foregroundStyle(DS.Text.primary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: buttonSize)
+                        .background(DS.Surface.card, in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).stroke(DS.Border.default, lineWidth: DS.BorderWidth.default))
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(Text("Exit navigation"))
             }
-            .disabled(vm.isEnding)
-            .accessibilityLabel(Text("End ride"))
         }
     }
 
@@ -2723,7 +2757,7 @@ struct RideNavigationView: View {
         HStack(spacing: 10) {
             barStat(label: "SPEED", value: vm.hasSpeedFix ? String(format: "%.0f", vm.mySpeedKmh) : "--", unit: nil)
             barDivider
-            barStat(label: "ETA", value: vm.etaString, unit: nil)
+            arrivalStat(showUnits: true)
             barDivider
             barStat(label: "DIST", value: vm.myDistanceToGoalKm > 0 ? String(format: "%.1f", vm.myDistanceToGoalKm) : "--", unit: nil)
             Spacer(minLength: 0)
@@ -2745,15 +2779,23 @@ struct RideNavigationView: View {
                         .foregroundStyle(DS.Text.primary)
                         .lineLimit(1)
                     Text(vm.myDistanceToGoalKm > 0
-                         ? String(format: "%.1f km away", vm.myDistanceToGoalKm)
+                         ? String(format: "%.1f km", vm.myDistanceToGoalKm) + (vm.timeLeftString.map { " · \($0)" } ?? "")
                          : String(localized: "Calculating route…"))
                         .dsText(.bodySmall)
                         .foregroundStyle(DS.Text.muted)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(vm.etaString).dsText(.hudEta).foregroundStyle(DS.Text.primary)
-                    Text("ETA").dsText(.hudStatLabel).foregroundStyle(DS.Text.muted)
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text(vm.arrival?.time ?? "--").dsText(.hudEta).foregroundStyle(DS.Text.primary)
+                        if let period = vm.arrival?.period {
+                            Text(period).dsText(.hudStatLabel).foregroundStyle(DS.Text.muted)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text("Arrival"))
+                    .accessibilityValue(Text(vm.arrival?.spoken ?? "--"))
+                    Text("ARRIVAL").dsText(.hudStatLabel).foregroundStyle(DS.Text.muted)
                 }
             }
             .padding(.horizontal, DS.Space.p5)
@@ -2793,10 +2835,6 @@ struct RideNavigationView: View {
         DSFloatingButton(systemImage: "chevron.backward", label: "Back") { dismiss() }
     }
 
-    private var liveRiderCountPill: some View {
-        DSLiveRiderCountPill(count: vm.liveRiderCount > 0 ? vm.liveRiderCount : nil)
-    }
-
     /// Portrait top chrome. (Landscape never renders this — `coreView` swaps in `landscapeHud`,
     /// which builds its own column in `landscapePanel`.)
     private var topBar: some View {
@@ -2819,11 +2857,6 @@ struct RideNavigationView: View {
                 }
                 .padding(.horizontal, 20)   // matches the banners below and the bottom bar
                 .transition(.opacity)
-            }
-
-            if isNavigationActive {
-                leaderboardStrip
-                    .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .padding(.top, 8)
@@ -2973,80 +3006,60 @@ struct RideNavigationView: View {
         return "arrow.up"
     }
 
-    /// Leaderboard row, with the live-rider count pinned to its trailing edge.
+    /// The convoy: one tappable card per rider, ordered by position, each showing how far that
+    /// rider is ahead of or behind me. Tapping a card shows the rider on the map (mine recentres).
     ///
-    /// The count sits OUTSIDE the scroll view on purpose: it is a fact about the convoy, not a
-    /// rider card, so it must stay put while the cards scroll under it. It moved down here from
-    /// the top row, which the turn banner now owns outright.
-    private var leaderboardStrip: some View {
-        HStack(spacing: 8) {
+    /// Lives at the bottom of the screen, inside the control bar, so it is in thumb reach and the
+    /// top of the screen stays free for the road. Portrait gives the mute button the trailing slot
+    /// the rider-count pill used to hold: offline riders are already dimmed, so a separate count
+    /// repeated what the cards show.
+    private func convoyStrip(compact: Bool) -> some View {
+        HStack(spacing: compact ? 6 : 8) {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: compact ? 6 : 10) {
                         if vm.leaderboardRows.isEmpty {
                             ForEach(0..<3, id: \.self) { _ in
                                 RoundedRectangle(cornerRadius: DS.Radius.md)
                                     .fill(DS.Surface.glassSubtle)
-                                    .frame(width: 140, height: DS.Target.hud)
+                                    .frame(width: compact ? 100 : 140, height: DS.Target.hud)
                                     .redacted(reason: .placeholder)
                             }
                         } else {
                             ForEach(vm.leaderboardRows) { row in
-                                LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id,
-                                                    isOffline: !row.isMe && !vm.onlineUserIds.contains(row.id))
-                                    .id(row.id)
+                                LiveLeaderboardCard(
+                                    row: row,
+                                    gapMeters: gap(to: row),
+                                    isSelected: selectedRiderId == row.id,
+                                    isOffline: !row.isMe && !vm.onlineUserIds.contains(row.id),
+                                    onTap: { row.isMe ? resumeNavigation() : focusRider(row.id) }
+                                )
+                                .id(row.id)
                             }
                         }
                     }
-                    .padding(.leading, 20)
-                    .padding(.trailing, 4)
                     .padding(.vertical, 4)
                 }
+                .contentMargins(.leading, compact ? 4 : 20, for: .scrollContent)
+                .contentMargins(.trailing, 4, for: .scrollContent)
                 .onChange(of: selectedRiderId) { _, id in
                     if let id {
                         withAnimation(.spring(response: 0.4)) { proxy.scrollTo(id, anchor: .center) }
                     }
                 }
             }
-            liveRiderCountPill
-                .padding(.trailing, 20)
+            if !compact {
+                voiceButton
+                    .padding(.trailing, 20)
+            }
         }
     }
 
-    /// Compact leaderboard for the landscape panel, with the live-rider count pinned trailing —
-    /// same arrangement as portrait, and for the same reason: it moved out of the turn-banner row
-    /// so that banner could have the panel's full width.
-    private var landscapeLeaderboardStrip: some View {
-        HStack(spacing: 6) {
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        if vm.leaderboardRows.isEmpty {
-                            ForEach(0..<3, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: DS.Radius.xs)
-                                    .fill(DS.Surface.glassSubtle)
-                                    .frame(width: 100, height: 44)
-                                    .redacted(reason: .placeholder)
-                            }
-                        } else {
-                            ForEach(vm.leaderboardRows) { row in
-                                LiveLeaderboardCard(row: row, isSelected: selectedRiderId == row.id,
-                                                    isOffline: !row.isMe && !vm.onlineUserIds.contains(row.id))
-                                    .id(row.id)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                }
-                .onChange(of: selectedRiderId) { _, id in
-                    if let id {
-                        withAnimation(.spring(response: 0.4)) { proxy.scrollTo(id, anchor: .center) }
-                    }
-                }
-            }
-            liveRiderCountPill
-        }
+    /// Metres this rider is ahead of me (+) or behind me (−), from each rider's distance to the
+    /// goal. Nil for my own card.
+    private func gap(to row: NavLeaderboardRow) -> Double? {
+        guard !row.isMe, let me = vm.leaderboardRows.first(where: { $0.isMe }) else { return nil }
+        return (me.distanceToGoalKm - row.distanceToGoalKm) * 1000
     }
 
     // MARK: - Bottom Controls
@@ -3065,12 +3078,16 @@ struct RideNavigationView: View {
     /// Reading it (rather than hardcoding 34) is what makes it right on home-button
     /// devices, where it's 0 and only `barMinBottomPad` applies.
     private func bottomControls(bottomInset: CGFloat) -> some View {
-        ViewThatFits(in: .horizontal) {
-            controlRow(spacing: 16, showUnits: true)
-            controlRow(spacing: 10, showUnits: true)
-            controlRow(spacing: 8,  showUnits: false)
+        VStack(spacing: 8) {
+            // Full width: the cards scroll edge to edge and inset themselves.
+            convoyStrip(compact: false)
+            ViewThatFits(in: .horizontal) {
+                controlRow(spacing: 16, showUnits: true)
+                controlRow(spacing: 10, showUnits: true)
+                controlRow(spacing: 8,  showUnits: false)
+            }
+            .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
         .padding(.top, barTopPad)
         // Content sits above the home indicator; the material behind it still runs to the
         // screen edge, so no map shows through below the bar. `max` keeps a sane gap on
@@ -3104,7 +3121,7 @@ struct RideNavigationView: View {
                 unit: showUnits ? "KM/H" : nil
             )
             barDivider
-            barStat(label: "ETA", value: vm.etaString, unit: nil)
+            arrivalStat(showUnits: showUnits)
             barDivider
             barStat(
                 label: "DIST",
@@ -3126,7 +3143,8 @@ struct RideNavigationView: View {
     // size when the row is full rather than forcing the HStack wider than the screen. Do NOT use
     // `fixedSize` here: three stats plus both buttons need ~438pt at worst-case values, so on a
     // 393pt screen a fixed-width row bleeds past both edges and clips the outermost glyphs.
-    private func barStat(label: LocalizedStringKey, value: String, unit: String?) -> some View {
+    private func barStat(label: LocalizedStringKey, value: String, unit: String?,
+                         sub: String? = nil, spoken: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .dsText(.hudStatLabel)
@@ -3144,10 +3162,30 @@ struct RideNavigationView: View {
                         .lineLimit(1)
                 }
             }
+            if let sub {
+                Text(sub)
+                    .dsText(.hudStatLabel)
+                    .foregroundStyle(DS.Text.muted)
+                    .lineLimit(1)
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(label))
-        .accessibilityValue(Text(unit.map { "\(value) \($0)" } ?? value))
+        .accessibilityValue(Text(spoken.map { s in sub.map { "\(s), \($0)" } ?? s }
+                                 ?? (unit.map { "\(value) \($0)" } ?? value)))
+    }
+
+    /// Clock arrival with the time left beneath it. `showUnits: false` drops the AM/PM on the
+    /// narrowest layouts (the 12-hour period is the first thing to go).
+    private func arrivalStat(showUnits: Bool) -> some View {
+        let arrival = vm.arrival
+        return barStat(
+            label: "ARRIVAL",
+            value: arrival?.time ?? "--",
+            unit: showUnits ? arrival?.period : nil,
+            sub: vm.timeLeftString,
+            spoken: arrival?.spoken
+        )
     }
 
     private var barDivider: some View {
@@ -3161,16 +3199,21 @@ struct RideNavigationView: View {
                            size: isLandscape ? .hudLandscape : .hud) { showRegroup = true }
     }
 
+    /// Two different controls, because they do two different things. The leader's red stop ends
+    /// the ride for everyone (after a confirmation that also offers Exit). Everyone else cannot
+    /// end anything, so theirs is a plain neutral exit — never a red "end ride" that only closes
+    /// the screen.
+    @ViewBuilder
     private var endRideButton: some View {
-        DSSquareIconButton(systemImage: "stop.fill", label: "End ride", variant: .danger,
-                           size: isLandscape ? .hudLandscape : .hud, isBusy: vm.isEnding) {
-            if vm.amILeader {
-                // Ending is irreversible and ends it for every rider in the convoy, so the leader
-                // confirms first. The same confirmation also carries Exit, since the back button
-                // is gone while navigating.
+        if vm.amILeader {
+            DSSquareIconButton(systemImage: "stop.fill", label: "End ride", variant: .danger,
+                               size: isLandscape ? .hudLandscape : .hud, isBusy: vm.isEnding) {
+                // Ending is irreversible and ends it for every rider in the convoy.
                 showEndConfirm = true
-            } else {
-                // Not the leader: they cannot end anything, so this is purely the exit.
+            }
+        } else {
+            DSSquareIconButton(systemImage: "rectangle.portrait.and.arrow.right", label: "Exit navigation",
+                               size: isLandscape ? .hudLandscape : .hud) {
                 dismiss()
             }
         }
@@ -3272,62 +3315,79 @@ struct LiveRiderPin: View {
 
 struct LiveLeaderboardCard: View {
     let row: NavLeaderboardRow
+    /// How far this rider is ahead of (+) or behind (−) me, in metres. Nil for my own card.
+    var gapMeters: Double? = nil
     var isSelected: Bool = false
     var isOffline: Bool = false
+    var onTap: () -> Void = {}
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isHighlighted: Bool { row.rank == 1 || isSelected || row.isMe }
     private var firstName: String { row.name.components(separatedBy: " ").first ?? row.name }
-    private var lastName: String {
-        let parts = row.name.components(separatedBy: " ")
-        return parts.dropFirst().joined(separator: " ")
+
+    /// "+1.2 km" ahead, "−300 m" behind, "Level" within a few car lengths.
+    private var gapText: String? {
+        guard let gap = gapMeters else { return nil }
+        let distance = abs(gap)
+        if distance < 25 { return String(localized: "Level") }
+        let formatted = distance < 1000
+            ? "\(Int((distance / 10).rounded()) * 10) m"
+            : String(format: "%.1f km", distance / 1000)
+        return (gap > 0 ? "+" : "−") + formatted
+    }
+
+    private var spokenGap: String? {
+        guard let gap = gapMeters else { return nil }
+        let distance = abs(gap)
+        if distance < 25 { return String(localized: "level with you") }
+        let spoken = NavVoiceGuide.spokenDistance(distance)
+        return gap > 0 ? String(localized: "\(spoken) ahead") : String(localized: "\(spoken) behind")
     }
 
     var body: some View {
         // No rank number: the strip is already ordered by position. `row.rank` still drives the
         // leader highlight below.
-        HStack(spacing: 7) {
-            DSAvatar(
-                name: row.name, id: row.id,
-                imageURL: row.avatarUrl.flatMap(URL.init(string:)),
-                size: DS.AvatarSize.stack,
-                isOnline: isOffline ? false : nil,   // grey dot = heartbeats lapsed
-                highlightRing: isHighlighted ? DS.Accent.base : nil
-            )
+        Button(action: {
+            DSHaptic.selection()
+            onTap()
+        }) {
+            HStack(spacing: 7) {
+                DSAvatar(
+                    name: row.name, id: row.id,
+                    imageURL: row.avatarUrl.flatMap(URL.init(string:)),
+                    size: DS.AvatarSize.stack,
+                    isOnline: isOffline ? false : nil,   // grey dot = heartbeats lapsed
+                    highlightRing: isHighlighted ? DS.Accent.base : nil
+                )
 
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(firstName)
                         .dsText(.navLabel)
                         .fontWeight(.bold)
                         .foregroundStyle(DS.Text.primary)
                         .lineLimit(1)
-                    if row.isMe {
-                        Text("You")
-                            .dsText(.badgeSmall)
-                            .foregroundStyle(DS.Text.onAccent)
-                            .padding(.horizontal, 4).padding(.vertical, 1)
-                            .background(DS.Accent.base, in: Capsule())
-                    }
-                }
-                if !lastName.isEmpty {
-                    Text(lastName)
-                        .dsText(.micro)
-                        .foregroundStyle(DS.Text.secondary)
+                    // The gap is the point of the card: where is this rider relative to me?
+                    Text(row.isMe ? String(localized: "You") : (gapText ?? ""))
+                        .dsText(.dataMono)
+                        .foregroundStyle(row.isMe ? DS.Accent.base : DS.Text.secondary.base)
                         .lineLimit(1)
                 }
             }
+            .padding(.horizontal, 10)
+            .frame(minHeight: DS.Target.hud)
+            .background(DS.Surface.card, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(isHighlighted ? DS.Accent.base : DS.Border.default.base, lineWidth: isHighlighted ? DS.BorderWidth.emphasis : DS.BorderWidth.default))
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
         }
-        .padding(.horizontal, 10)
-        .frame(minHeight: DS.Target.hud)
-        .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .stroke(isHighlighted ? DS.Accent.base : .clear, lineWidth: isHighlighted ? DS.BorderWidth.emphasis : 0))
+        .buttonStyle(.plain)
         .opacity(isOffline ? DS.Opacity.offline : 1)
         .animation(reduceMotion ? nil : .spring(response: 0.3), value: isSelected)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: isOffline)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("\(row.name)\(row.isMe ? ", you" : "")\(isOffline ? ", offline" : "")"))
+        .accessibilityLabel(Text("\(row.name)\(row.isMe ? ", you" : "")\(isOffline ? ", offline" : "")\(spokenGap.map { ", " + $0 } ?? "")"))
+        .accessibilityHint(Text(row.isMe ? "Recentres the map on you" : "Shows rider on map"))
+        .accessibilityAddTraits(.isButton)
     }
 }
 

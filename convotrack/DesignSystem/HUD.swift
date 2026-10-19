@@ -250,23 +250,6 @@ struct DSResumePill: View {
     }
 }
 
-struct DSLiveRiderCountPill: View {
-    let count: Int?
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(DS.Accent.base).frame(width: 6, height: 6)
-            Text(count.map(String.init) ?? "--").dsText(.dataMono).foregroundStyle(DS.Accent.base)
-        }
-        .padding(.horizontal, DS.Space.p3)
-        .frame(minHeight: 34)
-        .dsGlass(clear: true)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Riders live"))
-        .accessibilityValue(Text(count.map(String.init) ?? "--"))
-    }
-}
-
 struct DSRegroupArrivalControl: View {
     var hasArrived: Bool
     var action: () -> Void
@@ -341,7 +324,6 @@ struct HUDGallery: View {
                         HStack {
                             DSLeaderboardCard(rank: 1, name: "Asha", id: "a", gap: "Leading", isMe: true, isSelected: true)
                             DSLeaderboardCard(rank: 2, name: "Ravi", id: "b", gap: "-120 m")
-                            DSLiveRiderCountPill(count: 3)
                         }
                     }
                     DSBanner(tone: .regroup, eyebrow: "Regroup called", message: "Fuel stop in 500 m", detail: "Called by Asha")

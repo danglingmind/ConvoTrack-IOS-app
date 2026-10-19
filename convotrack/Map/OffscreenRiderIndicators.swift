@@ -110,16 +110,14 @@ struct OffscreenIndicatorsOverlay: View {
                     if cluster.id == expandedClusterId && cluster.members.count > 1 {
                         fannedCluster(cluster, center: center)
                     } else if cluster.members.count > 1 {
-                        ClusterChip(count: cluster.members.count,
-                                    distanceMeters: cluster.minDistance)
-                            .position(cluster.anchor)
-                            .onTapGesture { expandedClusterId = cluster.id }
+                        chipButton({ expandedClusterId = cluster.id }) {
+                            ClusterChip(count: cluster.members.count,
+                                        distanceMeters: cluster.minDistance)
+                        }
+                        .position(cluster.anchor)
                     } else if let only = cluster.members.first {
-                        EdgeChip(model: only)
-                            .frame(minWidth: DS.Target.minimum, minHeight: DS.Target.minimum)
-                            .contentShape(Rectangle())
+                        chipButton({ onTapRider(only.id) }) { EdgeChip(model: only) }
                             .position(cluster.anchor)
-                            .onTapGesture { onTapRider(only.id) }
                     }
                 }
             }
@@ -127,6 +125,21 @@ struct OffscreenIndicatorsOverlay: View {
         }
         .ignoresSafeArea()
         .allowsHitTesting(true)
+    }
+
+    /// A real button around a chip, with at least a 44 pt hit area; the chip's drawn size is
+    /// unchanged, so it still hides no more road than before.
+    private func chipButton<Content: View>(_ action: @escaping () -> Void,
+                                           @ViewBuilder _ content: () -> Content) -> some View {
+        Button {
+            DSHaptic.selection()
+            action()
+        } label: {
+            content()
+                .frame(minWidth: DS.Target.minimum, minHeight: DS.Target.minimum)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// Members stacked toward screen interior from the cluster anchor.
@@ -141,9 +154,8 @@ struct OffscreenIndicatorsOverlay: View {
             let step = CGFloat(idx) * 46
             let pt = CGPoint(x: cluster.anchor.x + inward.dx * step,
                              y: cluster.anchor.y + inward.dy * step)
-            EdgeChip(model: member)
+            chipButton({ onTapRider(member.id) }) { EdgeChip(model: member) }
                 .position(pt)
-                .onTapGesture { onTapRider(member.id) }
         }
     }
 }
@@ -263,5 +275,8 @@ struct ClusterChip: View {
                 .shadow(color: .black.opacity(0.85), radius: 3)
                 .shadow(color: .black.opacity(0.6), radius: 1)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(count) riders, closest \(formatEdgeDistance(distanceMeters)) away"))
+        .accessibilityHint(Text("Shows the riders"))
     }
 }
