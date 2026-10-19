@@ -167,8 +167,8 @@ struct HomeView: View {
         let dismissible: Bool
     }
 
-    /// One quiet card under the hero. The trial countdown leads; the last day and the ended trial
-    /// can't be hidden, everything else can be snoozed. Never during a ride, never for Pro.
+    /// One quiet card under the hero. The trial countdown leads; the last day can't be hidden,
+    /// everything else can be snoozed. Never during a ride, for Pro, or once the trial has ended.
     private var homeCard: HomeCard? {
         guard appState.currentRideId == nil else { return nil }
         switch membershipStore.access {
@@ -181,10 +181,12 @@ struct HomeView: View {
             }
             return HomeCard(message: "Your free trial ends today", actionTitle: "Go Pro", dismissible: false)
         case .trialExpired:
-            return HomeCard(message: "Your free trial has ended. Go Pro to keep riding.", actionTitle: "See plans", dismissible: false)
+            // The locked buttons, the badge and the app-open nudge already carry this state; a
+            // fourth upsell on the same screen is noise (design review).
+            return nil
         case .free:
             guard !homeCardSnoozed else { return nil }
-            return HomeCard(message: "Bigger packs and no monthly ride limit", actionTitle: "Upgrade", dismissible: true)
+            return HomeCard(message: "Bigger packs and no monthly ride limit", actionTitle: "Go Pro", dismissible: true)
         }
     }
 

@@ -161,7 +161,7 @@ These are implemented twice (iOS `RideNavigationView` / `Services/NavVoiceGuide.
 | Image cache TTL | static map 30 days (iOS) / server max-age floored at 5 min (Android); avatars 24 h with ETag revalidation; place photos 30 days (7 days for "no photo"); disk cap 100 MB |
 | Access (trial-first freemium) | Pro > enforced trial running > trial expired (create/join blocked, server 403 `TRIAL_EXPIRED`) > free (enforcement off). From `/users/me` `trial { endsAt, enforced }`; days left = ceil, "today" under 24 h |
 | App-open nudge | iOS `UpsellPolicy` / Android `data/upsell/UpsellPolicy.kt` (20 shared test cases). Trial day 1 none; day 2 once per calendar day; last 24 h once + once more in the final 6 h; expired every open, ≥ 4 h apart; free: ≥ 3 opens, ≥ 48 h since first, ≥ 72 h apart, 14 days after 3 dismissals, never after 6, a completed ride triggers early. Never within 24 h of the onboarding paywall, for Pro, during a ride, over a deep link or another sheet. An "open" needs ≥ 30 min in the background |
-| Home Pro card | trial > 1 day: countdown, ✕ snoozes 24 h; last day + expired: not dismissible; free: ✕ snoozes 7 days (30 after the 3rd). Hidden during a ride |
+| Home Pro card | trial > 1 day: countdown, ✕ snoozes 24 h; last day: not dismissible; trial expired: no card (locks + badge + nudge carry it); free: ✕ snoozes 7 days (30 after the 3rd). Hidden during a ride. Every paywall entry is labelled "Go Pro" (the nudge's own button is "See plans") |
 
 ### Component Locations (not in ConvoTrackTheme.swift)
 - `Triangle` shape — defined in `RideNavigationView.swift`, used by map pins across lobby and navigation

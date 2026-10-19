@@ -136,18 +136,24 @@ struct MembershipView: View {
                 .accessibilityHidden(true)
 
             Text(heroTitle)
+                .redacted(reason: isAwaitingPlan ? .placeholder : [])
                 .dsText(.heroTitleCompact)
                 .foregroundStyle(DS.Text.primary)
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
 
             Text(heroSubtitle)
+                .redacted(reason: isAwaitingPlan ? .placeholder : [])
                 .dsText(.body)
                 .foregroundStyle(DS.Text.secondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
     }
+
+    /// First sign-in: `/users/me` hasn't answered yet, so the headline would read "ConvoTrack Pro"
+    /// and then jump to the trial wording. Hold a placeholder until it lands instead.
+    private var isAwaitingPlan: Bool { isOnboarding && store.plan == nil && !store.isPremium }
 
     /// The trial leads: while it runs the headline is the countdown, once it ends it's the wall.
     /// Monthly rides and the rider cap are secondary and only surface through the subtitle.
@@ -238,6 +244,10 @@ struct MembershipView: View {
     @ViewBuilder private var freePlanTerms: some View {
         if !store.isPremium {
             Group {
+                if case .trial = store.access {
+                    // The trial is the app's, not the App Store's: buying now isn't deferred.
+                    Text("Going Pro starts your subscription today — it doesn't wait for the trial to end.")
+                }
                 if store.access == .trialExpired {
                     Text("Creating and joining rides needs Pro now that your free trial has ended.")
                 } else if isAppTrial, let plan = freePlan, let monthly = plan.monthlyLimit {

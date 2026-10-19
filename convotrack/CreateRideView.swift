@@ -133,7 +133,7 @@ struct CreateRideView: View {
         }
         .alert("Failed to Create Ride", isPresented: $showError) {
             if createBlockedByPlan {
-                Button("See Pro plans") { paywall.present(.createBlocked) }
+                Button("Go Pro") { paywall.present(.createBlocked) }
                 Button("Not now", role: .cancel) {}
             } else {
                 Button("OK", role: .cancel) {}

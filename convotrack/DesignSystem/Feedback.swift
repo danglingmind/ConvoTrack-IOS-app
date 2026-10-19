@@ -142,12 +142,18 @@ struct DSPlanBadge: View {
         case goPro
     }
     let kind: Kind
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// At accessibility sizes the label drops "Trial ·" — the hourglass already says it — so the
+    /// badge can't crowd the toolbar. VoiceOver keeps the full sentence either way.
     private var title: LocalizedStringKey {
+        let compact = dynamicTypeSize.isAccessibilitySize
         switch kind {
-        case .pro: "Pro"
-        case .trial(let days): days <= 1 ? "Trial · today" : "Trial · \(days)d"
-        case .goPro: "Go Pro"
+        case .pro: return "Pro"
+        case .trial(let days):
+            if days <= 1 { return compact ? "Today" : "Trial · today" }
+            return compact ? "\(days)d" : "Trial · \(days)d"
+        case .goPro: return "Go Pro"
         }
     }
 

@@ -430,7 +430,7 @@ struct RideRouteForm: View {
                 onDecrement: { if maxRiders > 2 { maxRiders -= 1 } }
             )
             if atRiderCap {
-                DSPromoBanner(eyebrow: "ConvoTrack Pro", message: "Pro unlocks bigger packs", actionTitle: "Upgrade", action: onUpgrade)
+                DSPromoBanner(eyebrow: "ConvoTrack Pro", message: "Pro unlocks bigger packs", actionTitle: "Go Pro", action: onUpgrade)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
                 riderPlanLine

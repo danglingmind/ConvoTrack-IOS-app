@@ -546,7 +546,7 @@ struct DSPromoBanner: View {
                     Image(systemName: "xmark")
                         .dsIcon(12, weight: .bold)
                         .foregroundStyle(DS.Text.muted)
-                        .frame(width: 28, height: DS.Target.minimum)
+                        .frame(width: DS.Target.minimum, height: DS.Target.minimum)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

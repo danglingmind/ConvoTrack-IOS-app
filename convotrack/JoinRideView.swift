@@ -57,7 +57,7 @@ struct JoinRideView: View {
                             DSInlineError(message: LocalizedStringKey(errorMessage))
                         }
                         if joinBlockedByPlan {
-                            DSPrimaryButton(title: "See Pro plans", systemImage: "rosette") { openPaywall() }
+                            DSPrimaryButton(title: "Go Pro", systemImage: "rosette") { openPaywall() }
                         }
 
                         codeInputSection

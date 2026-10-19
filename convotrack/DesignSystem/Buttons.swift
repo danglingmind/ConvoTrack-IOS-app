@@ -340,6 +340,7 @@ struct DSActionButtonPair: View {
             .dsShadow(DS.Shadow.accentGlow)
         }
         .buttonStyle(DSPressStyle())
+        .accessibilityValue(isLocked ? Text("Locked") : Text(""))
         .accessibilityHint(isLocked ? Text("Needs ConvoTrack Pro") : Text(""))
     }
 
@@ -358,6 +359,7 @@ struct DSActionButtonPair: View {
             .dsGlass(in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous), clear: true, interactive: true)
         }
         .buttonStyle(DSPressStyle())
+        .accessibilityValue(isLocked ? Text("Locked") : Text(""))
         .accessibilityHint(isLocked ? Text("Needs ConvoTrack Pro") : Text(""))
     }
 
