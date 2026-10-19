@@ -2,7 +2,7 @@
 
 Everything left behind from the live-navigation improvements (HIG review of `RideNavigationView`,
 Android parity in `convotrack-android`). Source plan: the "Live Navigation Improvements — iOS Plan
-& Android Parity" doc. Updated after Phase 3.
+& Android Parity" doc. Updated after Phase 4.
 
 Status key: **todo** not started · **partial** done in part · **verify** built but never run on a
 device/simulator · **decide** needs a product call.
@@ -11,18 +11,28 @@ device/simulator · **decide** needs a product call.
 
 | # | Phase | Status | Notes |
 | --- | --- | --- | --- |
-| 4a | ARRIVAL stat shows clock time, minutes left beneath | todo | `etaString` still returns a duration labelled "ETA" (iOS + Android) |
-| 4b | Convoy strip: move above stats bar, show gap, tappable, drop last name and rider-count pill | todo | Android cards are already tappable; iOS cards are not |
-| 4c | Exit vs End: neutral "Exit navigation" button for non-leaders | todo | iOS `endRideButton`/`landscapeButtonsRow`; Android `RideNavigationScreen` `onEndRide` |
-| 4d | Edge chips as real buttons, 44 pt (iOS) / 48 dp (Android) | partial | Done only for the new regroup/emergency chips on iOS. Rider chips on both platforms, and the new chips on Android, still use a bare tap/clickable |
-| 5 | Live Activity (iOS) / ongoing notification with next turn (Android) | todo | Needs a Widget Extension target and `NSSupportsLiveActivities`; add a `convotrack://ride/<id>` route to `DeepLinkRouter` |
-| 6 | Use DesignSystem HUD components; reduce glass; Reduce Motion | todo | See also "Phase 3 leftovers" below |
+| 4a | ARRIVAL stat shows clock time, minutes left beneath | done, **verify** | iOS 12/24h from locale; Android from the system setting. AM/PM dropped on the narrowest portrait layout |
+| 4b | Convoy strip in the bottom bar, gap per card, tappable, count pill removed | done, **verify** | Portrait only: landscape keeps its side-panel order. The bar is taller; check the map still has enough room |
+| 4c | Exit vs End: neutral "Exit navigation" for non-leaders | done, **verify** | |
+| 4d | Edge chips as real buttons, 44 pt (iOS) / 48 dp (Android) | done, **verify** | |
+| 5 | Live Activity (iOS) / ongoing notification with next turn (Android) | in progress | Needs a Widget Extension target and `NSSupportsLiveActivities`; add a `convotrack://ride/<id>` route to `DeepLinkRouter` |
+| 6 | Use DesignSystem HUD components; reduce glass; Reduce Motion | in progress | See also "Phase 3 leftovers" below |
+
+## Phase 4 leftovers
+
+- **verify** Arrival time against the device clock (and across a 12/24-hour change); AM/PM hidden on the narrowest width; "42m left" line height with the largest text size.
+- **verify** Gap on each convoy card: sign and size match who is actually ahead/behind; "Level" within 25 m; offline riders dimmed; tapping a card peeks at that rider, tapping your own recentres.
+- **verify** Edge chips no longer collide with the turn card now that the strip left the top; hit areas at 44/48 dp.
+- Gap is derived from each rider's distance to the goal, so it is meaningless until a rider has posted a position (every rider is seeded with the full route distance, which reads as "Level").
+- Landscape still shows the strip in the side panel above the banners, not at the bottom; the plan asked for "same order" only.
+- iOS `DSLiveRiderCountPill` and Android `LiveRiderCountPill` were deleted; `liveRiderCount` on both view models is now unused.
+- Android `BarStat`/iOS `barStat` gained a third line; the row is ~8 pt taller. Revisit if it crowds the Regroup/Exit buttons.
 
 ## Phase 1 leftovers
 
 - **verify** Split alert on a two-simulator ride: names the right rider, gap within ~100 m of the leaderboard difference, number moves while the alert is up.
 - **verify** Pin labels at default size and at the largest text size (iOS capped 1.5×, Android font scale capped 1.5×): no overlap with the route, wrapped names stay inside the plate.
-- iOS `Localizable.xcstrings` still holds the removed "2.4 km behind" and "Signal strength dropping rapidly." entries; new strings (`A rider`, group-split and regroup voice text) are not catalogued. Run a string-catalog sync.
+- iOS string catalog was synced by Xcode after Phase 4 (commit `Sync string catalog`); re-sync after any further user-facing copy change.
 - Android touch target: `DsSize.touchTarget` is 44 dp but Android's minimum is 48 dp. Decide whether to raise the token.
 - Android `STOP_PIN_TOP_EXTENT_DP` and iOS `stopPinTopExtent` were raised to 104 by estimate; measure against a two-line destination name at the largest label size.
 
