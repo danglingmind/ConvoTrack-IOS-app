@@ -19,9 +19,9 @@ Legend: **[you]** needs you (console, credentials, judgement) · **[me]** I can 
 
 ## 1. Backend live with the switch OFF
 
-- [ ] **[you]** Render shows `544715b` (or later) deployed and healthy.
-- [ ] **[you]** `TRIAL_ENFORCEMENT_ENABLED` is unset or `false` in Render.
-- [ ] **[me]** Verify on the live API with your test account (needs a signed-in session on any device): `GET /users/me` returns `trial` (`enforced: false`), `usage` and `proPlan`. Read-only.
+- [x] **[you]** Render shows `544715b` (or later) deployed and healthy.
+- [x] **[you]** `TRIAL_ENFORCEMENT_ENABLED` is unset or `false` in Render.
+- [x] **[me]** (2026-10-19: `/events` live; iOS paywall events reach production with device id. `/users/me` fields not checked — needs a signed-in token.) Verify on the live API with your test account (needs a signed-in session on any device): `GET /users/me` returns `trial` (`enforced: false`), `usage` and `proPlan`. Read-only.
 
 ## 2. Store-side setup (before submitting either app)
 
@@ -33,8 +33,8 @@ Legend: **[you]** needs you (console, credentials, judgement) · **[me]** I can 
 
 ## 3. Ship iOS
 
-- [ ] **[me]** Bump version/build in Xcode (`MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`).
-- [ ] **[you]** Archive and upload the build (Xcode Organizer), or ask me to drive `xcodebuild archive` / upload if you have that set up.
+- [x] **[me]** Bump version/build in Xcode — 2.0.0 (8), `dde9a9c`.
+- [x] **[you]** Archive and upload the build (Organizer). The `BMSHCXL2PM` API key can't cloud-sign; an Admin-role key is needed for me to upload.
 - [ ] **[me]** Upload App Store metadata only (no binary, no submission): description, promotional text, What's New for 50 locales. Note: **promotional text goes live immediately** — upload it no earlier than the day the build ships.
 - [ ] **[you]** App Store Connect → version page:
   - attach the build;
@@ -44,7 +44,7 @@ Legend: **[you]** needs you (console, credentials, judgement) · **[me]** I can 
 
 ## 4. Ship Android (in parallel with iOS review)
 
-- [ ] **[me]** Release via the `android-play-release` skill: version bump (you choose patch/minor/major), CHANGELOG, signed bundle, upload to the testing track, Play "What's new" from store-copy doc §3.
+- [x] **[me]** 2.0.0 (9) on alpha, tagged `v2.0.0`. Release via the `android-play-release` skill: version bump (you choose patch/minor/major), CHANGELOG, signed bundle, upload to the testing track, Play "What's new" from store-copy doc §3.
 - [ ] **[you]** Play Console listing: short description, full-description section and What's new from store-copy doc §5.
 - [ ] **[you]** Promote to production once testers are happy.
 
