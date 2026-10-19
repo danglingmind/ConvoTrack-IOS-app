@@ -188,3 +188,29 @@ Mirror Phases 3–6 with identical thresholds and copy:
 6. App Store review notes: explain the app-level trial (no payment taken) and that the paywall is dismissible. Update App Store / Play description: "3-day free trial, then Pro required to create or join rides."
 7. Ship apps → wait for adoption → flip `TRIAL_ENFORCEMENT_ENABLED=true` (this starts existing users' 3 days).
 8. Update CLAUDE.md: freemium model, presenter location, trial flag, cadence table.
+
+---
+
+## Decisions after Phase 8 (2026-10-19)
+
+| Question | Decision |
+| --- | --- |
+| When to flip `TRIAL_ENFORCEMENT_ENABLED` | As soon as the iOS update is live (Android riders on the old build see a generic error until they update) |
+| Monthly ride limit during the trial | Keep it: 3 days or 3 rides, whichever runs out first |
+| Android onboarding paywall | Add it (trial-started headline, "Continue with free trial"), matching iOS |
+| Repeat trials via new accounts | Tie trials to the device: install id stored with the trial; a new account on the same device doesn't get fresh days |
+| Expired-trial nudge cadence | Keep every app open, at most every 4 h |
+| Verification | User signs in on the Pixel 8 emulator; then screenshot every Android state |
+| Store setup | Add en-US subscription localizations (copy approved by user first); Play Console free-trial offer deactivation stays a manual rollout step |
+
+## Phase 9 — follow-ups (in order)
+
+1. ~~Push iOS + Android commits~~ (done: iOS `9d82b15`, Android `75df622`).
+2. **Device-tied trial** — backend: `trial_devices(device_id PK, first_user_id, trial_ends_at)`; `/users/me`, create and join send `X-Device-Id`; when a free rider's trial starts, reuse the device's existing `trial_ends_at` if one exists. iOS: `identifierForVendor`; Android: a random UUID in app storage (no hardware id). Update both privacy labels/data-safety forms (device id, app functionality, not linked to tracking). Update `openapi.json`.
+3. **Android onboarding paywall** — after first sign-in for non-Pro riders, `MembershipScreen` in an onboarding presentation; record `UpsellState.recordOnboardingPaywall()`.
+4. **Paywall conversion analytics** — log `paywall_shown {source, access}` and `paywall_converted {source}`; backend endpoint or existing analytics sink to be chosen.
+5. **Server-driven "25 riders" copy** — iOS onboarding pack-size headline, Android "25 RIDERS" benefit tile.
+6. **Store copy + App Review notes** — App Store / Play description lines for the trial; review notes explaining the app-level trial and that the paywall is dismissible.
+7. **en-US subscription localizations** — draft names/descriptions for approval, then add via the App Store Connect API.
+8. **Android visual pass** — after the user signs in on the emulator.
+9. **Rollout checklist** — deploy backend (switch off) → ship iOS → flip switch → ship Android; manual: remove the Play Console free-trial offer on `convotrack_pro_monthly` / `convotrack_pro_yearly`.
