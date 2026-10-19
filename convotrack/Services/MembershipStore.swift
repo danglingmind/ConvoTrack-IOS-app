@@ -25,6 +25,8 @@ final class MembershipStore: ObservableObject {
     @Published private(set) var plan: MembershipPlanInfo? = nil
     @Published private(set) var trial: TrialInfo? = nil
     @Published private(set) var usage: UsageInfo? = nil
+    /// What Pro offers, from the server. nil until loaded (or from an older server).
+    @Published private(set) var proPlan: ProPlanInfo? = nil
 
     /// Premium according to the server (e.g. bought on Android with the same account). Kept
     /// separately so a local entitlement refresh can't wipe it.
@@ -206,6 +208,7 @@ final class MembershipStore: ObservableObject {
         plan = me.plan
         trial = me.trial
         usage = me.usage
+        if let pro = me.proPlan { proPlan = pro }
         serverSaysPremium = me.plan.isPremium
         isPremium = isPremium || me.plan.isPremium
     }
@@ -257,8 +260,11 @@ final class MembershipStore: ObservableObject {
         // Only trust the server's number when it describes the plan the rider is on right now —
         // a just-purchased Pro rider may still hold the free plan's response.
         if let plan, plan.isPremium == isPremium { return plan.maxRidersPerRide }
-        return isPremium ? 25 : 5
+        return isPremium ? proRiderCap : 5
     }
+
+    /// Riders per ride on Pro, for upsell copy shown to free riders. 25 only until the server answers.
+    var proRiderCap: Int { proPlan?.maxRidersPerRide ?? 25 }
 
     // MARK: - Introductory Offers
 

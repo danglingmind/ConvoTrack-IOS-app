@@ -205,7 +205,7 @@ struct MembershipView: View {
         // Only talks about the rider cap when the rider told us their pack is bigger than it.
         guard isOnboarding else { return "Your rides. No limits." }
         if let pack = OnboardingState.packSize, pack.exceedsFreeCap(cap) {
-            return pack == .large ? "Up to 25 riders on one map." : "Your pack is bigger than \(cap)."
+            return pack == .large ? "Up to \(store.proRiderCap) riders on one map." : "Your pack is bigger than \(cap)."
         }
         return "Ride bigger. Keep every ride."
     }

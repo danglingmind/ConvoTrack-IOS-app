@@ -284,6 +284,14 @@ struct TrialInfo: Codable, Equatable {
     }
 }
 
+/// What Pro offers (from `/users/me`), so upsell copy quotes real limits instead of constants.
+struct ProPlanInfo: Codable, Equatable {
+    let maxRidersPerRide: Int
+    /// nil = unlimited.
+    let monthlyLimit: Int?
+    let rideHistoryDays: Int
+}
+
 struct UsageInfo: Codable, Equatable {
     let ridesUsedThisMonth: Int
     /// nil = unlimited.
@@ -304,6 +312,7 @@ struct UserMeResponse: Codable {
     /// nil from servers that predate the app-level trial.
     let trial: TrialInfo?
     let usage: UsageInfo?
+    let proPlan: ProPlanInfo?
 
     // Default values for Bool fields so older API responses decode gracefully
     init(from decoder: Decoder) throws {
@@ -320,6 +329,7 @@ struct UserMeResponse: Codable {
         plan                 = try c.decode(MembershipPlanInfo.self, forKey: .plan)
         trial                = try c.decodeIfPresent(TrialInfo.self, forKey: .trial)
         usage                = try c.decodeIfPresent(UsageInfo.self, forKey: .usage)
+        proPlan              = try c.decodeIfPresent(ProPlanInfo.self, forKey: .proPlan)
     }
 }
 
