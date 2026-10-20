@@ -151,7 +151,7 @@ These are implemented twice (iOS `RideNavigationView` / `Services/NavVoiceGuide.
 | --- | --- |
 | Spoken turn prompts | far heads-up only if the turn is ≥ 800 m away; main prompt at 500 m or speed × 20 s (whichever is larger); reminder at 100 m or speed × 6 s; "now" at 15 m (30 m for arrival). A level is spoken at most once per maneuver; a new route or step resets it |
 | "Then …" | appended to the reminder when the next maneuver is within 150 m |
-| Voice priority | turn < alert (regroup, split, reroute, off-route) < emergency. Higher interrupts lower; lower queues behind higher. Mute silences everything except emergencies |
+| Voice priority | turn < alert (regroup, split, ride-updated reroute) < emergency. Off-route is never spoken (visual status line only). Higher interrupts lower; lower queues behind higher. Mute silences everything except emergencies |
 | Spoken after a siren | start after the siren's own length + 200 ms (`SirenPlayer.Sound.duration` / `durationMs`) |
 | Alert slot priority | emergency > group split > regroup called > regroup complete; "+N more" chip cycles the rest; off-route and reconnecting are a turn-card status line, not alerts |
 | Peek (Show / edge-chip tap) | camera flies to the point; follow camera returns after ~10 s of riding |

@@ -155,13 +155,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// banner arrow, so the arrow can't disagree with the instruction text.
     @Published var currentManeuver: String = ""
     @Published var distanceToNextTurnMeters: Double = 0
-    @Published var isOffRoute: Bool = false {
-        didSet {
-            if isOffRoute && !oldValue {
-                VoiceAnnouncer.shared.announce("Off route. Rerouting.", priority: .alert)
-            }
-        }
-    }
+    /// Shown as the turn card's status line only. Deliberately not spoken: the voice stays on turns.
+    @Published var isOffRoute: Bool = false
     /// The maneuver after the one on the banner, set only when it follows within ~150 m.
     @Published private(set) var thenManeuver: String? = nil
     private var voiceGuide = NavVoiceGuide()
