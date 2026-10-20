@@ -32,9 +32,6 @@
     "#%lld" : {
 
     },
-    "%@ · %@ rides" : {
-
-    },
     "%@ / %@" : {
 
     },
@@ -116,8 +113,17 @@
     "%lld" : {
 
     },
+    "%lld " : {
+
+    },
     "%lld days" : {
       "comment" : "Billing period noun, plural\nCompact billing period, plural days"
+    },
+    "%lld days left in your free trial" : {
+
+    },
+    "%lld days of ConvoTrack, on us. Go Pro any time to keep riding after it ends." : {
+
     },
     "%lld mo" : {
       "comment" : "Compact billing period, plural months"
@@ -127,6 +133,16 @@
     },
     "%lld more alerts" : {
 
+    },
+    "%lld of %lld riders" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld riders"
+          }
+        }
+      }
     },
     "%lld rider%@" : {
 
@@ -159,6 +175,19 @@
     "%lld/%lld" : {
 
     },
+    "%lld/%lld riders" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld riders"
+          }
+        }
+      }
+    },
+    "%lldd" : {
+
+    },
     "+%lld" : {
 
     },
@@ -172,9 +201,6 @@
 
     },
     "3–5 riders" : {
-
-    },
-    "6 ACTIVE • 1 BEHIND" : {
 
     },
     "6-character code shared by the Ride Leader. Case-insensitive." : {
@@ -211,6 +237,9 @@
 
     },
     "Add stop" : {
+
+    },
+    "After that, creating and joining rides needs Pro." : {
 
     },
     "After the trial, the free plan has monthly ride and rider limits." : {
@@ -256,10 +285,25 @@
     "Bigger packs · Unlimited rides" : {
 
     },
+    "Bigger packs and every ride kept, with Pro." : {
+
+    },
+    "Bigger packs and no monthly ride limit" : {
+
+    },
+    "Bigger packs with Pro" : {
+
+    },
+    "Bigger packs, no monthly ride limit, every ride kept." : {
+
+    },
     "Billed every %@" : {
       "comment" : "Plan card subtitle; argument is a period such as 'month' or '6 months'"
     },
     "BMW R 1250 GS" : {
+
+    },
+    "Bring your whole crew — bigger packs" : {
 
     },
     "Bring your whole crew along" : {
@@ -304,13 +348,22 @@
     "Code verified" : {
 
     },
+    "Connected" : {
+
+    },
     "Connection status" : {
+
+    },
+    "continue" : {
 
     },
     "Continue" : {
 
     },
     "Continue with Free" : {
+
+    },
+    "Continue with free trial" : {
 
     },
     "Continue with Google" : {
@@ -320,6 +373,9 @@
 
     },
     "CONVOTRACK" : {
+
+    },
+    "ConvoTrack is free while it lasts. Go Pro any time to keep riding after it ends." : {
 
     },
     "ConvoTrack needs camera access to scan QR codes." : {
@@ -364,11 +420,20 @@
     "Create ride" : {
 
     },
+    "Creating and joining rides needs Pro now that your free trial has ended." : {
+
+    },
+    "Creating and joining rides needs Pro once the free trial ends." : {
+
+    },
     "DAILY" : {
       "comment" : "Plan card title"
     },
     "day" : {
       "comment" : "Billing period noun, singular\nCompact billing period: one day"
+    },
+    "days left in your free trial" : {
+
     },
     "Delete" : {
 
@@ -409,13 +474,7 @@
     "Dismiss emergency" : {
 
     },
-    "Dist" : {
-
-    },
     "DIST" : {
-
-    },
-    "Dist (km)" : {
 
     },
     "Distance" : {
@@ -478,7 +537,7 @@
     "Estimated time" : {
 
     },
-    "ETA" : {
+    "Every ride kept in your history" : {
 
     },
     "Every rider. One map." : {
@@ -517,9 +576,6 @@
     "Formation rider" : {
 
     },
-    "Free plan" : {
-
-    },
     "Free plan: %lld rides a month, up to %lld riders per ride." : {
       "localizations" : {
         "en" : {
@@ -531,6 +587,12 @@
       }
     },
     "Free plan: up to %lld riders per ride." : {
+
+    },
+    "Free trial, %lld days left" : {
+
+    },
+    "Free trial, ends today" : {
 
     },
     "Fuel stop" : {
@@ -551,6 +613,27 @@
     "GET PRO  ·  %@ / %@" : {
 
     },
+    "Go Pro" : {
+
+    },
+    "Go Pro to keep creating and joining rides after your trial." : {
+
+    },
+    "Go Pro to keep creating and joining rides with your crew." : {
+
+    },
+    "Going Pro starts your subscription today — it doesn't wait for the trial to end." : {
+
+    },
+    "Good ride. %lld days left in your trial — go Pro to keep riding." : {
+
+    },
+    "Good ride. Go Pro to start the next one." : {
+
+    },
+    "Good ride. Your free trial ends today — go Pro to keep riding." : {
+
+    },
     "Group split" : {
 
     },
@@ -565,6 +648,9 @@
       }
     },
     "Head to the %@" : {
+
+    },
+    "Hide" : {
 
     },
     "History" : {
@@ -606,13 +692,7 @@
     "Just me and one other" : {
 
     },
-    "km" : {
-
-    },
     "KM" : {
-
-    },
-    "km/h" : {
 
     },
     "Leader" : {
@@ -655,6 +735,9 @@
 
     },
     "Loading…" : {
+
+    },
+    "Locked" : {
 
     },
     "Map showing a new rider joining the group." : {
@@ -708,10 +791,16 @@
     "Mute voice guidance" : {
 
     },
+    "Needs ConvoTrack Pro" : {
+
+    },
     "New Ride" : {
 
     },
     "No monthly ride cap, ever" : {
+
+    },
+    "No monthly ride limit" : {
 
     },
     "No ride cap" : {
@@ -721,6 +810,9 @@
 
     },
     "Nobody gets left behind." : {
+
+    },
+    "Not now" : {
 
     },
     "Not sure yet" : {
@@ -796,6 +888,15 @@
     "Privacy Policy" : {
 
     },
+    "Pro" : {
+
+    },
+    "Pro · up to %lld riders" : {
+
+    },
+    "Pro lifts the %lld-rider limit. Bring your whole crew." : {
+
+    },
     "Pro unlocks bigger packs" : {
 
     },
@@ -860,6 +961,9 @@
 
     },
     "Ride" : {
+
+    },
+    "Ride bigger with Pro" : {
 
     },
     "Ride bigger. Keep every ride." : {
@@ -964,6 +1068,9 @@
     "See all" : {
 
     },
+    "See plans" : {
+
+    },
     "See where your whole pack is, second by second — even the ones you can't see." : {
 
     },
@@ -989,6 +1096,12 @@
 
     },
     "Show QR Code" : {
+
+    },
+    "Shows ConvoTrack Pro plans" : {
+
+    },
+    "Shows ConvoTrack Pro plans for bigger packs" : {
 
     },
     "Shows it on the map" : {
@@ -1024,19 +1137,10 @@
     "Something went wrong" : {
 
     },
-    "Speed" : {
-
-    },
     "SPEED" : {
 
     },
-    "Speed (km/h)" : {
-
-    },
     "Squad roster" : {
-
-    },
-    "Squad Status" : {
 
     },
     "START" : {
@@ -1093,6 +1197,16 @@
     "The free plan has monthly ride and rider limits." : {
 
     },
+    "The free trial includes up to %lld rides and %lld riders per ride. Creating and joining rides needs Pro once it ends." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The free trial includes up to %1$lld rides and %2$lld riders per ride. Creating and joining rides needs Pro once it ends."
+          }
+        }
+      }
+    },
     "the fuel stop" : {
 
     },
@@ -1120,10 +1234,19 @@
     "This will permanently delete your account and all ride history. Active subscriptions must be cancelled separately in Settings > Apple ID > Subscriptions. This cannot be undone." : {
 
     },
+    "Today" : {
+
+    },
     "Total distance" : {
 
     },
     "Total km" : {
+
+    },
+    "Trial · %lldd" : {
+
+    },
+    "Trial · today" : {
 
     },
     "Turn on voice guidance" : {
@@ -1135,10 +1258,13 @@
     "UNLIMITED" : {
 
     },
-    "Unlimited rides & advanced telemetry" : {
+    "Unlimited rides & bigger packs" : {
 
     },
-    "Up to 25 riders on one map." : {
+    "Up to %lld riders on one map." : {
+
+    },
+    "Up to %lld riders on your plan" : {
 
     },
     "Upgrade" : {
@@ -1196,6 +1322,21 @@
 
     },
     "You're the leader" : {
+
+    },
+    "You've used your %lld rides this month. Pro has no monthly limit." : {
+
+    },
+    "Your free trial ends today" : {
+
+    },
+    "Your free trial has ended" : {
+
+    },
+    "Your free trial has ended. Go Pro to keep riding." : {
+
+    },
+    "Your free trial has started" : {
 
     },
     "Your membership is active" : {
