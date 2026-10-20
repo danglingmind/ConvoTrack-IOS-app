@@ -120,7 +120,7 @@ struct DSBarStat: View {
                 Text(shown).dsText(valueStyle).foregroundStyle(DS.Text.primary).lineLimit(1)
                 if let unit { Text(unit).dsText(.hudStatLabel).foregroundStyle(DS.Text.secondary).lineLimit(1) }
             }
-            if let sub { Text(sub).dsText(.hudStatLabel).foregroundStyle(DS.Text.secondary).lineLimit(1) }
+            if let sub { Text(sub).dsText(.micro).foregroundStyle(DS.Text.secondary).lineLimit(1).monospacedDigit() }
         }
         .fixedSize(horizontal: rigid, vertical: false)
         .accessibilityElement(children: .ignore)

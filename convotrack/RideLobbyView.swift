@@ -1141,7 +1141,7 @@ struct LobbyStartPin: View {
                     .foregroundColor(DS.Accent.base)
             }
             Triangle().fill(DS.Accent.base).frame(width: 8, height: 5).offset(y: -1)
-            Text("START").font(.system(size: 8, weight: .black, design: .monospaced))
+            Text("START").font(.system(size: 11, weight: .bold))
                 .foregroundColor(DS.Text.primary.base).tracking(0.5)
                 .padding(.horizontal, 7).padding(.vertical, 3)
                 .background(DS.Surface.raised.opacity(0.92)).clipShape(Capsule())

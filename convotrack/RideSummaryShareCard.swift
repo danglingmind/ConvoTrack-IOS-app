@@ -22,7 +22,7 @@ struct RideSummaryShareCard: View {
 
     /// Part of the cached share image's key. Bump whenever this card's layout, fonts or colours
     /// change, so previously rendered PNGs are not served in the old design.
-    static let styleVersion = 1
+    static let styleVersion = 2
 
     private let cardSize = CGSize(width: 390, height: 700)
     // Static Maps free-tier cap (640pt tall); the map is a top-anchored hero and the
@@ -100,7 +100,7 @@ struct RideSummaryShareCard: View {
             // stop names stay inside the card instead of being clipped at the edge.
             ForEach(placed) { m in
                 Text(m.name.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(.system(size: 9, weight: .bold)).monospacedDigit()
                     .tracking(0.5)
                     .lineLimit(Self.maxLabelLines)
                     .multilineTextAlignment(.center)
@@ -247,7 +247,7 @@ struct RideSummaryShareCard: View {
                 .scaledToFit()
                 .frame(width: 18, height: 18)
             Text("CONVOTRACK")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(.system(size: 12, weight: .bold)).monospacedDigit()
                 .tracking(4)
                 .foregroundColor(DS.Accent.base)
         }
@@ -256,7 +256,7 @@ struct RideSummaryShareCard: View {
     private var hero: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(distanceKm)
-                .font(.system(size: 60, weight: .black))
+                .font(.system(size: 60, weight: .heavy).width(.expanded))
                 .foregroundColor(DS.Accent.base)
             Text("KM")
                 .font(.system(size: 24, weight: .black))
@@ -284,16 +284,16 @@ struct RideSummaryShareCard: View {
         VStack(spacing: 3) {
             HStack(alignment: .lastTextBaseline, spacing: 2) {
                 Text(value)
-                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .font(.system(size: 22, weight: .bold)).monospacedDigit()
                     .foregroundColor(DS.Text.onPhoto)
                 if !unit.isEmpty {
                     Text(unit)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(.system(size: 10, weight: .bold)).monospacedDigit()
                         .foregroundColor(DS.Text.muted.base)
                 }
             }
             Text(label)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .font(.system(size: 8, weight: .bold)).monospacedDigit()
                 .tracking(1.5)
                 .foregroundColor(DS.Text.muted.base)
         }
@@ -313,26 +313,26 @@ struct RideSummaryShareCard: View {
                 Image(systemName: "flag.checkered")
                     .font(.system(size: 10, weight: .bold))
                 Text("RIDE COMPLETED")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(.system(size: 10, weight: .bold)).monospacedDigit()
                     .tracking(2)
                 if !dateText.isEmpty {
                     Text("· \(dateText.uppercased())")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(.system(size: 10, weight: .bold)).monospacedDigit()
                         .tracking(1)
                 }
             }
             .foregroundColor(DS.Status.success)
 
-            Text(rideTitle.uppercased())
-                .font(.system(size: 30, weight: .black))
-                .tracking(1)
+            Text(rideTitle)
+                .font(.system(size: 30, weight: .heavy).width(.expanded))
+                .tracking(-0.4)
                 .foregroundColor(DS.Text.onPhoto)
                 .lineLimit(2)
                 .minimumScaleFactor(0.7)
 
             if let route = routeEndpoints {
                 Text(route)
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .font(.system(size: 13, weight: .bold)).monospacedDigit()
                     .tracking(1.5)
                     .foregroundColor(DS.Text.muted.base)
                     .fixedSize(horizontal: false, vertical: true)
@@ -369,7 +369,7 @@ struct RideSummaryShareCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 5))
             }
             Text("SCAN TO\nDOWNLOAD")
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .font(.system(size: 8, weight: .bold)).monospacedDigit()
                 .tracking(1)
                 .foregroundColor(DS.Text.muted.base)
                 .fixedSize()

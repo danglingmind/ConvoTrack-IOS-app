@@ -261,7 +261,7 @@ struct ClusterChip: View {
     var body: some View {
         VStack(spacing: 3) {
             Text("\(count)")
-                .font(.system(size: 15, weight: .black, design: .monospaced))
+                .font(.system(size: 15, weight: .heavy)).monospacedDigit()
                 .foregroundColor(DS.Text.primary.base)
                 .frame(width: size, height: size)
                 .background(DS.Surface.avatar)

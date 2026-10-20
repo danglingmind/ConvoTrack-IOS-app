@@ -3182,7 +3182,7 @@ struct LiveRiderPin: View {
 
                 // Rank badge
                 Text("#\(rider.rank)")
-                    .font(.system(size: 7, weight: .black, design: .monospaced))
+                    .font(.system(size: 10, weight: .heavy)).monospacedDigit()
                     .foregroundColor(rider.rank == 1 ? DS.Text.onAccent : DS.Text.primary.base)
                     .padding(.horizontal, 3).padding(.vertical, 1.5)
                     .background(rider.rank == 1 ? DS.Accent.base : DS.Surface.neutralBadge.opacity(0.95))
@@ -3202,7 +3202,7 @@ struct LiveRiderPin: View {
 
             // Name label always visible — first name only unless selected
             Text(isSelected ? rider.name.uppercased() : firstName.uppercased())
-                .font(.system(size: isSelected ? 9 : 8, weight: .black, design: .monospaced))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(DS.Text.primary.base)
                 .tracking(0.5)
                 .lineLimit(1)

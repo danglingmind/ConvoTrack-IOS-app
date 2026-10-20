@@ -52,7 +52,6 @@ struct RiderDetailDrawer: View {
                     Text("RIDER #2")
                         .dsText(.badge)
                         .foregroundColor(DS.Accent.base)
-                        .tracking(1)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(DS.Accent.base.opacity(0.12))
@@ -95,9 +94,8 @@ struct RiderDetailDrawer: View {
             HStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 15, weight: .bold))
-                Text("REPORT ISSUE")
-                    .dsText(.badge)
-                    .tracking(1)
+                Text("Report issue")
+                    .dsText(.buttonPill)
             }
             .foregroundColor(DS.Status.danger)
             .frame(maxWidth: .infinity)
@@ -130,7 +128,7 @@ struct TelemetryCard: View {
             if let icon {
                 HStack(alignment: .center) {
                     Text(value)
-                        .font(.system(size: 20, weight: .bold, design: .monospaced))
+                        .font(.system(size: 20, weight: .bold)).monospacedDigit()
                         .foregroundColor(DS.Text.primary.base)
                     Spacer()
                     Image(systemName: icon)
@@ -140,7 +138,7 @@ struct TelemetryCard: View {
             } else {
                 HStack(alignment: .lastTextBaseline, spacing: 4) {
                     Text(value)
-                        .font(.system(size: 30, weight: .bold, design: .monospaced))
+                        .font(.system(size: 30, weight: .bold)).monospacedDigit()
                         .foregroundColor(isPrimary ? DS.Accent.base : DS.Text.primary.base)
                     if let unit {
                         Text(unit)

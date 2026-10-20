@@ -496,7 +496,6 @@ private struct BadgeChip: View {
     var body: some View {
         Text(text)
             .dsText(.badge)
-            .tracking(1)
             .foregroundColor(fg)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -530,7 +529,7 @@ private struct NearbyEmptyCard: View {
             }
             Button(action: action) {
                 Text(actionLabel)
-                    .dsText(.badge).tracking(1)
+                    .dsText(.buttonPill)
                     .foregroundColor(DS.Text.onAccent)
                     .padding(.horizontal, 20).padding(.vertical, 10)
                     .background(DS.Accent.base)
@@ -606,8 +605,8 @@ struct RidePreviewSheet: View {
                                     if isJoining {
                                         ProgressView().tint(DS.Text.onAccent)
                                     } else {
-                                        Text(ride.isFull ? "RIDE IS FULL" : "JOIN RIDE")
-                                            .dsText(.badge).tracking(1)
+                                        Text(ride.isFull ? "Ride is full" : "Join ride")
+                                            .dsText(.button)
                                     }
                                 }
                                 .frame(maxWidth: .infinity)
@@ -619,9 +618,8 @@ struct RidePreviewSheet: View {
                             .disabled(isJoining || ride.isFull)
 
                             Text("You'll join as a Formation Rider")
-                                .dsText(.badge)
+                                .dsText(.helper)
                                 .foregroundColor(DS.Text.secondary.base)
-                                .tracking(1)
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 28)

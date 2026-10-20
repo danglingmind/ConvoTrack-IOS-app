@@ -342,9 +342,8 @@ struct EditProfileSheet: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(header)
-                .dsText(.badge)
+                .dsText(.sectionLabel)
                 .foregroundColor(DS.Accent.base)
-                .tracking(3)
             VStack(spacing: 0) { content() }
                 .background(DS.Surface.raised)
                 .clipShape(RoundedRectangle(cornerRadius: 12))

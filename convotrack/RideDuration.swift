@@ -37,8 +37,8 @@ enum RideDuration {
     /// Single inline string, for rows with no separate unit slot.
     static func inline(_ seconds: Int?) -> String {
         guard let seconds, seconds > 0 else { return "--" }
-        if seconds < 60   { return "\(seconds) SEC" }
-        if seconds < 3600 { return "\(seconds / 60) MIN" }
-        return String(format: "%dH %02dM", seconds / 3600, (seconds % 3600) / 60)
+        if seconds < 60   { return "\(seconds) sec" }
+        if seconds < 3600 { return "\(seconds / 60) min" }
+        return String(format: "%dh %02dm", seconds / 3600, (seconds % 3600) / 60)
     }
 }

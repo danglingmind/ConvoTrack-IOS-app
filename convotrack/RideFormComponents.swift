@@ -327,7 +327,7 @@ struct RideRouteForm: View {
                     Rectangle().fill(DS.Surface.cardQuiet)
                     VStack(spacing: DS.Space.p2) {
                         Image(systemName: "map").dsIcon(28).foregroundStyle(DS.Text.secondary)
-                        Text("Add start & destination").dsText(.fieldLabel).foregroundStyle(DS.Text.secondary)
+                        Text("Add start & destination").dsText(.bodySmall).foregroundStyle(DS.Text.secondary)
                     }
                 }
             }

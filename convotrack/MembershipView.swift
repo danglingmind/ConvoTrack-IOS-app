@@ -648,13 +648,13 @@ struct MembershipView: View {
 
     private var ctaLabelWithPrice: Text {
         guard let product = selectedProduct else {
-            return Text("GET CONVOTRACK PRO")
+            return Text("Get ConvoTrack Pro")
         }
         let price = Text(product.displayPrice)
         guard let period = PlanPeriod(product) else {
-            return Text("GET PRO  ·  \(price)")
+            return Text("Get Pro  ·  \(price)")
         }
-        return Text("GET PRO  ·  \(price) / \(period.shortLabel)")
+        return Text("Get Pro  ·  \(price) / \(period.shortLabel)")
     }
 
     /// "3 days free trial, then $39.99 / yr" for the selected plan. nil unless that plan has a
@@ -672,7 +672,7 @@ struct MembershipView: View {
     }
 
     private var ctaLabelShort: Text {
-        selectedProduct == nil ? Text("GET CONVOTRACK PRO") : Text("GET PRO")
+        selectedProduct == nil ? Text("Get ConvoTrack Pro") : Text("Get Pro")
     }
 
     /// Price of a single month at this plan's rate, formatted in the product's own
