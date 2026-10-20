@@ -818,7 +818,7 @@ extension GoogleMapView {
         /// big the user marker draws. Google's navigation puck is a touch taller
         /// than it is wide; the corner radii and canvas derive from this, so the
         /// shape stays proportional at any size.
-        static let userChevronSize = CGSize(width: 34, height: 38)
+        static let userChevronSize = CGSize(width: 44, height: 49)
 
         /// White keyline width, scaled off the chevron so it stays proportional.
         private static var userChevronStroke: CGFloat { userChevronSize.height * 0.075 }
@@ -837,7 +837,7 @@ extension GoogleMapView {
 
             // Radii as fractions of height so scaling the chevron doesn't change
             // how rounded it reads.
-            let tipR = h * 0.096, tailR = h * 0.119, notchR = h * 0.111
+            let tipR = h * 0.03, tailR = h * 0.04, notchR = h * 0.04
 
             let path = CGMutablePath()
             // Start mid-edge (tip → right) so the first corner arc has an incoming
@@ -899,7 +899,8 @@ extension GoogleMapView {
                 cg.addPath(path)
                 cg.setStrokeColor(UIColor.white.cgColor)
                 cg.setLineWidth(Self.userChevronStroke)
-                cg.setLineJoin(.round)
+                cg.setLineJoin(.miter)
+                cg.setMiterLimit(4)
                 cg.strokePath()
             }
         }
