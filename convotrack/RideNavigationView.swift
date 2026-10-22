@@ -179,6 +179,13 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         return e.userId == myUserId || amILeader
     }
 
+    /// Only the rider who called the regroup or the ride leader may clear it early (server enforces
+    /// the same rule); it otherwise stays until every active rider has arrived.
+    var canDismissRegroup: Bool {
+        guard let r = activeRegroup else { return false }
+        return r.createdBy == myUserId || amILeader
+    }
+
     /// Every alert that is live, most urgent first. The HUD shows `first` and a "+N" chip for the rest.
     var activeAlerts: [NavAlert] {
         var alerts: [NavAlert] = []
@@ -543,6 +550,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             .compactMap { $0 }
             .sink { [weak self] id in self?.handleRegroupResolved(id) }
             .store(in: &cancellables)
+        session.$latestRegroupDismissedId
+            .dropFirst()
+            .compactMap { $0 }
+            .sink { [weak self] id in self?.handleRegroupDismissed(id) }
+            .store(in: &cancellables)
         session.$latestEmergency
             .dropFirst()
             .compactMap { $0 }
@@ -804,6 +816,20 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             }
             VoiceAnnouncer.shared.announce("Regroup called. Head to \(stop).", after: SirenPlayer.Sound.regroup.duration + 0.2, priority: .alert)
         }
+    }
+
+    /// Creator- or leader-initiated clear. The local state clears when the server echoes
+    /// `ride:regroup_dismissed`, keeping every device in sync.
+    func dismissRegroup() {
+        guard let regroup = activeRegroup, canDismissRegroup else { return }
+        SocketClient.shared.emitRegroupDismiss(rideId: rideId, regroupId: regroup.regroupId)
+    }
+
+    /// Cleared without the "everyone arrived" toast, since they didn't.
+    private func handleRegroupDismissed(_ regroupId: String) {
+        guard activeRegroup?.regroupId == regroupId else { return }
+        withAnimation { activeRegroup = nil }
+        hasMarkedArrived = false
     }
 
     private func handleRegroupResolved(_ regroupId: String) {
@@ -2646,6 +2672,14 @@ struct RideNavigationView: View {
                                 peek(lat: regroup.lat, lng: regroup.lng, zoom: 15)
                             }
                             DSRegroupArrivalControl(hasArrived: vm.hasMarkedArrived) { vm.markArrivedAtRegroup() }
+                        }
+                    },
+                    trailing: {
+                        // Only the caller or the leader can end it early; others wait for arrivals.
+                        if vm.canDismissRegroup {
+                            DSBannerIconButton(systemImage: "xmark", label: "Dismiss regroup", quiet: true) {
+                                vm.dismissRegroup()
+                            }
                         }
                     }
                 )

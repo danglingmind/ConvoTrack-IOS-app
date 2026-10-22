@@ -25,6 +25,7 @@ final class SocketClient {
     var onEmergencyResolved: ((String) -> Void)?   // emergencyId
     var onRegroupStarted: ((RegroupEvent) -> Void)?
     var onRegroupResolved: ((String) -> Void)?   // regroupId
+    var onRegroupDismissed: ((String) -> Void)?  // regroupId
     var onRideUpdated: ((RideUpdatedEvent) -> Void)?
     var onRideDeleted: (() -> Void)?
 
@@ -141,6 +142,12 @@ final class SocketClient {
     /// `ride:emergency_resolved` so the pin + siren stop on every device.
     func emitEmergencyDismiss(rideId: String, emergencyId: String) {
         socket?.emit("ride:emergency_dismiss", ["rideId": rideId, "emergencyId": emergencyId])
+    }
+
+    /// Clear an open regroup before everyone has arrived. The server authorizes it (the rider who
+    /// called it or the leader) and broadcasts `ride:regroup_dismissed` to every device.
+    func emitRegroupDismiss(rideId: String, regroupId: String) {
+        socket?.emit("ride:regroup_dismiss", ["rideId": rideId, "regroupId": regroupId])
     }
 
     func emitRegroupArrived(rideId: String, regroupId: String) {
@@ -281,6 +288,12 @@ final class SocketClient {
             guard let dict = data.first as? [String: Any],
                   let regroupId = dict["regroupId"] as? String else { return }
             DispatchQueue.main.async { self?.onRegroupResolved?(regroupId) }
+        }
+
+        socket.on("ride:regroup_dismissed") { [weak self] data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let regroupId = dict["regroupId"] as? String else { return }
+            DispatchQueue.main.async { self?.onRegroupDismissed?(regroupId) }
         }
 
         socket.on("ride:updated") { [weak self] data, _ in
