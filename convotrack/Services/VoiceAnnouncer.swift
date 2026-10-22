@@ -36,14 +36,24 @@ final class VoiceAnnouncer: NSObject, AVSpeechSynthesizerDelegate {
         synth.delegate = self
     }
 
-    /// The prompts are English, so the voice is too — but in the rider's own accent when the device
-    /// has one (en-IN, en-GB, en-AU, ...), falling back to US English.
+    /// The prompts are English, so the voice is too. `AVSpeechSynthesisVoice(language:)` hands back
+    /// the low-quality compact voice, which is what sounded robotic, so pick the best installed
+    /// English voice instead (premium > enhanced > default), preferring the rider's own accent
+    /// (en-IN, en-GB, ...) among equals. Novelty and Eloquence voices are skipped: both are robotic.
     private static let englishVoice: AVSpeechSynthesisVoice? = {
-        if let region = Locale.current.region?.identifier,
-           let voice = AVSpeechSynthesisVoice(language: "en-\(region)") {
-            return voice
+        let region = Locale.current.region?.identifier
+        let candidates = AVSpeechSynthesisVoice.speechVoices().filter {
+            $0.language.hasPrefix("en-")
+                && !$0.identifier.contains("eloquence")
+                && !$0.identifier.hasPrefix("com.apple.speech.synthesis.voice.")
         }
-        return AVSpeechSynthesisVoice(language: "en-US")
+        let best = candidates.max { a, b in
+            func rank(_ v: AVSpeechSynthesisVoice) -> (Int, Int) {
+                (v.quality.rawValue, v.language == "en-\(region ?? "US")" ? 1 : 0)
+            }
+            return rank(a) < rank(b)
+        }
+        return best ?? AVSpeechSynthesisVoice(language: "en-US")
     }()
 
     var isMuted: Bool { UserDefaults.standard.bool(forKey: Self.mutedKey) }
@@ -65,7 +75,9 @@ final class VoiceAnnouncer: NSObject, AVSpeechSynthesizerDelegate {
             try? session.setActive(true)
 
             let utterance = AVSpeechUtterance(string: text)
-            utterance.rate  = AVSpeechUtteranceDefaultSpeechRate
+            utterance.rate  = AVSpeechUtteranceDefaultSpeechRate * 1.02
+            utterance.pitchMultiplier = 1.05
+            utterance.preUtteranceDelay = 0.1
             utterance.voice = Self.englishVoice
             self.priorities[ObjectIdentifier(utterance)] = priority
             self.synth.speak(utterance)
