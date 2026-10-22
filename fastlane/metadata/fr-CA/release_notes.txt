@@ -1,3 +1,5 @@
-• Tout le monde reçoit 3 jours gratuits dès aujourd'hui; les nouveaux comptes, 3 jours dès l'inscription. Le badge sur l'accueil indique les jours restants.
-• Après les jours gratuits, Pro est nécessaire pour créer ou rejoindre une randonnée — une randonnée en cours peut toujours être terminée.
-• Votre limite de motocyclistes s'affiche pendant la planification, et le salon montre le remplissage du groupe.
+• Un tout nouveau look : l'accueil, le lobby de la randonnée, la navigation et le bilan de randonnée sont repensés, avec une seule police épurée partout.
+• Directives virage par virage à voix haute, plus une Live Activity (Activité en direct) et la Dynamic Island pour garder le prochain virage sur votre écran verrouillé.
+• Plusieurs appels de regroupement et urgences peuvent maintenant s'afficher en même temps, et l'auteur de l'appel ou le meneur peut fermer un regroupement.
+• Tout le monde profite de 3 jours gratuits à partir d'aujourd'hui; les nouveaux comptes ont 3 jours à partir de la connexion. Ensuite, ConvoTrack Pro est nécessaire pour créer ou rejoindre une randonnée — une randonnée en cours peut toujours être terminée.
+• Une barre du haut plus épurée et une mention de crédit Google plus discrète sur les photos de destination.

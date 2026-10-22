@@ -1,3 +1,5 @@
-• Da oggi tutti hanno 3 giorni gratis; i nuovi account 3 giorni dalla registrazione. Il badge nella Home mostra i giorni rimasti.
-• Dopo i giorni gratis serve Pro per creare o unirti a un giro: un giro già in corso si può sempre concludere.
-• Mentre pianifichi un giro vedi il tuo limite di motociclisti, e la lobby mostra quanto è pieno il gruppo.
+• Un look completamente nuovo: Home, lobby del giro, navigazione e riepilogo del giro sono stati ridisegnati, con un unico font pulito ovunque.
+• Indicazioni vocali curva dopo curva, più una Live Activity (Attività in tempo reale) e la Dynamic Island per tenere la prossima svolta sulla schermata di blocco.
+• Ora più chiamate di raggruppamento ed emergenze possono comparire insieme, e chi ha chiamato o il capogruppo può chiudere un raggruppamento.
+• Da oggi tutti hanno 3 giorni gratis; i nuovi account ricevono 3 giorni dall'accesso. Dopo, per creare un giro o unirsi serve ConvoTrack Pro: un giro già in corso si può sempre concludere.
+• Una barra superiore più pulita e un credito Google più discreto sulle foto delle destinazioni.

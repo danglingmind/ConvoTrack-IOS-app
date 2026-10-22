@@ -1,3 +1,5 @@
-• Bugünden itibaren herkese 3 gün ücretsiz; yeni hesaplara girişten itibaren 3 gün. Ana sayfadaki rozet kalan günleri gösterir.
-• Ücretsiz günlerden sonra sürüş oluşturmak veya katılmak için Pro gerekir — devam eden sürüş her zaman tamamlanabilir.
-• Sürüş planlarken sürücü sınırınız görünür, lobi de grubun ne kadar dolu olduğunu gösterir.
+• Yepyeni bir görünüm: Ana sayfa, sürüş lobisi, navigasyon ve sürüş özeti yeniden tasarlandı; baştan sona tek bir temiz yazı tipi kullanılıyor.
+• Sesli adım adım yol tarifi ve bir sonraki dönüşün Kilit Ekranı'da görünmesi için Canlı Etkinlik ile Dynamic Island desteği.
+• Birden fazla toplanma çağrısı ve acil durum artık aynı anda görünebiliyor; çağrıyı yapan kişi veya lider bir toplanma çağrısını kapatabiliyor.
+• Herkese bugünden itibaren 3 gün ücretsiz; yeni hesaplara oturum açtıkları günden itibaren 3 gün. Sonrasında sürüş oluşturmak veya katılmak için ConvoTrack Pro gerekir — devam eden bir sürüş her zaman tamamlanabilir.
+• Daha sade bir üst çubuk ve varış noktası fotoğraflarında daha sessiz bir Google fotoğraf künyesi.

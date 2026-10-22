@@ -1,3 +1,5 @@
-• Svi od danas dobivaju 3 besplatna dana; novi računi 3 dana od prijave. Značka na Početnoj pokazuje koliko je dana ostalo.
-• Nakon besplatnih dana za stvaranje vožnji i pridruživanje treba Pro – vožnju u tijeku uvijek možete završiti.
-• Tijekom planiranja vidite ograničenje vozača, a predvorje pokazuje koliko je grupa puna.
+• Potpuno novi izgled: početni zaslon, predvorje vožnje, navigacija i sažetak vožnje redizajnirani su, s jednim čistim fontom svuda.
+• Glasovne upute zavoj po zavoj, uz Live Activity (Aktivnosti uživo) i Dynamic Island kako bi sljedeći zavoj ostao na vašem zaključanom zaslonu.
+• Više poziva na okupljanje i hitnih slučajeva sada se može prikazati istodobno, a pozivatelj ili vođa može odbaciti okupljanje.
+• Svi od danas dobivaju 3 besplatna dana; novi računi dobivaju 3 dana od prijave. Nakon toga za stvaranje vožnje ili pridruživanje potreban je ConvoTrack Pro — vožnju koja je u tijeku uvijek možete završiti.
+• Čišća gornja traka i diskretniji Google naziv autora na fotografijama odredišta.

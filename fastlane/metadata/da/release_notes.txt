@@ -1,3 +1,5 @@
-• Alle får 3 dage gratis fra i dag; nye konti får 3 dage fra login. Mærket på Hjem viser, hvor mange dage der er tilbage.
-• Efter de gratis dage kræver det Pro at oprette eller deltage i ture – en igangværende tur kan altid køres færdig.
-• Din kørergrænse vises, når du planlægger en tur, og lobbyen viser, hvor fuld gruppen er.
+• Et helt nyt udtryk: Hjem, turlobby, navigation og turopsummering er redesignet med én ren skrifttype hele vejen igennem.
+• Talt sving-for-sving-vejledning plus en Live aktivitet og Dynamic Island, så næste sving står på din låseskærm.
+• Flere samlingskald og nødsituationer kan nu vises samtidig, og den, der kaldte, eller turlederen kan afvise et samlingskald.
+• Alle får 3 dage gratis fra i dag; nye konti får 3 dage fra login. Derefter kræver det ConvoTrack Pro at oprette eller deltage i ture – en igangværende tur kan altid køres færdig.
+• En renere topbjælke og en mere diskret Google-fotokreditering på fotos af destinationer.

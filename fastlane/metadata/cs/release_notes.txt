@@ -1,3 +1,5 @@
-• Všichni mají ode dneška 3 dny zdarma; nové účty 3 dny od přihlášení. Odznak na Domů ukazuje, kolik dní zbývá.
-• Po dnech zdarma je k vytváření jízd a připojování potřeba Pro – probíhající jízdu lze vždy dokončit.
-• Při plánování jízdy vidíte svůj limit jezdců a lobby ukazuje, jak je skupina plná.
+• Úplně nový vzhled: přepracované jsou Domů, vstupní místnost jízdy, navigace i shrnutí jízdy, všude s jedním čistým písmem.
+• Hlasové navádění zatáčku po zatáčce a Živá aktivita s Dynamic Island, aby další odbočka zůstala na zamčené obrazovce.
+• Nyní se může zobrazit několik výzev ke srazu a nouzových alarmů najednou a ten, kdo sraz svolal, nebo vedoucí jej může zrušit.
+• Každý dostane 3 dny zdarma od dnešního dne; nové účty 3 dny od přihlášení. Poté je k vytváření jízd a připojování k nim potřeba ConvoTrack Pro – rozjetou jízdu lze vždy dokončit.
+• Čistší horní lišta a nenápadnější uvedení zdroje fotek od Google u fotografií cílů.

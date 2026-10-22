@@ -1,3 +1,5 @@
-• Todos tenéis 3 días gratis desde hoy; las cuentas nuevas, 3 días desde el registro. La insignia de Inicio muestra los días que quedan.
-• Tras los días gratis, Pro es necesario para crear o unirse a rutas; una ruta en curso siempre se puede terminar.
-• Verás tu límite de moteros al planificar una ruta, y la sala muestra lo lleno que está el grupo.
+• Un aspecto totalmente nuevo: se han rediseñado el inicio, la sala de espera de la ruta, la navegación y el resumen de la ruta, con una única tipografía limpia en todas partes.
+• Indicaciones de voz paso a paso, con una Actividad en directo y la Dynamic Island para que el siguiente giro se vea en la pantalla de bloqueo.
+• Ahora pueden mostrarse a la vez varios avisos de reagrupamiento y emergencias, y quien lo lanzó o el líder puede descartar un reagrupamiento.
+• Todos tienen 3 días gratis desde hoy; las cuentas nuevas, 3 días desde que inician sesión. Después hace falta ConvoTrack Pro para crear rutas o unirse a ellas: una ruta en curso siempre se puede terminar.
+• Una barra superior más limpia y un crédito de fotos de Google más discreto en las fotos de destino.

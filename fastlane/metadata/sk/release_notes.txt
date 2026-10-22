@@ -1,3 +1,5 @@
-• Všetci majú odo dneška 3 dni zadarmo; nové účty 3 dni od prihlásenia. Odznak na Domov ukazuje, koľko dní zostáva.
-• Po dňoch zadarmo je na vytváranie jázd a pripájanie potrebné Pro – prebiehajúcu jazdu možno vždy dokončiť.
-• Pri plánovaní jazdy vidíte svoj limit jazdcov a lobby ukazuje, aká plná je skupina.
+• Úplne nový vzhľad: Domov, lobby jazdy, navigácia aj zhrnutie jazdy sú prepracované a v celej appke je jediné čisté písmo.
+• Hlasové navádzanie zákrut a k tomu Aktivita naživo a Dynamic Island, aby ďalšia zákruta zostala na uzamknutej obrazovke.
+• Naraz sa teraz môže zobraziť viac výziev na zraz a núdzových alarmov a zraz môže zrušiť ten, kto ho vyhlásil, alebo vedúci.
+• Všetci majú 3 dni zadarmo od dnešného dňa; nové účty 3 dni od prihlásenia. Potom je na vytváranie jázd a pripájanie sa k nim potrebný ConvoTrack Pro – prebiehajúcu jazdu možno vždy dokončiť.
+• Čistejší horný panel a nenápadnejšie uvedenie autora z Google pri fotkách cieľov.

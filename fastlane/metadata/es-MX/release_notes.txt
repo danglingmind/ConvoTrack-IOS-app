@@ -1,3 +1,5 @@
-• Todos tienen 3 días gratis desde hoy; las cuentas nuevas, 3 días desde el registro. La insignia de Inicio muestra los días que quedan.
-• Después de los días gratis, Pro es necesario para crear o unirse a rodadas; una rodada en curso siempre se puede terminar.
-• Verás tu límite de motociclistas al planear una rodada, y la sala muestra qué tan lleno está el grupo.
+• Un look totalmente nuevo: se rediseñaron el inicio, la sala de espera de la rodada, la navegación y el resumen de la rodada, con una sola tipografía limpia en todos lados.
+• Indicaciones de voz giro a giro, con una Actividad en vivo y la Dynamic Island para que el siguiente giro se vea en la pantalla de bloqueo.
+• Ahora se pueden mostrar al mismo tiempo varios avisos de reagrupamiento y emergencias, y quien lo lanzó o el líder puede descartar un reagrupamiento.
+• Todos tienen 3 días gratis desde hoy; las cuentas nuevas, 3 días desde que inician sesión. Después se necesita ConvoTrack Pro para crear rodadas o unirse a ellas: una rodada en curso siempre se puede terminar.
+• Una barra superior más limpia y un crédito de fotos de Google más discreto en las fotos de destino.

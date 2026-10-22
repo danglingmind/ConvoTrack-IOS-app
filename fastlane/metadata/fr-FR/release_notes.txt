@@ -1,3 +1,5 @@
-• Tout le monde reçoit 3 jours gratuits dès aujourd'hui ; les nouveaux comptes, 3 jours dès l'inscription. Le badge sur l'accueil indique les jours restants.
-• Après les jours gratuits, Pro est nécessaire pour créer ou rejoindre une balade — une balade en cours peut toujours être terminée.
-• Votre limite de motards s'affiche quand vous planifiez une balade, et le salon montre le remplissage du groupe.
+• Un tout nouveau look : l'accueil, le lobby de la sortie, la navigation et le bilan de sortie sont repensés, avec une seule police épurée partout.
+• Guidage vocal virage par virage, plus une Live Activity (Activité en direct) et la Dynamic Island pour garder le prochain virage sur votre écran verrouillé.
+• Plusieurs appels au regroupement et urgences peuvent désormais s'afficher en même temps, et l'auteur de l'appel ou le chef de groupe peut fermer un regroupement.
+• Tout le monde profite de 3 jours gratuits à partir d'aujourd'hui ; les nouveaux comptes disposent de 3 jours à partir de leur connexion. Ensuite, ConvoTrack Pro est nécessaire pour créer ou rejoindre une sortie — une sortie en cours peut toujours être terminée.
+• Une barre supérieure plus épurée et un crédit Google plus discret sur les photos de destination.

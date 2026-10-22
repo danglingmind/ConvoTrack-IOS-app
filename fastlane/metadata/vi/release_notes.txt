@@ -1,3 +1,5 @@
-• Từ hôm nay mọi người có 3 ngày miễn phí; tài khoản mới có 3 ngày kể từ khi đăng nhập. Huy hiệu ở Trang chủ cho biết số ngày còn lại.
-• Sau những ngày miễn phí, tạo hoặc tham gia chuyến đi cần có Pro — chuyến đi đang diễn ra luôn có thể hoàn thành.
-• Giới hạn người lái hiển thị khi bạn lên kế hoạch, và sảnh chờ cho biết đoàn đã đầy đến đâu.
+• Diện mạo hoàn toàn mới: Trang chủ, sảnh chuyến đi, dẫn đường và tổng kết chuyến đi đều được thiết kế lại, dùng một phông chữ gọn gàng xuyên suốt.
+• Dẫn đường bằng giọng nói từng chặng rẽ, cùng Hoạt động trực tiếp và Dynamic Island để lần rẽ tiếp theo luôn hiện trên Màn hình khóa.
+• Giờ đây có thể hiển thị cùng lúc nhiều lời gọi tập hợp và cảnh báo khẩn cấp, và người gọi hoặc trưởng đoàn có thể tắt lời gọi tập hợp.
+• Mọi người được dùng miễn phí 3 ngày kể từ hôm nay; tài khoản mới được 3 ngày kể từ lúc đăng nhập. Sau đó cần ConvoTrack Pro để tạo hoặc tham gia chuyến đi — chuyến đi đang diễn ra luôn có thể hoàn thành.
+• Thanh trên cùng gọn gàng hơn và phần ghi công ảnh của Google trên ảnh điểm đến kín đáo hơn.

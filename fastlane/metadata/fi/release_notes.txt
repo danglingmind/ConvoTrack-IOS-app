@@ -1,3 +1,5 @@
-• Kaikki saavat tästä päivästä 3 ilmaista päivää; uudet tilit 3 päivää kirjautumisesta. Koti-näkymän merkki näyttää jäljellä olevat päivät.
-• Ilmaisten päivien jälkeen ajelujen luominen tai niihin liittyminen vaatii Pron – käynnissä olevan ajelun voi aina ajaa loppuun.
-• Kuljettajarajasi näkyy ajelua suunnitellessa, ja aula näyttää, kuinka täynnä ryhmä on.
+• Täysin uusi ilme: Koti, ajon aula, navigointi ja ajon yhteenveto on suunniteltu uudelleen, ja kaikkialla on yksi selkeä kirjasin.
+• Puhutut käännösohjeet sekä Live-toiminto ja Dynamic Island, jotta seuraava käännös pysyy lukitusnäytöllä näkyvissä.
+• Useita kokoontumiskutsuja ja hätätilanteita voi nyt näkyä yhtä aikaa, ja kutsun lähettänyt tai ajon johtaja voi sulkea kokoontumiskutsun.
+• Kaikki saavat 3 päivää ilmaiseksi tästä päivästä alkaen; uudet tilit 3 päivää kirjautumisesta. Sen jälkeen ajojen luominen tai niihin liittyminen vaatii ConvoTrack Pron – käynnissä olevan ajon voi aina ajaa loppuun.
+• Siistimpi yläpalkki ja hillitympi Google-kuvalähde kohdekuvissa.
