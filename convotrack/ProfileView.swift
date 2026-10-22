@@ -103,15 +103,16 @@ struct ProfileView: View {
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .dsTransparentNavigationBar()
-        .toolbar {
-            // The connection indicator only means something while a ride session exists.
-            if appState.currentRideId != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    DSConnectionStatusButton(state: connectionState)
-                }
-                .sharedBackgroundVisibility(.hidden)
-            }
-        }
+        // Hidden for now: the top-right slot is reserved for a notification bell.
+        // .toolbar {
+        //     // The connection indicator only means something while a ride session exists.
+        //     if appState.currentRideId != nil {
+        //         ToolbarItem(placement: .topBarTrailing) {
+        //             DSConnectionStatusButton(state: connectionState)
+        //         }
+        //         .sharedBackgroundVisibility(.hidden)
+        //     }
+        // }
         .task {
             async let me = try? await APIClient.shared.fetchMe()
             async let history = try? await APIClient.shared.getMyRides(statuses: APIClient.RideStatusFilter.completed)

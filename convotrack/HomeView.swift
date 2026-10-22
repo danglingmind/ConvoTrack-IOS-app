@@ -136,13 +136,14 @@ struct HomeView: View {
                 PlanBadgeButton(source: .homeBadge)
             }
             .sharedBackgroundVisibility(.hidden)
+            // Hidden for now: the top-right slot is reserved for a notification bell.
             // The connection indicator only means something while a ride session exists.
-            if appState.currentRideId != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    DSConnectionStatusButton(state: connectionState)
-                }
-                .sharedBackgroundVisibility(.hidden)
-            }
+            // if appState.currentRideId != nil {
+            //     ToolbarItem(placement: .topBarTrailing) {
+            //         DSConnectionStatusButton(state: connectionState)
+            //     }
+            //     .sharedBackgroundVisibility(.hidden)
+            // }
         }
         .navigationDestination(item: $selectedHistoryRide) { ride in
             RideSummaryView(rideId: ride.rideId, rideTitle: ride.title, fallback: ride)

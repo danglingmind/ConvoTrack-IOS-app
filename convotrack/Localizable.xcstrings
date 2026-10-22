@@ -74,6 +74,9 @@
     "%@ left" : {
 
     },
+    "%@ made way for a newer one" : {
+
+    },
     "%@ needs help — head to their location" : {
 
     },
@@ -224,9 +227,6 @@
     "A1B2C3" : {
 
     },
-    "Accessibility 3 text" : {
-
-    },
     "Active" : {
 
     },
@@ -313,6 +313,9 @@
 
     },
     "Call a regroup and every phone knows where to wait. One tap for emergencies." : {
+
+    },
+    "Called by %@" : {
 
     },
     "Camera Access Denied" : {
@@ -459,9 +462,6 @@
     "Deleting…" : {
 
     },
-    "Design system" : {
-
-    },
     "Destination" : {
 
     },
@@ -472,6 +472,9 @@
 
     },
     "Dismiss emergency" : {
+
+    },
+    "Dismiss regroup" : {
 
     },
     "DIST" : {
@@ -543,7 +546,7 @@
     "Every rider. One map." : {
 
     },
-    "Everyone arrived" : {
+    "Everyone arrived at the %@" : {
 
     },
     "Exit closes navigation on your phone — the ride keeps running and you can resume from the lobby. End Ride stops location sharing for every rider and generates the summary; that can't be undone." : {
@@ -601,17 +604,24 @@
     "Full ride history archive" : {
 
     },
-    "GET CONVOTRACK PRO" : {
+    "Get ConvoTrack Pro" : {
 
     },
-    "GET PRO" : {
+    "Get Pro" : {
 
     },
-    "GET PRO  ·  %@" : {
+    "Get Pro  ·  %@" : {
 
     },
-    "GET PRO  ·  %@ / %@" : {
-
+    "Get Pro  ·  %@ / %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Get Pro  ·  %1$@ / %2$@"
+          }
+        }
+      }
     },
     "Go Pro" : {
 
@@ -681,9 +691,6 @@
 
     },
     "Join ride" : {
-
-    },
-    "JOIN RIDE" : {
 
     },
     "Joining code" : {
@@ -933,7 +940,10 @@
     "Regroup complete" : {
 
     },
-    "Regroup complete. Everyone arrived" : {
+    "Regroup complete. Everyone arrived at the %@" : {
+
+    },
+    "Regroup replaced" : {
 
     },
     "Remove from ride" : {
@@ -945,7 +955,7 @@
     "Removed From Ride" : {
 
     },
-    "REPORT ISSUE" : {
+    "Report issue" : {
 
     },
     "Restore purchases" : {
@@ -984,7 +994,7 @@
     "Ride history" : {
 
     },
-    "RIDE IS FULL" : {
+    "Ride is full" : {
 
     },
     "Ride leader" : {

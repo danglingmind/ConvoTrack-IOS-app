@@ -307,14 +307,6 @@ struct DSActiveRideCard<Photo: View>: View {
                 }
             }
             .padding(.top, DS.Space.p2)
-            if let attribution {
-                Text("Photo: \(attribution) · Google")
-                    .dsText(.micro)
-                    .foregroundStyle(DS.Text.onPhotoMuted)
-                    .dsShadow(DS.Shadow.textOnPhoto)
-                    .lineLimit(1)
-                    .padding(.top, DS.Space.p2)
-            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
@@ -327,6 +319,16 @@ struct DSActiveRideCard<Photo: View>: View {
             // A scaledToFill photo overflows its card; clipping doesn't shrink its hit area, so
             // without this it swallows taps on whatever sits above the card.
             .allowsHitTesting(false)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if let attribution {
+                Text("Photo: \(attribution) · Google")
+                    .font(.system(size: 8, weight: .regular))
+                    .foregroundStyle(DS.Text.onPhotoMuted.opacity(0.7))
+                    .lineLimit(1)
+                    .padding(.trailing, DS.Space.p2)
+                    .padding(.bottom, DS.Space.p1)
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous).stroke(DS.Border.default, lineWidth: DS.BorderWidth.default))

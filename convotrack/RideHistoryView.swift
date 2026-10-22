@@ -72,15 +72,16 @@ struct RideHistoryView: View {
         .navigationTitle(titleVisible ? String(localized: "History") : "")
         .navigationBarTitleDisplayMode(.inline)
         .dsTransparentNavigationBar()
-        .toolbar {
-            // The connection indicator only means something while a ride session exists.
-            if appState.currentRideId != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    DSConnectionStatusButton(state: connectionState)
-                }
-                .sharedBackgroundVisibility(.hidden)
-            }
-        }
+        // Hidden for now: the top-right slot is reserved for a notification bell.
+        // .toolbar {
+        //     // The connection indicator only means something while a ride session exists.
+        //     if appState.currentRideId != nil {
+        //         ToolbarItem(placement: .topBarTrailing) {
+        //             DSConnectionStatusButton(state: connectionState)
+        //         }
+        //         .sharedBackgroundVisibility(.hidden)
+        //     }
+        // }
         .navigationDestination(isPresented: $showSummary) {
             if let ride = selectedRide {
                 RideSummaryView(rideId: ride.rideId, rideTitle: ride.title, fallback: ride)

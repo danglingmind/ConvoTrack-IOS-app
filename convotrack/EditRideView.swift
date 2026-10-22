@@ -181,13 +181,14 @@ struct EditRideView: View {
         .navigationTitle("Edit Ride")
         .navigationBarTitleDisplayMode(.inline)
         .dsTransparentNavigationBar()
-        .toolbar {
-            // Editing happens inside a ride session, so the connection indicator applies.
-            ToolbarItem(placement: .topBarTrailing) {
-                DSConnectionStatusButton(state: connectionState)
-            }
-            .sharedBackgroundVisibility(.hidden)
-        }
+        // Hidden for now: the top-right slot is reserved for a notification bell.
+        // .toolbar {
+        //     // Editing happens inside a ride session, so the connection indicator applies.
+        //     ToolbarItem(placement: .topBarTrailing) {
+        //         DSConnectionStatusButton(state: connectionState)
+        //     }
+        //     .sharedBackgroundVisibility(.hidden)
+        // }
         .alert("Failed to Save Ride", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {

@@ -460,12 +460,11 @@ struct RideLobbyView: View {
     // MARK: - Hero
 
     /// Title, live line and destination over the photo (or route map), with the Places credit
-    /// pill at the bottom-end. The media is the background, so the hero grows with the text at
+    /// tucked in the bottom-right corner. The media is the background, so the hero grows with the text at
     /// large Dynamic Type sizes instead of clipping it.
     private var lobbyHero: some View {
         VStack(alignment: .leading, spacing: DS.Space.p2) {
             heroTitleBlock
-            photoAttribution
         }
         // Measured so the route camera is framed above the title, not underneath it.
         .onGeometryChange(for: CGFloat.self) { proxy in
@@ -478,6 +477,7 @@ struct RideLobbyView: View {
         .padding(.bottom, DS.Space.p4)
         .frame(maxWidth: .infinity, minHeight: mapPreviewHeight, alignment: .bottomLeading)
         .background { heroMedia }
+        .overlay(alignment: .bottomTrailing) { photoAttribution }
         .dsAnimation(.easeInOut(duration: 0.35), value: heroPhase)
     }
 
@@ -665,20 +665,16 @@ struct RideLobbyView: View {
 
     /// Photographer credit for the destination photo. Required by Google's Places policy whenever
     /// a Place Photo is displayed, so it renders with the image rather than being optional
-    /// decoration: a glass pill at the photo's bottom-end.
+    /// decoration: a tiny label in the hero's bottom-right corner.
     @ViewBuilder
     private var photoAttribution: some View {
         if case .photo(let photo) = heroPhase, let attribution = photo.attribution {
-            HStack {
-                Spacer(minLength: 0)
-                Text("Photo: \(attribution) · Google")
-                    .dsText(.micro)
-                    .foregroundStyle(DS.Text.onPhotoMuted)
-                    .lineLimit(1)
-                    .padding(.horizontal, DS.Space.p3)
-                    .frame(minHeight: 28)
-                    .dsGlass(clear: true)
-            }
+            Text("Photo: \(attribution) · Google")
+                .font(.system(size: 8, weight: .regular))
+                .foregroundStyle(DS.Text.onPhotoMuted.opacity(0.7))
+                .lineLimit(1)
+                .padding(.trailing, DS.Space.p2)
+                .padding(.bottom, DS.Space.p1)
         }
     }
 

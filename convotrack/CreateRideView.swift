@@ -123,14 +123,15 @@ struct CreateRideView: View {
         .navigationTitle("New Ride")
         .navigationBarTitleDisplayMode(.inline)
         .dsTransparentNavigationBar()
-        .toolbar {
-            if appState.currentRideId != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    DSConnectionStatusButton(state: connectionState)
-                }
-                .sharedBackgroundVisibility(.hidden)
-            }
-        }
+        // Hidden for now: the top-right slot is reserved for a notification bell.
+        // .toolbar {
+        //     if appState.currentRideId != nil {
+        //         ToolbarItem(placement: .topBarTrailing) {
+        //             DSConnectionStatusButton(state: connectionState)
+        //         }
+        //         .sharedBackgroundVisibility(.hidden)
+        //     }
+        // }
         .alert("Failed to Create Ride", isPresented: $showError) {
             if createBlockedByPlan {
                 Button("Go Pro") { paywall.present(.createBlocked) }

@@ -132,16 +132,6 @@ struct RideSummaryView: View {
                     .foregroundStyle(DS.Text.secondary)
                     .dsShadow(DS.Shadow.textOnPhoto)
             }
-            if let photo = destinationPhoto, let attribution = photo.attribution {
-                Text("Photo: \(attribution) · Google")
-                    .dsText(.micro)
-                    .foregroundStyle(DS.Text.onPhotoMuted)
-                    .lineLimit(1)
-                    .padding(.horizontal, DS.Space.p3)
-                    .frame(minHeight: 28)
-                    .dsGlass(clear: true)
-                    .padding(.top, DS.Space.p2)
-            }
         }
         .padding(.horizontal, DS.Space.screenInset)
         .padding(.top, topInset + 24)
@@ -163,7 +153,21 @@ struct RideSummaryView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
+        .overlay(alignment: .bottomTrailing) { photoCredit }
         .allowsHitTesting(false)
+    }
+
+    /// Google Places requires the photographer credit; kept tiny and tucked in the corner.
+    @ViewBuilder
+    private var photoCredit: some View {
+        if let attribution = destinationPhoto?.attribution {
+            Text("Photo: \(attribution) · Google")
+                .font(.system(size: 8, weight: .regular))
+                .foregroundStyle(DS.Text.onPhotoMuted.opacity(0.7))
+                .lineLimit(1)
+                .padding(.trailing, DS.Space.p2)
+                .padding(.bottom, DS.Space.p1)
+        }
     }
 
     // MARK: - Metrics
