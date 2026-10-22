@@ -26,13 +26,10 @@ Sürüş bittiğinde herkes gerçek rakamları alır: yolda geçen gerçek süre
 SÜRÜŞ GEÇMİŞİ
 Liderliğini yaptığınız ya da katıldığınız her sürüş, tek bir yerde saklanır.
 
-3 GÜN ÜCRETSİZ, SONRA CONVOTRACK PRO
-Her yeni hesap 3 gün ücretsiz başlar: her biri en fazla 5 sürücülük en fazla 3 sürüş, ödeme bilgisi gerekmez. Sonrasında sürüş oluşturmak veya katılmak için Pro gerekir. Devam eden bir sürüş her zaman tamamlanabilir.
-
 CONVOTRACK PRO
 Sınırsız sürüş, 25 sürücüye kadar gruplar, canlı istatistikler ve senkron puanları, ayrıca 365 günlük tam sürüş arşivi.
 
-ConvoTrack Pro, otomatik yenilenen bir aboneliktir. Ödeme, satın alma onayında Apple Account hesabınızdan tahsil edilir. Mevcut dönemin bitiminden en az 24 saat önce iptal edilmediği sürece otomatik olarak yenilenir. Aboneliğinizi Apple Account ayarlarınızdan yönetin veya iptal edin. Ücretsiz günlerde abone olmak ücretli aboneliği hemen başlatır.
+ConvoTrack Pro, otomatik yenilenen bir aboneliktir. Ödeme, satın alma onayında Apple Account hesabınızdan tahsil edilir. Mevcut dönemin bitiminden en az 24 saat önce iptal edilmediği sürece otomatik olarak yenilenir. Aboneliğinizi Apple Account ayarlarınızdan yönetin veya iptal edin.
 
 Gizlilik Politikası: https://convotrack.in/privacy
 Kullanım Koşulları: https://convotrack.in/terms

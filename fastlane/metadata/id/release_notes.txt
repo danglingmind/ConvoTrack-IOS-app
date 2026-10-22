@@ -1,5 +1,5 @@
 • Tampilan baru: Beranda, lobi perjalanan, navigasi, dan ringkasan perjalanan didesain ulang, dengan satu jenis huruf yang bersih di seluruh aplikasi.
 • Petunjuk belokan demi belokan dengan suara, plus Live Activity dan Dynamic Island agar belokan berikutnya tetap tampil di Layar Terkunci.
 • Beberapa ajakan berkumpul kembali dan keadaan darurat kini bisa tampil sekaligus, dan pemanggil atau pemimpin dapat menutup ajakan berkumpul.
-• Mulai hari ini semua orang mendapat gratis 3 hari; akun baru mendapat 3 hari sejak masuk. Setelah itu, ConvoTrack Pro diperlukan untuk membuat atau bergabung ke perjalanan — perjalanan yang sedang berlangsung selalu bisa diselesaikan.
+• Batas rider ditampilkan saat kamu merencanakan perjalanan, dan lobi menunjukkan seberapa penuh rombongan.
 • Bilah atas yang lebih bersih dan kredit foto Google yang lebih tidak mencolok pada foto tujuan.

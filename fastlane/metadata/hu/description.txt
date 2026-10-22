@@ -26,13 +26,10 @@ A túra végén mindenki megkapja a valós számokat: a ténylegesen úton tölt
 TÚRANAPLÓ
 Minden túra, amelyet vezettél vagy amelyen részt vettél, egy helyen.
 
-3 NAP INGYEN, UTÁNA CONVOTRACK PRO
-Minden új fiók 3 ingyenes nappal indul – legfeljebb 3 túra, egyenként legfeljebb 5 motorossal, fizetési adatok nélkül. Ezután túrák létrehozásához vagy csatlakozáshoz Pro kell. A folyamatban lévő túrát mindig befejezheted.
-
 CONVOTRACK PRO
 Korlátlan túra, legfeljebb 25 fős csapatok, élő statisztikák és szinkronpontszámok, valamint teljes, 365 napos túraarchívum.
 
-A ConvoTrack Pro automatikusan megújuló előfizetés. A díjat a vásárlás megerősítésekor terheljük az Apple Account fiókodra. Automatikusan megújul, hacsak legalább 24 órával az aktuális időszak vége előtt le nem mondod. Az előfizetést az Apple Account beállításaiban kezelheted. Ha az ingyenes napok alatt fizetsz elő, a fizetős előfizetés azonnal elindul.
+A ConvoTrack Pro automatikusan megújuló előfizetés. A díjat a vásárlás megerősítésekor terheljük az Apple Account fiókodra. Automatikusan megújul, hacsak legalább 24 órával az aktuális időszak vége előtt le nem mondod. Az előfizetést az Apple Account beállításaiban kezelheted.
 
 Adatvédelmi irányelvek: https://convotrack.in/privacy
 Felhasználási feltételek: https://convotrack.in/terms

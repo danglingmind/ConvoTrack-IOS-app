@@ -1,5 +1,5 @@
 • Un aspect complet nou: Acasă, lobby-ul turei, navigația și rezumatul turei au fost reproiectate, cu un singur font curat peste tot.
 • Indicații vocale pas cu pas, plus o Activitate live și Dynamic Island, ca următoarea manevră să rămână pe ecranul de blocare.
 • Acum pot apărea simultan mai multe apeluri de regrupare și urgențe, iar cel care a inițiat apelul sau liderul poate închide o regrupare.
-• Toți primesc 3 zile gratuite de azi; conturile noi primesc 3 zile de la autentificare. După aceea, ConvoTrack Pro este necesar pentru a crea sau a te alătura turelor — o tură în desfășurare poate fi mereu încheiată.
+• Limita de motocicliști se vede cât planifici tura, iar lobby-ul arată cât de plin este grupul.
 • O bară de sus mai curată și o mențiune Google mai discretă pe fotografiile destinațiilor.

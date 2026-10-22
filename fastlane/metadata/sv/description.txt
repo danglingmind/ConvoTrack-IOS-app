@@ -26,13 +26,10 @@ När turen är slut får alla de riktiga siffrorna: verklig tid på vägen, kör
 TURHISTORIK
 Varje tur du har lett eller kört med på, samlad på ett ställe.
 
-3 DAGAR GRATIS, SEDAN CONVOTRACK PRO
-Varje nytt konto börjar med 3 dagar gratis – upp till 3 turer med upp till 5 förare vardera, inga betaluppgifter behövs. Därefter krävs Pro för att skapa eller gå med i turer. En pågående tur kan alltid slutföras.
-
 CONVOTRACK PRO
 Obegränsat med turer, grupper med upp till 25 förare, livestatistik och synkpoäng samt ett fullständigt turarkiv på 365 dagar.
 
-ConvoTrack Pro är en prenumeration som förnyas automatiskt. Betalningen dras från ditt Apple Account när köpet bekräftas. Den förnyas automatiskt om den inte sägs upp minst 24 timmar före den aktuella periodens slut. Hantera eller säg upp din prenumeration i inställningarna för ditt Apple Account. Att prenumerera under gratisdagarna startar den betalda prenumerationen direkt.
+ConvoTrack Pro är en prenumeration som förnyas automatiskt. Betalningen dras från ditt Apple Account när köpet bekräftas. Den förnyas automatiskt om den inte sägs upp minst 24 timmar före den aktuella periodens slut. Hantera eller säg upp din prenumeration i inställningarna för ditt Apple Account.
 
 Integritetspolicy: https://convotrack.in/privacy
 Användarvillkor: https://convotrack.in/terms

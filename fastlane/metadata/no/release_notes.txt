@@ -1,5 +1,5 @@
 • Nytt og friskt utseende: Hjem, turlobby, navigasjon og turoppsummering er redesignet, med én ren skrifttype overalt.
 • Talt navigasjon sving for sving, pluss en Live-aktivitet og Dynamic Island, så neste sving blir stående på låseskjermen.
 • Flere samlingskall og nødvarsler kan nå vises samtidig, og den som ropte opp eller turlederen kan avslutte et samlingskall.
-• Alle får 3 dager gratis fra i dag; nye kontoer får 3 dager fra innlogging. Etter det trenger du ConvoTrack Pro for å opprette eller bli med på turer – en pågående tur kan alltid fullføres.
+• Førergrensen vises mens du planlegger en tur, og lobbyen viser hvor full gruppen er.
 • En ryddigere toppstolpe og en mer dempet Google-bildekreditering på bilder av reisemål.

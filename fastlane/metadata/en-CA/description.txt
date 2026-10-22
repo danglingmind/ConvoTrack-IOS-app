@@ -26,13 +26,10 @@ When the ride ends, everyone gets the real numbers: actual time on the road, kil
 RIDE HISTORY
 Every ride you have led or joined, kept in one place.
 
-3 DAYS FREE, THEN CONVOTRACK PRO
-Every new account starts with 3 days free — up to 3 rides, up to 5 riders each, no payment details needed. After the free days, creating or joining rides needs Pro. A ride you're already on can always be finished.
-
 CONVOTRACK PRO
 Unlimited rides, packs of up to 25 riders, live stats and sync scores, and a full 365-day ride history archive.
 
-ConvoTrack Pro is an auto-renewable subscription. Payment is charged to your Apple Account at confirmation of purchase. It renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel your subscription in your Apple Account settings. Subscribing during the free days starts the paid subscription right away.
+ConvoTrack Pro is an auto-renewable subscription. Payment is charged to your Apple Account at confirmation of purchase. It renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel your subscription in your Apple Account settings.
 
 Privacy Policy: https://convotrack.in/privacy
 Terms of Service: https://convotrack.in/terms

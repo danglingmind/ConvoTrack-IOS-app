@@ -1,5 +1,5 @@
 • Povsem nov videz: Domov, preddverje vožnje, navigacija in povzetek vožnje so prenovljeni, po vsej aplikaciji pa je ena sama čista pisava.
 • Glasovna navigacija zavoj za zavojem ter Aktivnost v živo in Dynamic Island, da naslednji zavoj ostane na zaklenjenem zaslonu.
 • Zdaj je lahko hkrati prikazanih več pozivov na zbor in klicev v sili, zbor pa lahko prekliče tisti, ki ga je sprožil, ali vodja.
-• Vsi dobijo 3 brezplačne dni od danes; novi računi 3 dni od prijave. Nato je za ustvarjanje voženj in pridružitev potreben ConvoTrack Pro – vožnjo, ki že poteka, lahko vedno dokončate.
+• Omejitev voznikov je vidna med načrtovanjem vožnje, preddverje pa pokaže, kako polna je skupina.
 • Čistejša zgornja vrstica in manj opazen podpis Google na fotografijah ciljev.

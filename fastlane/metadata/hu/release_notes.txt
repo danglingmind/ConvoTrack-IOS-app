@@ -1,5 +1,5 @@
 • Vadonatúj megjelenés: a kezdőképernyő, a túra előszobája, a navigáció és a túraösszegzés újratervezve, mindenhol egyetlen letisztult betűtípussal.
 • Hangos fordulónkénti navigáció, valamint Live Activity (Élő tevékenység) és Dynamic Island, hogy a következő kanyar a zárolt képernyőn is látszódjon.
 • Mostantól több gyülekezőhívás és vészhelyzet is megjelenhet egyszerre, a hívó vagy a vezető pedig elvetheti a gyülekezőt.
-• Mától mindenki 3 napot kap ingyen; az új fiókok a bejelentkezéstől számított 3 napot. Ezután a túrák létrehozásához és csatlakozáshoz ConvoTrack Pro szükséges — a folyamatban lévő túrát mindig befejezheted.
+• A motorosok létszámkorlátja a túra tervezése közben látszik, a túra előszobája pedig mutatja, mennyire telt a csapat.
 • Letisztultabb felső sáv és visszafogottabb Google fotókredit a célállomás-fotókon.

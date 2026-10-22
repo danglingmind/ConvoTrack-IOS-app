@@ -1,5 +1,5 @@
 • Un look completamente nuovo: Home, lobby del giro, navigazione e riepilogo del giro sono stati ridisegnati, con un unico font pulito ovunque.
 • Indicazioni vocali curva dopo curva, più una Live Activity (Attività in tempo reale) e la Dynamic Island per tenere la prossima svolta sulla schermata di blocco.
 • Ora più chiamate di raggruppamento ed emergenze possono comparire insieme, e chi ha chiamato o il capogruppo può chiudere un raggruppamento.
-• Da oggi tutti hanno 3 giorni gratis; i nuovi account ricevono 3 giorni dall'accesso. Dopo, per creare un giro o unirsi serve ConvoTrack Pro: un giro già in corso si può sempre concludere.
+• Il limite di motociclisti si vede mentre pianifichi un giro, e la lobby mostra quanto è pieno il gruppo.
 • Una barra superiore più pulita e un credito Google più discreto sulle foto delle destinazioni.

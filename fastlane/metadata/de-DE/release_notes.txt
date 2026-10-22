@@ -1,5 +1,5 @@
 • Ein ganz neuer Look: Start, Tour-Lobby, Navigation und Tour-Auswertung wurden neu gestaltet – mit einer einheitlichen, klaren Schrift.
 • Gesprochene Abbiegehinweise sowie eine Live-Aktivität und Dynamic Island, damit die nächste Abbiegung auf dem Sperrbildschirm sichtbar bleibt.
 • Mehrere Sammel-Rufe und Notfälle können jetzt gleichzeitig angezeigt werden, und wer den Ruf ausgelöst hat oder der Tourleiter kann einen Sammel-Ruf schließen.
-• Alle bekommen ab heute 3 Tage gratis; neue Konten erhalten 3 Tage ab der Anmeldung. Danach brauchst du ConvoTrack Pro, um Touren zu erstellen oder ihnen beizutreten – eine laufende Tour kannst du immer zu Ende fahren.
+• Dein Fahrerlimit wird bei der Tourplanung angezeigt, und die Tour-Lobby zeigt, wie voll die Gruppe ist.
 • Eine aufgeräumtere obere Leiste und ein dezenterer Google-Fotonachweis bei Zielfotos.

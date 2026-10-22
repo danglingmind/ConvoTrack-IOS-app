@@ -1,5 +1,5 @@
 • Un look totalmente nuevo: se rediseñaron el inicio, la sala de espera de la rodada, la navegación y el resumen de la rodada, con una sola tipografía limpia en todos lados.
 • Indicaciones de voz giro a giro, con una Actividad en vivo y la Dynamic Island para que el siguiente giro se vea en la pantalla de bloqueo.
 • Ahora se pueden mostrar al mismo tiempo varios avisos de reagrupamiento y emergencias, y quien lo lanzó o el líder puede descartar un reagrupamiento.
-• Todos tienen 3 días gratis desde hoy; las cuentas nuevas, 3 días desde que inician sesión. Después se necesita ConvoTrack Pro para crear rodadas o unirse a ellas: una rodada en curso siempre se puede terminar.
+• El límite de motociclistas se muestra mientras planeas una rodada, y la sala de espera indica qué tan lleno está el grupo.
 • Una barra superior más limpia y un crédito de fotos de Google más discreto en las fotos de destino.

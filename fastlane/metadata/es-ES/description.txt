@@ -26,13 +26,10 @@ Cuando termina la ruta, todos reciben los números de verdad: tiempo real en car
 HISTORIAL DE RUTAS
 Todas las rutas que has liderado o a las que te has unido, reunidas en un solo sitio.
 
-3 DÍAS GRATIS, DESPUÉS CONVOTRACK PRO
-Cada cuenta nueva empieza con 3 días gratis: hasta 3 rutas de hasta 5 moteros cada una, sin datos de pago. Después, crear o unirse a rutas requiere Pro. Una ruta en curso siempre se puede terminar.
-
 CONVOTRACK PRO
 Rutas ilimitadas, grupos de hasta 25 moteros, estadísticas en directo y puntuaciones de sincronía, y un historial completo de 365 días.
 
-ConvoTrack Pro es una suscripción de renovación automática. El pago se carga en tu Apple Account al confirmar la compra. Se renueva automáticamente salvo que se cancele al menos 24 horas antes de que acabe el periodo en curso. Gestiona o cancela tu suscripción en los ajustes de tu Apple Account. Suscribirte durante los días gratis inicia la suscripción de pago al momento.
+ConvoTrack Pro es una suscripción de renovación automática. El pago se carga en tu Apple Account al confirmar la compra. Se renueva automáticamente salvo que se cancele al menos 24 horas antes de que acabe el periodo en curso. Gestiona o cancela tu suscripción en los ajustes de tu Apple Account.
 
 Política de privacidad: https://convotrack.in/privacy
 Términos del servicio: https://convotrack.in/terms

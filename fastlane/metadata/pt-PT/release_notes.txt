@@ -1,5 +1,5 @@
 • Novo visual: o Início, o lobby do passeio, a navegação e o resumo do passeio foram redesenhados, com um único tipo de letra limpo em toda a app.
 • Indicações curva a curva por voz, além de uma Atividade em Direto e da Dynamic Island para que a próxima curva fique no seu Ecrã de Bloqueio.
 • Vários pedidos de reagrupamento e emergências podem agora aparecer em simultâneo, e quem fez o pedido ou o líder pode dispensar um reagrupamento.
-• Todos têm 3 dias grátis a partir de hoje; as contas novas têm 3 dias a partir do início de sessão. Depois disso, é necessário o ConvoTrack Pro para criar ou aderir a passeios — um passeio em curso pode sempre ser concluído.
+• O limite de motociclistas aparece enquanto planeia o passeio, e o lobby mostra quão cheio está o grupo.
 • Uma barra superior mais limpa e um crédito do Google mais discreto nas fotografias dos destinos.

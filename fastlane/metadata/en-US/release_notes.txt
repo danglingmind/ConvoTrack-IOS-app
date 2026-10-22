@@ -1,5 +1,5 @@
 • A fresh new look: Home, ride lobby, navigation and ride summary are redesigned, with one clean typeface throughout.
 • Spoken turn-by-turn directions, plus a Live Activity and Dynamic Island so the next turn stays on your Lock Screen.
 • Several regroup calls and emergencies can now show at once, and the caller or leader can dismiss a regroup.
-• Everyone gets 3 days free from today; new accounts get 3 days from sign-in. After that, ConvoTrack Pro is needed to create or join rides — a ride already in progress can always be finished.
+• Your rider limit is shown while you plan a ride, and the lobby shows how full the pack is.
 • A cleaner top bar and a quieter Google photo credit on destination photos.

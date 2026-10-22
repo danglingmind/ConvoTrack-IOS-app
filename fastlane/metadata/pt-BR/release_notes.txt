@@ -1,5 +1,5 @@
 • Visual novo: Início, lobby do rolê, navegação e resumo do rolê foram redesenhados, com uma única fonte limpa em todo o app.
 • Direções curva a curva por voz, além de uma Atividade ao Vivo e a Dynamic Island para a próxima curva ficar na sua Tela Bloqueada.
 • Vários chamados de reagrupamento e emergências agora podem aparecer ao mesmo tempo, e quem chamou ou o líder pode dispensar um reagrupamento.
-• Todo mundo ganha 3 dias grátis a partir de hoje; contas novas ganham 3 dias a partir do login. Depois disso, é preciso ter o ConvoTrack Pro para criar ou entrar em rolês — um rolê em andamento sempre pode ser concluído.
+• Seu limite de motociclistas aparece enquanto você planeja o rolê, e o lobby mostra o quanto o grupo está cheio.
 • Barra superior mais limpa e um crédito do Google mais discreto nas fotos de destino.

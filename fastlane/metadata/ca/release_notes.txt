@@ -1,5 +1,5 @@
 • Un aspecte completament nou: s'han redissenyat l'inici, la sala d'espera de la ruta, la navegació i el resum de la ruta, amb una sola tipografia neta a tot arreu.
 • Indicacions de veu pas a pas, amb una Activitat en directe i la Dynamic Island perquè el proper gir es vegi a la pantalla de bloqueig.
 • Ara es poden mostrar alhora diversos avisos de reagrupament i emergències, i qui l'ha llançat o el líder pot descartar un reagrupament.
-• Tothom té 3 dies gratis a partir d'avui; els comptes nous en tenen 3 des que inicien la sessió. Després cal ConvoTrack Pro per crear o unir-se a rutes: una ruta en curs sempre es pot acabar.
+• El límit de motoristes es veu mentre planifiques una ruta, i la sala d'espera mostra com de ple està el grup.
 • Una barra superior més neta i un crèdit de fotos de Google més discret a les fotos de destinació.

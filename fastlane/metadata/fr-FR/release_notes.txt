@@ -1,5 +1,5 @@
 • Un tout nouveau look : l'accueil, le lobby de la sortie, la navigation et le bilan de sortie sont repensés, avec une seule police épurée partout.
 • Guidage vocal virage par virage, plus une Live Activity (Activité en direct) et la Dynamic Island pour garder le prochain virage sur votre écran verrouillé.
 • Plusieurs appels au regroupement et urgences peuvent désormais s'afficher en même temps, et l'auteur de l'appel ou le chef de groupe peut fermer un regroupement.
-• Tout le monde profite de 3 jours gratuits à partir d'aujourd'hui ; les nouveaux comptes disposent de 3 jours à partir de leur connexion. Ensuite, ConvoTrack Pro est nécessaire pour créer ou rejoindre une sortie — une sortie en cours peut toujours être terminée.
+• La limite de motards s'affiche pendant que vous planifiez une sortie, et le lobby indique à quel point le groupe est plein.
 • Une barre supérieure plus épurée et un crédit Google plus discret sur les photos de destination.

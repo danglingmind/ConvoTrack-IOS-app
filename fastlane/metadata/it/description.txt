@@ -26,13 +26,10 @@ Quando il giro finisce, tutti ricevono i numeri veri: tempo effettivo su strada,
 STORICO DEI GIRI
 Tutti i giri che hai guidato o a cui ti sei unito, raccolti in un unico posto.
 
-3 GIORNI GRATIS, POI CONVOTRACK PRO
-Ogni nuovo account parte con 3 giorni gratis: fino a 3 giri con massimo 5 motociclisti ciascuno, senza dati di pagamento. Dopo, per creare o unirti a un giro serve Pro. Un giro in corso si può sempre concludere.
-
 CONVOTRACK PRO
 Giri illimitati, gruppi fino a 25 motociclisti, statistiche in tempo reale e punteggi di sincronia, e l'archivio completo di 365 giorni.
 
-ConvoTrack Pro è un abbonamento con rinnovo automatico. Il pagamento viene addebitato sul tuo Apple Account alla conferma dell'acquisto. Si rinnova automaticamente a meno che non venga annullato almeno 24 ore prima della fine del periodo in corso. Gestisci o annulla l'abbonamento nelle impostazioni del tuo Apple Account. Abbonarsi durante i giorni gratis avvia subito l'abbonamento a pagamento.
+ConvoTrack Pro è un abbonamento con rinnovo automatico. Il pagamento viene addebitato sul tuo Apple Account alla conferma dell'acquisto. Si rinnova automaticamente a meno che non venga annullato almeno 24 ore prima della fine del periodo in corso. Gestisci o annulla l'abbonamento nelle impostazioni del tuo Apple Account.
 
 Informativa sulla privacy: https://convotrack.in/privacy
 Termini di servizio: https://convotrack.in/terms

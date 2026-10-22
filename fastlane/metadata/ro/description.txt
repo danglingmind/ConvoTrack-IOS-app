@@ -26,13 +26,10 @@ Când tura se încheie, toată lumea primește cifrele adevărate: timpul real p
 ISTORICUL TURELOR
 Toate turele pe care le-ai condus sau la care te-ai alăturat, într-un singur loc.
 
-3 ZILE GRATUIT, APOI CONVOTRACK PRO
-Fiecare cont nou începe cu 3 zile gratuite – până la 3 ture, fiecare cu până la 5 motocicliști, fără date de plată. Apoi, crearea turelor sau alăturarea la ele necesită Pro. O tură aflată în desfășurare poate fi mereu încheiată.
-
 CONVOTRACK PRO
 Ture nelimitate, grupuri de până la 25 de motocicliști, statistici live și scoruri de sincronizare și un istoric complet de 365 de zile.
 
-ConvoTrack Pro este un abonament cu reînnoire automată. Plata este debitată din Apple Account la confirmarea achiziției. Se reînnoiește automat dacă nu este anulat cu cel puțin 24 de ore înainte de sfârșitul perioadei curente. Gestionează sau anulează abonamentul din setările contului tău Apple Account. Abonarea în zilele gratuite pornește imediat abonamentul plătit.
+ConvoTrack Pro este un abonament cu reînnoire automată. Plata este debitată din Apple Account la confirmarea achiziției. Se reînnoiește automat dacă nu este anulat cu cel puțin 24 de ore înainte de sfârșitul perioadei curente. Gestionează sau anulează abonamentul din setările contului tău Apple Account.
 
 Politica de confidențialitate: https://convotrack.in/privacy
 Termeni și condiții: https://convotrack.in/terms

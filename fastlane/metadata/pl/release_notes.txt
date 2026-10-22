@@ -1,5 +1,5 @@
 • Świeży, nowy wygląd: ekran główny, lobby trasy, nawigacja i podsumowanie trasy zostały przeprojektowane, z jedną czytelną czcionką w całej aplikacji.
 • Głosowe wskazówki zakręt po zakręcie oraz Aktywność na żywo i Dynamic Island, dzięki którym kolejny zakręt zostaje na ekranie blokady.
 • Kilka wezwań do zbiórki i alarmów awaryjnych może się teraz wyświetlać naraz, a wzywający lub prowadzący może zamknąć zbiórkę.
-• Od dziś każdy dostaje 3 darmowe dni; nowe konta – 3 dni od zalogowania. Potem do tworzenia tras i dołączania do nich potrzebny jest ConvoTrack Pro – trwającą trasę zawsze można dokończyć.
+• Limit motocyklistów widać podczas planowania trasy, a lobby pokazuje, jak pełna jest grupa.
 • Czytelniejszy górny pasek i mniej rzucające się w oczy źródło zdjęć Google przy zdjęciach celów podróży.
