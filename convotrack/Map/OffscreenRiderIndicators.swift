@@ -17,8 +17,11 @@ struct EdgeIndicator: Identifiable, Equatable {
 
 /// Pin ids for the non-rider things worth an edge chip. They share the rider tap path.
 enum EdgeTarget {
-    static let regroupId = "regroup"
-    static let emergencyId = "emergency"
+    static let regroupPrefix = "regroup:"
+    static let emergencyPrefix = "emergency:"
+
+    static func regroupId(_ id: String) -> String { regroupPrefix + id }
+    static func emergencyId(_ id: String) -> String { emergencyPrefix + id }
 }
 
 /// An `EdgeIndicator` joined with the rider's display metadata.

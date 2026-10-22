@@ -184,6 +184,20 @@ struct RideStateUpdate: Codable {
     let leaderboard: [LiveLeaderboardEntry]
     let openRegroup: RegroupEvent?
     let openEmergency: EmergencyEvent?
+    /// Every open regroup / emergency. Absent from servers that predate multiple open items, in
+    /// which case `openRegroup` / `openEmergency` (the most recent) is all there is.
+    let openRegroups: [RegroupEvent]?
+    let openEmergencies: [EmergencyEvent]?
+
+    var allOpenRegroups: [RegroupEvent] { openRegroups ?? openRegroup.map { [$0] } ?? [] }
+    var allOpenEmergencies: [EmergencyEvent] { openEmergencies ?? openEmergency.map { [$0] } ?? [] }
+}
+
+/// `ride:regroup_dismissed`. `reason` is "dismissed" (by its caller or the leader), "superseded"
+/// (its caller started another) or "capped" (dropped as the oldest when a fourth was called).
+struct RegroupDismissal: Equatable {
+    let regroupId: String
+    let reason: String
 }
 
 struct LiveParticipant: Codable {

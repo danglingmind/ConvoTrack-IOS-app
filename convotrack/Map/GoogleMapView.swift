@@ -11,8 +11,8 @@ struct MapPin: Identifiable {
         case waypoint(name: String)
         case lobbyStart
         case rider(name: String, avatarUrl: String?, isMe: Bool, rank: Int, isSelected: Bool, isOffline: Bool)
-        case regroup(type: String)
-        case emergency
+        case regroup(type: String, caller: String)
+        case emergency(caller: String)
         case simpleDot(color: UIColor, size: CGFloat)
     }
 
@@ -38,12 +38,12 @@ struct MapPin: Identifiable {
             h.combine(3)
         case .rider(let n, _, let me, let rank, let sel, let off):
             h.combine(4); h.combine(n); h.combine(me); h.combine(rank); h.combine(sel); h.combine(off)
-        case .regroup(let t):
-            h.combine(5); h.combine(t)
+        case .regroup(let t, let caller):
+            h.combine(5); h.combine(t); h.combine(caller)
         case .simpleDot(_, let sz):
             h.combine(6); h.combine(Int(sz))
-        case .emergency:
-            h.combine(7)
+        case .emergency(let caller):
+            h.combine(7); h.combine(caller)
         }
         h.combine(distanceText)   // re-bake when the displayed distance changes
         return h.finalize()
@@ -739,11 +739,11 @@ extension GoogleMapView {
             // Intrinsic size, like the stop pins: baking these into a fixed 70×90 canvas
             // centred their ~62pt art, leaving ~14pt of empty canvas below it — so with a
             // bottom anchor the marker floated that far above its true coordinate.
-            case .regroup(let type):
-                guard let img = renderSwiftUIFit(RegroupPin(type: type, labelSize: Self.pinLabelSize)) else { return nil }
+            case .regroup(let type, let caller):
+                guard let img = renderSwiftUIFit(RegroupPin(type: type, caller: caller, labelSize: Self.pinLabelSize)) else { return nil }
                 return (img, CGPoint(x: img.size.width / 2, y: img.size.height))
-            case .emergency:
-                guard let img = renderSwiftUIFit(EmergencyPin(labelSize: Self.pinLabelSize)) else { return nil }
+            case .emergency(let caller):
+                guard let img = renderSwiftUIFit(EmergencyPin(caller: caller, labelSize: Self.pinLabelSize)) else { return nil }
                 return (img, CGPoint(x: img.size.width / 2, y: img.size.height))
             case .rider(let name, let avatarUrl, let isMe, _, let isSelected, let isOffline):
                 let size = Self.riderCircleSize(isSelected)

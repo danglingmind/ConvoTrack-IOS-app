@@ -25,7 +25,7 @@ final class SocketClient {
     var onEmergencyResolved: ((String) -> Void)?   // emergencyId
     var onRegroupStarted: ((RegroupEvent) -> Void)?
     var onRegroupResolved: ((String) -> Void)?   // regroupId
-    var onRegroupDismissed: ((String) -> Void)?  // regroupId
+    var onRegroupDismissed: ((RegroupDismissal) -> Void)?
     var onRideUpdated: ((RideUpdatedEvent) -> Void)?
     var onRideDeleted: (() -> Void)?
 
@@ -293,7 +293,8 @@ final class SocketClient {
         socket.on("ride:regroup_dismissed") { [weak self] data, _ in
             guard let dict = data.first as? [String: Any],
                   let regroupId = dict["regroupId"] as? String else { return }
-            DispatchQueue.main.async { self?.onRegroupDismissed?(regroupId) }
+            let reason = dict["reason"] as? String ?? "dismissed"
+            DispatchQueue.main.async { self?.onRegroupDismissed?(RegroupDismissal(regroupId: regroupId, reason: reason)) }
         }
 
         socket.on("ride:updated") { [weak self] data, _ in

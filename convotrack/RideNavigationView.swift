@@ -33,10 +33,22 @@ struct NavLeaderboardRow: Identifiable {
 /// The alerts that can claim the banner slot, in priority order: the first case that is active
 /// is the one shown. Off-route and reconnecting are NOT here; they are a status line on the turn
 /// card (`NavStatus`, in HUD.swift), because they describe the guidance itself rather than ask for a decision.
-enum NavAlert: Int, Comparable {
-    case emergency, split, regroup, regroupResolved
+///
+/// Several emergencies or regroups can be open at once. Each is its own alert, in the order it was
+/// raised, so the banner a rider is reading never reshuffles under them as they ride.
+enum NavAlert: Hashable {
+    case emergency(String)   // emergencyId
+    case split
+    case regroup(String)     // regroupId
+    case notice
+}
 
-    static func < (a: NavAlert, b: NavAlert) -> Bool { a.rawValue < b.rawValue }
+/// A short-lived confirmation in the banner slot, after a regroup ends without anyone dismissing it.
+enum RegroupNotice: Equatable {
+    /// Everyone arrived at this stop (e.g. "Fuel stop").
+    case complete(String)
+    /// The oldest of the open regroups was dropped to make room (e.g. "Fuel stop from Ravi").
+    case replaced(String)
 }
 
 // MARK: - NavigationViewModel
@@ -161,10 +173,14 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     @Published private(set) var thenManeuver: String? = nil
     private var voiceGuide = NavVoiceGuide()
     private var destinationName = ""
-    @Published var activeRegroup: RegroupEvent? = nil
-    @Published var hasMarkedArrived: Bool = false
-    @Published var showRegroupResolvedToast: Bool = false
-    @Published var activeEmergency: EmergencyEvent? = nil
+    /// Open regroups / emergencies, oldest first. The server caps regroups at three.
+    @Published var activeRegroups: [RegroupEvent] = []
+    @Published var arrivedRegroupIds: Set<String> = []
+    @Published var regroupNotice: RegroupNotice? = nil
+    @Published var activeEmergencies: [EmergencyEvent] = []
+    /// Ids already closed, so a state snapshot that was in flight can't bring one back.
+    private var closedRegroupIds: Set<String> = []
+    private var closedEmergencyIds: Set<String> = []
 
     var amILeader: Bool { !myUserId.isEmpty && myUserId == leaderId }
 
@@ -172,27 +188,20 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// step / destination). Drives the maneuver-aware camera pull-back.
     var hasUpcomingTurn: Bool { currentStepIndex < navSteps.count - 1 && !currentInstruction.isEmpty }
 
-    /// Only the rider who raised the emergency or the ride leader may clear it (server enforces the
+    /// Only the rider who raised an emergency or the ride leader may clear it (server enforces the
     /// same rule); everyone else sees the persistent pin + siren until one of them dismisses it.
-    var canDismissEmergency: Bool {
-        guard let e = activeEmergency else { return false }
-        return e.userId == myUserId || amILeader
-    }
+    func canDismiss(_ e: EmergencyEvent) -> Bool { e.userId == myUserId || amILeader }
 
-    /// Only the rider who called the regroup or the ride leader may clear it early (server enforces
+    /// Only the rider who called a regroup or the ride leader may clear it early (server enforces
     /// the same rule); it otherwise stays until every active rider has arrived.
-    var canDismissRegroup: Bool {
-        guard let r = activeRegroup else { return false }
-        return r.createdBy == myUserId || amILeader
-    }
+    func canDismiss(_ r: RegroupEvent) -> Bool { r.createdBy == myUserId || amILeader }
 
     /// Every alert that is live, most urgent first. The HUD shows `first` and a "+N" chip for the rest.
     var activeAlerts: [NavAlert] {
-        var alerts: [NavAlert] = []
-        if activeEmergency != nil { alerts.append(.emergency) }
+        var alerts: [NavAlert] = activeEmergencies.map { .emergency($0.emergencyId) }
         if showSplitAlert { alerts.append(.split) }
-        if activeRegroup != nil { alerts.append(.regroup) }
-        if showRegroupResolvedToast { alerts.append(.regroupResolved) }
+        alerts += activeRegroups.map { .regroup($0.regroupId) }
+        if regroupNotice != nil { alerts.append(.notice) }
         return alerts
     }
 
@@ -231,12 +240,17 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         remainingStops.contains { abs($0.latitude - lat) < 1e-6 && abs($0.longitude - lng) < 1e-6 }
     }
 
-    var emergencyReporterName: String {
-        guard let e = activeEmergency else { return "" }
-        if e.userId == myUserId { return "You" }
-        return leaderboardRows.first { $0.id == e.userId }?.name
-            ?? staticParticipants.first { $0.userId == e.userId }?.name
-            ?? "A rider"
+    /// A rider's display name; "You" for the signed-in rider.
+    func riderName(_ id: String) -> String {
+        if id == myUserId { return String(localized: "You") }
+        return leaderboardRows.first { $0.id == id }?.name
+            ?? staticParticipants.first { $0.userId == id }?.name
+            ?? String(localized: "A rider")
+    }
+
+    func riderFirstName(_ id: String) -> String {
+        let full = riderName(id)
+        return full.components(separatedBy: " ").first ?? full
     }
 
     /// Remaining travel time to the NEXT stop on the route, in seconds. On a single-stop ride the
@@ -550,10 +564,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
             .compactMap { $0 }
             .sink { [weak self] id in self?.handleRegroupResolved(id) }
             .store(in: &cancellables)
-        session.$latestRegroupDismissedId
+        session.$latestRegroupDismissal
             .dropFirst()
             .compactMap { $0 }
-            .sink { [weak self] id in self?.handleRegroupDismissed(id) }
+            .sink { [weak self] dismissal in self?.handleRegroupDismissed(dismissal) }
             .store(in: &cancellables)
         session.$latestEmergency
             .dropFirst()
@@ -581,8 +595,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// computes (banner, ETA, split, emergency); no navigation logic is repeated here.
     private var liveActivityState: RideActivityAttributes.ContentState {
         let secs = timeLeftSeconds
-        let emergencyFirstName: String? = activeEmergency == nil ? nil
-            : (emergencyReporterName.components(separatedBy: " ").first ?? emergencyReporterName)
+        let emergencyFirstName: String? = activeEmergencies.first.map { first in
+            let name = riderFirstName(first.userId)
+            return activeEmergencies.count > 1 ? "\(name) +\(activeEmergencies.count - 1)" : name
+        }
         return RideActivityAttributes.ContentState(
             maneuver: currentManeuver,
             distanceText: currentInstruction.isEmpty ? "" : RideNavigationView.turnDistanceText(distanceToNextTurnMeters),
@@ -794,15 +810,15 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         return CLLocationCoordinate2D(latitude: lat2 * 180 / .pi, longitude: lon2 * 180 / .pi)
     }
 
-    func markArrivedAtRegroup() {
-        guard let regroup = activeRegroup else { return }
+    func markArrivedAtRegroup(_ regroup: RegroupEvent) {
         SocketClient.shared.emitRegroupArrived(rideId: rideId, regroupId: regroup.regroupId)
-        hasMarkedArrived = true
+        arrivedRegroupIds.insert(regroup.regroupId)
     }
 
     private func handleRegroupStarted(_ event: RegroupEvent) {
-        activeRegroup = event
-        hasMarkedArrived = false
+        guard !activeRegroups.contains(where: { $0.regroupId == event.regroupId }),
+              !closedRegroupIds.contains(event.regroupId) else { return }
+        activeRegroups.append(event)
         // Alert riders who didn't broadcast it with a bold two-tone siren that's clearly
         // distinct from the emergency wail. The initiator already knows, so stays silent.
         if event.createdBy != myUserId {
@@ -820,27 +836,39 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
 
     /// Creator- or leader-initiated clear. The local state clears when the server echoes
     /// `ride:regroup_dismissed`, keeping every device in sync.
-    func dismissRegroup() {
-        guard let regroup = activeRegroup, canDismissRegroup else { return }
+    func dismissRegroup(_ regroup: RegroupEvent) {
+        guard canDismiss(regroup) else { return }
         SocketClient.shared.emitRegroupDismiss(rideId: rideId, regroupId: regroup.regroupId)
     }
 
-    /// Cleared without the "everyone arrived" toast, since they didn't.
-    private func handleRegroupDismissed(_ regroupId: String) {
-        guard activeRegroup?.regroupId == regroupId else { return }
-        withAnimation { activeRegroup = nil }
-        hasMarkedArrived = false
+    /// Removes a regroup from the HUD and the map. Returns it so the caller can word a notice.
+    @discardableResult
+    private func closeRegroup(_ regroupId: String) -> RegroupEvent? {
+        closedRegroupIds.insert(regroupId)
+        arrivedRegroupIds.remove(regroupId)
+        guard let idx = activeRegroups.firstIndex(where: { $0.regroupId == regroupId }) else { return nil }
+        return withAnimation { activeRegroups.remove(at: idx) }
+    }
+
+    /// Cleared without the "everyone arrived" notice, since they didn't. Dropped as the oldest to
+    /// make room for a newer one is the exception: everyone is told, so a stop doesn't just vanish.
+    private func handleRegroupDismissed(_ dismissal: RegroupDismissal) {
+        guard let regroup = closeRegroup(dismissal.regroupId), dismissal.reason == "capped" else { return }
+        let what = "\(DSRegroupKind.label(regroup.type)) · \(riderFirstName(regroup.createdBy))"
+        showNotice(.replaced(what))
     }
 
     private func handleRegroupResolved(_ regroupId: String) {
-        guard activeRegroup?.regroupId == regroupId else { return }
-        activeRegroup = nil
-        hasMarkedArrived = false
-        showRegroupResolvedToast = true
+        guard let regroup = closeRegroup(regroupId) else { return }
+        showNotice(.complete(DSRegroupKind.label(regroup.type)))
+    }
+
+    private func showNotice(_ notice: RegroupNotice) {
+        regroupNotice = notice
         regroupResolvedToastTask?.cancel()
         regroupResolvedToastTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2.5))
-            self?.showRegroupResolvedToast = false
+            self?.regroupNotice = nil
         }
     }
 
@@ -871,20 +899,22 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     }
 
     private func handleEmergencyStarted(_ event: EmergencyEvent) {
-        // Ignore a re-broadcast of the emergency we're already showing (e.g. a late-join snapshot
+        // Ignore a re-broadcast of an emergency we're already showing (e.g. a late-join snapshot
         // arriving after the live event) so we don't restart the siren cadence.
-        guard activeEmergency?.emergencyId != event.emergencyId else { return }
-        activeEmergency = event
+        guard !activeEmergencies.contains(where: { $0.emergencyId == event.emergencyId }),
+              !closedEmergencyIds.contains(event.emergencyId) else { return }
+        activeEmergencies.append(event)
         pushLiveActivity()
         startEmergencySiren()
-        VoiceAnnouncer.shared.announce("Emergency. \(emergencyReporterName) needs help.", after: SirenPlayer.Sound.emergency.duration + 0.2, priority: .emergency)
+        VoiceAnnouncer.shared.announce("Emergency. \(riderName(event.userId)) needs help.", after: SirenPlayer.Sound.emergency.duration + 0.2, priority: .emergency)
     }
 
-    /// Emergency siren repeats every 10s until the emergency is resolved — an unresolved emergency
-    /// is meant to keep nagging the whole group, not chime once.
+    /// The siren repeats every 10s while ANY emergency is open — an unresolved emergency is meant
+    /// to keep nagging the whole group, not chime once. A new emergency sounds at once; the cadence
+    /// is shared, so two open emergencies don't double it.
     private func startEmergencySiren() {
-        emergencySirenTimer?.invalidate()
         SirenPlayer.shared.play(.emergency)
+        guard emergencySirenTimer == nil else { return }
         emergencySirenTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in
             SirenPlayer.shared.play(.emergency)
         }
@@ -896,18 +926,18 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     }
 
     private func handleEmergencyResolved(_ emergencyId: String) {
-        guard activeEmergency?.emergencyId == emergencyId else { return }
-        stopEmergencySiren()
-        withAnimation { activeEmergency = nil }
+        closedEmergencyIds.insert(emergencyId)
+        guard let idx = activeEmergencies.firstIndex(where: { $0.emergencyId == emergencyId }) else { return }
+        withAnimation { _ = activeEmergencies.remove(at: idx) }
+        if activeEmergencies.isEmpty { stopEmergencySiren() }
         pushLiveActivity()
     }
 
     /// Creator- or leader-initiated clear. The local state clears when the server echoes
-    /// `ride:emergency_resolved`, keeping every device in sync; we stop our own siren optimistically.
-    func dismissEmergency() {
-        guard let e = activeEmergency, canDismissEmergency else { return }
-        stopEmergencySiren()
-        SocketClient.shared.emitEmergencyDismiss(rideId: rideId, emergencyId: e.emergencyId)
+    /// `ride:emergency_resolved`, keeping every device in sync; the siren stops once none are left.
+    func dismissEmergency(_ emergency: EmergencyEvent) {
+        guard canDismiss(emergency) else { return }
+        SocketClient.shared.emitEmergencyDismiss(rideId: rideId, emergencyId: emergency.emergencyId)
     }
 
     // MARK: - LocationServiceDelegate
@@ -1131,12 +1161,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         if update.status == "COMPLETED" { showSummary = true }
 
         // Late-join: pick up any open regroup / emergency from the authoritative state snapshot.
-        if activeRegroup == nil, let incoming = update.openRegroup {
-            handleRegroupStarted(incoming)
-        }
-        if activeEmergency == nil, let incoming = update.openEmergency {
-            handleEmergencyStarted(incoming)
-        }
+        for incoming in update.allOpenRegroups { handleRegroupStarted(incoming) }
+        for incoming in update.allOpenEmergencies { handleEmergencyStarted(incoming) }
     }
 
     private func calculateRoute(from waypoints: [Waypoint], polyline: String? = nil) async {
@@ -2311,11 +2337,15 @@ struct RideNavigationView: View {
         if let coord = vm.destinationCoordinate {
             pins.append(MapPin(id: "dest", coordinate: coord, style: .destination(name: destinationName)))
         }
-        if let regroup = vm.activeRegroup {
-            pins.append(MapPin(id: "regroup", coordinate: CLLocationCoordinate2D(latitude: regroup.lat, longitude: regroup.lng), style: .regroup(type: regroup.type)))
+        for regroup in vm.activeRegroups {
+            pins.append(MapPin(id: EdgeTarget.regroupId(regroup.regroupId),
+                               coordinate: CLLocationCoordinate2D(latitude: regroup.lat, longitude: regroup.lng),
+                               style: .regroup(type: regroup.type, caller: vm.riderFirstName(regroup.createdBy))))
         }
-        if let emergency = vm.activeEmergency {
-            pins.append(MapPin(id: "emergency", coordinate: CLLocationCoordinate2D(latitude: emergency.lat, longitude: emergency.lng), style: .emergency))
+        for emergency in vm.activeEmergencies {
+            pins.append(MapPin(id: EdgeTarget.emergencyId(emergency.emergencyId),
+                               coordinate: CLLocationCoordinate2D(latitude: emergency.lat, longitude: emergency.lng),
+                               style: .emergency(caller: vm.riderFirstName(emergency.userId))))
         }
         return pins
     }
@@ -2355,11 +2385,13 @@ struct RideNavigationView: View {
     private var edgeClusters: [EdgeCluster] {
         let byId = Dictionary(uniqueKeysWithValues: vm.riders.map { ($0.id, $0) })
         let models: [EdgeChipModel] = edgeIndicators.compactMap { ind in
-            if ind.id == EdgeTarget.regroupId, let regroup = vm.activeRegroup {
+            if ind.id.hasPrefix(EdgeTarget.regroupPrefix),
+               let regroup = vm.activeRegroups.first(where: { EdgeTarget.regroupId($0.regroupId) == ind.id }) {
                 return EdgeChipModel(kind: .regroup(type: regroup.type), id: ind.id, name: "", avatarUrl: nil, isOffline: false,
                                      edgePoint: ind.edgePoint, arrowAngle: ind.arrowAngle, distanceMeters: ind.distanceMeters)
             }
-            if ind.id == EdgeTarget.emergencyId, vm.activeEmergency != nil {
+            if ind.id.hasPrefix(EdgeTarget.emergencyPrefix),
+               vm.activeEmergencies.contains(where: { EdgeTarget.emergencyId($0.emergencyId) == ind.id }) {
                 return EdgeChipModel(kind: .emergency, id: ind.id, name: "", avatarUrl: nil, isOffline: false,
                                      edgePoint: ind.edgePoint, arrowAngle: ind.arrowAngle, distanceMeters: ind.distanceMeters)
             }
@@ -2511,8 +2543,8 @@ struct RideNavigationView: View {
     /// follow; the RESUME capsule (shown while `isFreeLooking`) re-engages nav.
     private func focusRider(_ id: String) {
         // Edge chips for the regroup point and the emergency use the same tap path as riders.
-        if id == EdgeTarget.regroupId, let r = vm.activeRegroup { peek(lat: r.lat, lng: r.lng); return }
-        if id == EdgeTarget.emergencyId, let e = vm.activeEmergency { peek(lat: e.lat, lng: e.lng); return }
+        if let r = vm.activeRegroups.first(where: { EdgeTarget.regroupId($0.regroupId) == id }) { peek(lat: r.lat, lng: r.lng); return }
+        if let e = vm.activeEmergencies.first(where: { EdgeTarget.emergencyId($0.emergencyId) == id }) { peek(lat: e.lat, lng: e.lng); return }
         guard let rider = vm.riders.first(where: { $0.id == id }) else { return }
         isFreeLooking = true
         lastInteractionDate = Date()
@@ -2627,9 +2659,9 @@ struct RideNavigationView: View {
     @ViewBuilder
     private func alertBanner(_ alert: NavAlert) -> some View {
         switch alert {
-        case .emergency:
-            if let emergency = vm.activeEmergency {
-                let reporter = vm.emergencyReporterName
+        case .emergency(let id):
+            if let emergency = vm.activeEmergencies.first(where: { $0.emergencyId == id }) {
+                let reporter = vm.riderName(emergency.userId)
                 DSBanner(
                     tone: .emergency,
                     eyebrow: "Emergency",
@@ -2641,9 +2673,9 @@ struct RideNavigationView: View {
                         }
                         // Only the raiser or the leader can clear it; for everyone else the banner
                         // has no dismiss control and persists (with the pin) until they do.
-                        if vm.canDismissEmergency {
+                        if vm.canDismiss(emergency) {
                             DSBannerIconButton(systemImage: "xmark", label: "Dismiss emergency", quiet: true) {
-                                vm.dismissEmergency()
+                                vm.dismissEmergency(emergency)
                             }
                         }
                     }
@@ -2656,13 +2688,15 @@ struct RideNavigationView: View {
                 onIgnore: { withAnimation(reduceMotion ? nil : .spring()) { vm.dismissSplitAlert() } },
                 onRegroup: { showRegroup = true }
             )
-        case .regroup:
-            if let regroup = vm.activeRegroup {
+        case .regroup(let id):
+            if let regroup = vm.activeRegroups.first(where: { $0.regroupId == id }) {
                 let stop = DSRegroupKind.label(regroup.type)
                 DSBanner(
                     tone: .regroup,
                     eyebrow: "Regroup called",
                     message: String(localized: "Head to the \(stop)"),
+                    // Several can be open at once, so say whose it is.
+                    detail: String(localized: "Called by \(vm.riderName(regroup.createdBy))"),
                     icon: DSRegroupKind.icon(regroup.type),
                     tint: DSRegroupKind.color(regroup.type),
                     actions: {
@@ -2671,26 +2705,40 @@ struct RideNavigationView: View {
                             DSPillButton(title: "Show", systemImage: "scope", variant: .tonal, large: true) {
                                 peek(lat: regroup.lat, lng: regroup.lng, zoom: 15)
                             }
-                            DSRegroupArrivalControl(hasArrived: vm.hasMarkedArrived) { vm.markArrivedAtRegroup() }
+                            DSRegroupArrivalControl(hasArrived: vm.arrivedRegroupIds.contains(regroup.regroupId)) {
+                                vm.markArrivedAtRegroup(regroup)
+                            }
                         }
                     },
                     trailing: {
                         // Only the caller or the leader can end it early; others wait for arrivals.
-                        if vm.canDismissRegroup {
+                        if vm.canDismiss(regroup) {
                             DSBannerIconButton(systemImage: "xmark", label: "Dismiss regroup", quiet: true) {
-                                vm.dismissRegroup()
+                                vm.dismissRegroup(regroup)
                             }
                         }
                     }
                 )
             }
-        case .regroupResolved:
-            DSBanner(
-                tone: .complete,
-                eyebrow: "Regroup complete",
-                message: String(localized: "Everyone arrived"),
-                announcement: String(localized: "Regroup complete. Everyone arrived")
-            )
+        case .notice:
+            switch vm.regroupNotice {
+            case .complete(let stop):
+                DSBanner(
+                    tone: .complete,
+                    eyebrow: "Regroup complete",
+                    message: String(localized: "Everyone arrived at the \(stop)"),
+                    announcement: String(localized: "Regroup complete. Everyone arrived at the \(stop)")
+                )
+            case .replaced(let what):
+                DSBanner(
+                    tone: .regroup,
+                    eyebrow: "Regroup replaced",
+                    message: String(localized: "\(what) made way for a newer one"),
+                    icon: "arrow.triangle.2.circlepath"
+                )
+            case nil:
+                EmptyView()
+            }
         }
     }
 
@@ -3371,6 +3419,8 @@ struct StartPin: View {
 
 struct RegroupPin: View {
     let type: String
+    /// Who called it, so several stops on the map can be told apart.
+    var caller: String = ""
     var labelSize: CGFloat = DS.Map.minLabelSize
 
     private var icon: String {
@@ -3392,12 +3442,14 @@ struct RegroupPin: View {
     }
 
     private var label: String {
+        let stop: String
         switch type {
-        case "FUEL":      return String(localized: "Fuel stop")
-        case "FOOD":      return String(localized: "Food stop")
-        case "SCENIC":    return String(localized: "Scenic stop")
-        default:          return String(localized: "Stop")
+        case "FUEL":      stop = String(localized: "Fuel stop")
+        case "FOOD":      stop = String(localized: "Food stop")
+        case "SCENIC":    stop = String(localized: "Scenic stop")
+        default:          stop = String(localized: "Stop")
         }
+        return caller.isEmpty ? stop : "\(stop) · \(caller)"
     }
 
     var body: some View {
@@ -3426,6 +3478,8 @@ struct RegroupPin: View {
 
 /// Distinct from RegroupPin — an emergency is its own concept, not a regroup "type".
 struct EmergencyPin: View {
+    /// Who needs help, so several emergencies on the map can be told apart.
+    var caller: String = ""
     var labelSize: CGFloat = DS.Map.minLabelSize
 
     var body: some View {
@@ -3439,7 +3493,7 @@ struct EmergencyPin: View {
                     .foregroundColor(.white)
             }
             Triangle().fill(DS.Status.danger).frame(width: 8, height: 5).offset(y: -1)
-            Text("Emergency")
+            Text(caller.isEmpty ? String(localized: "Emergency") : "\(String(localized: "Emergency")) · \(caller)")
                 .font(.system(size: labelSize, weight: .semibold))
                 .foregroundColor(.white)
                 .padding(.horizontal, 8).padding(.vertical, 2)

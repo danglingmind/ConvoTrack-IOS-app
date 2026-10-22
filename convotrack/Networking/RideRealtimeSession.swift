@@ -36,7 +36,7 @@ final class RideRealtimeSession: ObservableObject {
     @Published private(set) var split: SplitInfo? = nil
     @Published private(set) var latestRegroup: RegroupEvent? = nil
     @Published private(set) var latestRegroupResolvedId: String? = nil
-    @Published private(set) var latestRegroupDismissedId: String? = nil
+    @Published private(set) var latestRegroupDismissal: RegroupDismissal? = nil
     @Published private(set) var latestEmergency: EmergencyEvent? = nil
     @Published private(set) var latestEmergencyResolvedId: String? = nil
     @Published private(set) var rideUpdated: RideUpdatedEvent? = nil
@@ -125,7 +125,7 @@ final class RideRealtimeSession: ObservableObject {
         split = nil
         latestRegroup = nil
         latestRegroupResolvedId = nil
-        latestRegroupDismissedId = nil
+        latestRegroupDismissal = nil
         latestEmergency = nil
         latestEmergencyResolvedId = nil
         rideUpdated = nil
@@ -285,7 +285,7 @@ final class RideRealtimeSession: ObservableObject {
         socket.onSplitResolved = { [weak self] in self?.split = nil }
         socket.onRegroupStarted = { [weak self] event in self?.latestRegroup = event }
         socket.onRegroupResolved = { [weak self] id in self?.latestRegroupResolvedId = id }
-        socket.onRegroupDismissed = { [weak self] id in self?.latestRegroupDismissedId = id }
+        socket.onRegroupDismissed = { [weak self] dismissal in self?.latestRegroupDismissal = dismissal }
         socket.onEmergencyStarted = { [weak self] event in self?.latestEmergency = event }
         socket.onEmergencyResolved = { [weak self] id in self?.latestEmergencyResolvedId = id }
     }
