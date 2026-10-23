@@ -45,6 +45,8 @@ struct RidePlannerView<PrimaryAction: View>: View {
     /// pin away from the finger that dropped it; the card covering the logo for that moment is
     /// fine (`maps.md`: "It's fine when parts of your interface temporarily cover the logo").
     @State private var mapBottomPadding: CGFloat = 0
+    /// The rider has panned or zoomed the map themselves; stop re-centring it on them.
+    @State private var userMovedMap = false
     @State private var homeIndicatorInset: CGFloat = 0
     @State private var recents = RecentDestinations.load()
     @FocusState private var titleFocused: Bool
@@ -115,6 +117,13 @@ struct RidePlannerView<PrimaryAction: View>: View {
         .dsAnimation(DS.Motion.standard, value: choosingStopID)
         .dsAnimation(DS.Motion.standard, value: droppedPin?.coordinate.latitude)
         .onAppear { model.locateUser() }
+        // The opening view is the same one the recentre button gives: the rider, centred in the
+        // part of the map between the top card and the sheet. That area isn't known until both
+        // have been measured (and the rider's position can arrive after that), so re-centre as
+        // each of them settles, until the rider moves the map themselves.
+        .onChange(of: topChromeBottom) { _, _ in recenterOnUserIfIdle() }
+        .onChange(of: mapBottomPadding) { _, _ in recenterOnUserIfIdle() }
+        .onChange(of: model.userLocation?.coordinate.latitude) { _, _ in recenterOnUserIfIdle() }
     }
 
     // MARK: Map
@@ -125,6 +134,7 @@ struct RidePlannerView<PrimaryAction: View>: View {
             pins: pins,
             cameraCommand: model.cameraCommand,
             isInteractive: true,
+            onInteraction: { userMovedMap = true },
             alternativeRoutes: model.routes.map(\.coordinates),
             selectedRouteIndex: model.selectedRouteIndex,
             onSelectRoute: { index in
@@ -141,6 +151,12 @@ struct RidePlannerView<PrimaryAction: View>: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("Map"))
         .accessibilityValue(Text(routeSummary))
+    }
+
+    private func recenterOnUserIfIdle() {
+        guard !userMovedMap, !model.hasDestination, searchStopID == nil, choosingStopID == nil,
+              droppedPin == nil, model.userLocation != nil else { return }
+        model.focusOnUser(animated: false)
     }
 
     private var pins: [MapPin] {
