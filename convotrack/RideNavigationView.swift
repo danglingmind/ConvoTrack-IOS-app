@@ -357,6 +357,11 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private var lastFastBroadcastLocation: CLLocation? = nil
     private var lastCameraTickDate: Date = .distantPast
     private var remainingStops: [CLLocationCoordinate2D] = []
+    /// The leader-selected route and its turn instructions, kept so an off-route reroute can rejoin
+    /// IT rather than ask Google for the default route (which is not the one the leader picked).
+    /// Empty when the ride has no stored polyline.
+    private var plannedRoute: [CLLocationCoordinate2D] = []
+    private var plannedSteps: [NavStep] = []
     // Cumulative travel time from the ride start to each stop (WAYPOINT/DESTINATION), in route order.
     // `totalStopCount` is the count captured at route-calc time; `remainingStops` shrinks as stops are
     // passed, so `totalStopCount - remainingStops.count` yields the index of the next stop.
@@ -1255,6 +1260,8 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // on it: even the matching route is a fresh response whose vertices need not coincide with
         // the stored polyline's.
         adoptNavRoute(geometry, steps: steps)
+        plannedRoute = storedRoute != nil ? geometry : []
+        plannedSteps = storedRoute != nil ? navSteps : []
 
         // `adoptNavRoute` above already set navRoute / its prefix distances / navSegmentIndex.
         // The dim planned layer and the followed line are the same polyline at ride start; they
@@ -1708,6 +1715,14 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     private func calculateFullReroute(from origin: CLLocationCoordinate2D, heading: Double? = nil) async {
         guard !remainingStops.isEmpty else { return }
         isRerouteInFlight = true
+        // The leader chose this route (possibly an alternative, not Google's default). Getting
+        // back onto it beats a fresh default-route request, which silently swaps in route 1.
+        if let rejoin = await rejoinPlannedRoute(from: origin, heading: heading) {
+            isRerouteInFlight = false
+            activeRouteCoordinates = rejoin.coords
+            adoptNavRoute(rejoin.coords, steps: rejoin.steps)
+            return
+        }
         let stops = [origin] + remainingStops
         var coords: [CLLocationCoordinate2D] = []
         // The reroute's own turn instructions. Previously discarded, which left the banner reciting
@@ -1741,6 +1756,39 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         // steps all now refer to it. Without this the rider stays "off" the abandoned plan forever
         // and re-reroutes every 200 m, which would also reset the steps every 200 m.
         adoptNavRoute(coords, steps: steps)
+    }
+
+    /// How far ahead on the planned route a rejoin leg aims, and how far from it a rider can be
+    /// before a rejoin stops making sense (they are somewhere else entirely; route afresh).
+    private static let rejoinLookaheadMeters: Double = 250
+    private static let rejoinMaxOffsetMeters: Double = 5_000
+
+    /// A route from `origin` that drives a short leg back onto the planned route and then follows
+    /// it to the end. Nil when there is no planned route, the rider is too far from it, too little
+    /// of it remains, or the leg can't be fetched — the caller then reroutes the usual way.
+    private func rejoinPlannedRoute(
+        from origin: CLLocationCoordinate2D, heading: Double?
+    ) async -> (coords: [CLLocationCoordinate2D], steps: [NavStep])? {
+        guard plannedRoute.count >= 2 else { return nil }
+        let route = plannedRoute
+        let cumulative = Self.cumulativeDistances(route)
+        let (segIdx, projected) = Self.nearestPointOnRoute(route, to: origin)
+        let here = CLLocation(latitude: origin.latitude, longitude: origin.longitude)
+        guard here.distance(from: CLLocation(latitude: projected.latitude, longitude: projected.longitude))
+                <= Self.rejoinMaxOffsetMeters else { return nil }
+        let along = cumulative[segIdx] + CLLocation(latitude: route[segIdx].latitude, longitude: route[segIdx].longitude)
+            .distance(from: CLLocation(latitude: projected.latitude, longitude: projected.longitude))
+        let target = along + Self.rejoinLookaheadMeters
+        guard let joinIdx = cumulative.firstIndex(where: { $0 >= target }),
+              joinIdx < route.count - 1 else { return nil }
+
+        guard let leg = await Self.routeLeg(from: origin, to: route[joinIdx], originHeading: heading) else {
+            return nil
+        }
+        let coords = leg.coordinates + Array(route[(joinIdx + 1)...])
+        let legSteps = Self.makeNavSteps(from: leg.steps)
+        let ahead = plannedSteps.filter { $0.endDistanceAlongRoute > cumulative[joinIdx] }
+        return (coords, legSteps + ahead)
     }
 
     /// Adopts `route` as the polyline being followed: rebuilds its prefix distances, restamps the
@@ -2856,6 +2904,7 @@ struct RideNavigationView: View {
             .accessibilityLabel(Text("Regroup"))
             Button {
                 voiceMuted.toggle()
+                Analytics.capture(.voiceMuteToggled, ["muted": voiceMuted])
                 if voiceMuted { VoiceAnnouncer.shared.stop() } else { vm.repeatInstruction() }
             } label: {
                 Image(systemName: voiceMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
@@ -2977,6 +3026,7 @@ struct RideNavigationView: View {
             label: voiceMuted ? "Turn on voice guidance" : "Mute voice guidance"
         ) {
             voiceMuted.toggle()
+            Analytics.capture(.voiceMuteToggled, ["muted": voiceMuted])
             if voiceMuted { VoiceAnnouncer.shared.stop() } else { vm.repeatInstruction() }
         }
     }

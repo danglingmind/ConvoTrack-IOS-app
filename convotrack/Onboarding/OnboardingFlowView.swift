@@ -66,6 +66,8 @@ struct OnboardingFlowView: View {
                 }
             }
             .id(index)
+            // The id change re-creates the group on every page, so this fires once per page shown.
+            .onAppear { Analytics.capture(.onboardingStepViewed, ["step": index + 1, "of": pageCount]) }
             // Cross-fade, never a slide: nothing travels across the screen when motion is reduced,
             // and it is calmer for everyone else too.
             .transition(.opacity)
@@ -252,7 +254,10 @@ struct OnboardingFlowView: View {
         withAnimation(reduceMotion ? nil : DS.Motion.standard) { index -= 1 }
     }
 
-    private func finish() { onFinish() }
+    private func finish() {
+        Analytics.capture(.onboardingCompleted, ["last_step": index + 1])
+        onFinish()
+    }
 }
 
 #Preview { OnboardingFlowView(onFinish: {}) }

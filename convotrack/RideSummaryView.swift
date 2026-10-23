@@ -105,7 +105,10 @@ struct RideSummaryView: View {
         .dsTransparentNavigationBar()
         .task { await loadSummary() }
         // A finished ride is the free-plan nudge's best moment (see `UpsellPolicy`).
-        .onAppear { if isPostRide { UpsellState.recordRideCompleted() } }
+        .onAppear {
+            Analytics.capture(.rideSummaryViewed, ["post_ride": isPostRide])
+            if isPostRide { UpsellState.recordRideCompleted() }
+        }
         .task { await loadRoute() }
         .sheet(isPresented: $showShareSheet) {
             SummaryShareSheet(items: shareSheetItems)
@@ -385,6 +388,7 @@ struct RideSummaryView: View {
         }
         shareSheetItems = [image]
         showShareSheet = true
+        Analytics.capture(.rideSummaryShared, ["post_ride": isPostRide])
     }
 
     private func generateMapSnapshot(waypoints: [Waypoint]) async -> StaticMapSnapshot? {

@@ -23,6 +23,7 @@ enum DeepLinkRouter {
             guard !id.isEmpty, id.count <= 64,
                   id.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else { return }
             pendingOpenRideId = id
+            Task { @MainActor in Analytics.capture(.deepLinkOpened, ["kind": "ride"]) }
             NotificationCenter.default.post(name: .convotrackOpenRide, object: nil, userInfo: ["rideId": id])
             return
         }
@@ -44,6 +45,7 @@ enum DeepLinkRouter {
         )
         guard code.count == 6 else { return }
         pendingJoinCode = code
+        Task { @MainActor in Analytics.capture(.deepLinkOpened, ["kind": "join"]) }
         NotificationCenter.default.post(
             name: .convotrackJoinRide,
             object: nil,
@@ -112,6 +114,7 @@ struct ConvoTrackApp: App {
     init() {
         GoogleMapsConfig.initialize()
         Clerk.configure(publishableKey: "pk_live_Y2xlcmsuY29udm95LnZ5bmwuaW4k")
+        Analytics.start()
     }
 
     var body: some Scene {

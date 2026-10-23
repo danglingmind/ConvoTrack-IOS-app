@@ -38,6 +38,7 @@ struct PackSizeQuestionView: View {
 
             DSPrimaryButton(title: "Continue") {
                 OnboardingState.packSize = selection
+                Analytics.capture(.packSizeSelected, ["pack_size": selection?.rawValue ?? "skipped"])
                 onContinue()
             }
             .padding(.horizontal, 24)

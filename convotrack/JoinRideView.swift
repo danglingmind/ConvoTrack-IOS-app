@@ -293,14 +293,17 @@ struct JoinRideView: View {
                 }
                 // Everything else takes its wording from the central map, so a code this switch
                 // hasn't heard of can no longer reach the rider as "Couldn't join: QUOTA_EXCEEDED".
+                Analytics.capture(.joinFailed, ["reason": msg])
                 errorMessage = error.riderMessage
                 joinBlockedByPlan = error.isPlanLimit
                 showError = true
             default:
+                Analytics.capture(.joinFailed, ["reason": "request_failed"])
                 errorMessage = error.riderMessage
                 showError = true
             }
         } catch {
+            Analytics.capture(.joinFailed, ["reason": "request_failed"])
             errorMessage = error.riderMessage
             showError = true
         }

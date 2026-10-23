@@ -291,6 +291,7 @@ struct CreateRideView: View {
             appState.inviteCode = response.inviteCode
             appState.currentRideId = response.rideId
         } catch {
+            Analytics.capture(.createRideFailed, ["plan_limit": error.isPlanLimit])
             errorMessage = error.riderMessage
             createBlockedByPlan = error.isPlanLimit
             showError = true

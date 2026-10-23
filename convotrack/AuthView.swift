@@ -215,6 +215,7 @@ struct AuthView: View {
     private func signInWithGoogle() {
         signingInProvider = .google
         errorMessage = nil
+        Analytics.capture(.signInStarted, ["method": "google"])
         Task {
             do {
                 try await clerk.auth.signInWithOAuth(
@@ -224,8 +225,10 @@ struct AuthView: View {
                 // Cleared only on success: an abandoned or failed attempt leaves the rider exactly
                 // where they were, still needing the chooser next time.
                 WebSignInSession.needsAccountChoice = false
+                Analytics.capture(.signInSucceeded, ["method": "google"])
                 finishAuth()
             } catch {
+                Analytics.capture(.signInFailed, ["method": "google"])
                 errorMessage = error.riderMessage
             }
             signingInProvider = nil
@@ -235,11 +238,14 @@ struct AuthView: View {
     private func signInWithApple() {
         signingInProvider = .apple
         errorMessage = nil
+        Analytics.capture(.signInStarted, ["method": "apple"])
         Task {
             do {
                 try await clerk.auth.signInWithApple()
+                Analytics.capture(.signInSucceeded, ["method": "apple"])
                 finishAuth()
             } catch {
+                Analytics.capture(.signInFailed, ["method": "apple"])
                 errorMessage = error.riderMessage
             }
             signingInProvider = nil

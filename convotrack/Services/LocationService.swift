@@ -213,6 +213,16 @@ extension LocationService: CLLocationManagerDelegate {
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        if status != .notDetermined {
+            let name = switch status {
+            case .authorizedAlways: "always"
+            case .authorizedWhenInUse: "when_in_use"
+            case .denied: "denied"
+            default: "restricted"
+            }
+            Task { @MainActor in Analytics.capture(.permissionResult, ["kind": "location", "status": name]) }
+        }
         switch manager.authorizationStatus {
         case .authorizedAlways:
             // Go through start() so allowsBackgroundLocationUpdates is enabled

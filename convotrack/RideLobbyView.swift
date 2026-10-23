@@ -382,6 +382,8 @@ struct RideLobbyView: View {
         )
         .sheet(isPresented: $showRiderDetail) { RiderDetailDrawer() }
         .sheet(isPresented: $showQRModal) { QRCodeModal(inviteCode: inviteCode) }
+        .onChange(of: showShareSheet) { _, shown in if shown { Analytics.capture(.inviteShareOpened, ["method": "link"]) } }
+        .onChange(of: showQRModal) { _, shown in if shown { Analytics.capture(.inviteShareOpened, ["method": "qr"]) } }
         // Pushed, not presented as a sheet. Edit Ride is a long form that already carries page
         // chrome (inline title, back button, dark toolbar) — chrome that is inert inside a sheet,
         // since a sheet has no navigation container, which is why it appeared with no title, no

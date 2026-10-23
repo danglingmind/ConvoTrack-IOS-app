@@ -195,6 +195,7 @@ struct ProfileView: View {
             appState.currentRideId = nil
             appState.inviteCode = nil
             appState.currentRide = nil
+            Analytics.reset()
             try? await Clerk.shared.auth.signOut()
             await ImageCache.clearEverything()
             // Signing out is the one moment we know the rider may want a different

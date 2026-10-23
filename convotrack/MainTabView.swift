@@ -54,6 +54,8 @@ struct MainTabView: View {
             }
         }
         .tint(DS.Accent.base)
+        .onChange(of: activeTab, initial: true) { _, tab in Analytics.screen("tab_\(tab)") }
+        .onChange(of: membershipStore.access, initial: true) { _, access in Analytics.setAccess(access) }
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
         .environmentObject(appState)
@@ -63,6 +65,7 @@ struct MainTabView: View {
         .sheet(item: $joinSheet) { ctx in
             JoinRideView(prefillCode: ctx.code)
                 .environmentObject(appState)
+                .onAppear { Analytics.capture(.joinSheetOpened, ["prefilled": ctx.code != nil]) }
         }
         // The one paywall sheet for every screen under the tabs (see `PaywallPresenter`).
         .sheet(item: $paywall.request) { request in

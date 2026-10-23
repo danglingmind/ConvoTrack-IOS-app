@@ -40,6 +40,8 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.3), value: stage)
         .task { await resolveLaunchStage() }
+        // Ties this device's earlier anonymous events (onboarding, sign-in) to the rider once known.
+        .task(id: clerk.user?.id) { if let id = clerk.user?.id { Analytics.identify(userId: id) } }
     }
 
     // MARK: Routing
