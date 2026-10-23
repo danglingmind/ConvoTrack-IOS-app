@@ -185,6 +185,12 @@ struct GoogleMapView: UIViewRepresentable {
     var mapPadding: UIEdgeInsets = .zero
     /// Time labels on the route alternatives; tapping one calls `onSelectRoute`.
     var routeBubbles: [RouteBubble] = []
+    /// Long-press on the map (not on a marker or line), for dropping a pin.
+    var onLongPress: ((CLLocationCoordinate2D) -> Void)? = nil
+    /// A plain tap on the map, away from any marker or line.
+    var onTapMap: ((CLLocationCoordinate2D) -> Void)? = nil
+    /// The camera came to rest; carries the target, which is the centre of the padded area.
+    var onCameraIdle: ((CLLocationCoordinate2D) -> Void)? = nil
 
     /// Height of the tallest stop-pin art drawn ABOVE its coordinate. Stop pins are
     /// bottom-anchored, so this is simply the tallest baked image: `DestinationPin` measures
@@ -230,6 +236,9 @@ struct GoogleMapView: UIViewRepresentable {
         c.onInteraction = onInteraction
         c.onSelectRoute = onSelectRoute
         c.onEdgeIndicators = onEdgeIndicators
+        c.onLongPress = onLongPress
+        c.onTapMap = onTapMap
+        c.onCameraIdle = onCameraIdle
         c.topOverlayHeight = topOverlayHeight
         if c.basePadding != mapPadding {
             c.basePadding = mapPadding
@@ -301,6 +310,9 @@ extension GoogleMapView {
         var onInteraction: (() -> Void)?
         var onSelectRoute: ((Int) -> Void)?
         var onEdgeIndicators: (([EdgeIndicator]) -> Void)?
+        var onLongPress: ((CLLocationCoordinate2D) -> Void)?
+        var onTapMap: ((CLLocationCoordinate2D) -> Void)?
+        var onCameraIdle: ((CLLocationCoordinate2D) -> Void)?
         var topOverlayHeight: CGFloat = 0
         /// `GoogleMapView.mapPadding`; what a centred camera returns the padding to.
         var basePadding: UIEdgeInsets = .zero
@@ -1125,6 +1137,18 @@ extension GoogleMapView {
             if let idx = (overlay as? GMSPolyline)?.userData as? Int {
                 onSelectRoute?(idx)
             }
+        }
+
+        func mapView(_ mapView: GMSMapView, didLongPressAt coordinate: CLLocationCoordinate2D) {
+            onLongPress?(coordinate)
+        }
+
+        func mapView(_ mapView: GMSMapView, didTapAt coordinate: CLLocationCoordinate2D) {
+            onTapMap?(coordinate)
+        }
+
+        func mapView(_ mapView: GMSMapView, idleAt position: GMSCameraPosition) {
+            onCameraIdle?(position.target)
         }
 
         // So does tapping its time bubble. Every other marker keeps the SDK's default handling.

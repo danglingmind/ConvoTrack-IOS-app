@@ -17,8 +17,20 @@ struct RidePlannerView<PrimaryAction: View>: View {
     /// The stop whose search is open.
     @State private var searchStopID: UUID?
     @State private var stopsExpanded = false
+    /// A pin the rider dropped with a long-press, waiting for them to say what it is.
+    @State private var droppedPin: PlaceCandidate?
+    /// The stop being placed by moving the map under a fixed pin ("Choose on map").
+    @State private var choosingStopID: UUID?
+    /// The spot under that fixed pin, once the map comes to rest.
+    @State private var mapCenter: PlaceCandidate?
+    @State private var geocodeTask: Task<Void, Never>?
     @State private var topChromeBottom: CGFloat = 0
     @State private var sheetRestingHeight: CGFloat = 0
+    /// The map's bottom padding: the resting sheet's height, except that it holds still while a
+    /// dropped pin's card is up. Following the taller card would slide the map up and carry the
+    /// pin away from the finger that dropped it; the card covering the logo for that moment is
+    /// fine (`maps.md`: "It's fine when parts of your interface temporarily cover the logo").
+    @State private var mapBottomPadding: CGFloat = 0
     @State private var homeIndicatorInset: CGFloat = 0
     @State private var recents = RecentDestinations.load()
     @FocusState private var titleFocused: Bool
@@ -46,6 +58,13 @@ struct RidePlannerView<PrimaryAction: View>: View {
                         .transition(.move(edge: .bottom))
                 }
 
+                if choosingStopID != nil {
+                    crosshair
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+
                 if let id = searchStopID, let stop = model.stops.first(where: { $0.id == id }) {
                     PlannerSearchOverlay(
                         role: model.role(of: stop),
@@ -56,6 +75,7 @@ struct RidePlannerView<PrimaryAction: View>: View {
                             model.useCurrentLocation(for: id)
                             closeSearch()
                         },
+                        onChooseOnMap: { startChoosingOnMap(for: id) },
                         onCancel: {
                             model.discardIfEmpty(id)
                             closeSearch()
@@ -73,6 +93,8 @@ struct RidePlannerView<PrimaryAction: View>: View {
         }
         .dsAnimation(DS.Motion.standard, value: searchStopID)
         .dsAnimation(DS.Motion.standard, value: model.hasDestination)
+        .dsAnimation(DS.Motion.standard, value: choosingStopID)
+        .dsAnimation(DS.Motion.standard, value: droppedPin?.coordinate.latitude)
         .onAppear { model.locateUser() }
     }
 
@@ -91,8 +113,11 @@ struct RidePlannerView<PrimaryAction: View>: View {
                 model.selectRoute(index)
             },
             mapPadding: UIEdgeInsets(top: topChromeBottom + DS.Space.p2, left: 0,
-                                     bottom: sheetRestingHeight, right: 0),
-            routeBubbles: routeBubbles
+                                     bottom: mapBottomPadding, right: 0),
+            routeBubbles: routeBubbles,
+            onLongPress: { dropPin(at: $0) },
+            onTapMap: { _ in if droppedPin != nil { clearDroppedPin() } },
+            onCameraIdle: { mapCameToRest(at: $0) }
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("Map"))
@@ -100,18 +125,26 @@ struct RidePlannerView<PrimaryAction: View>: View {
     }
 
     private var pins: [MapPin] {
-        guard model.hasDestination else {
-            guard let me = model.userLocation?.coordinate else { return [] }
-            return [MapPin(id: "me", coordinate: me,
+        var pins: [MapPin]
+        if model.hasDestination {
+            let chosen = model.chosenStops
+            pins = chosen.enumerated().compactMap { i, stop in
+                guard let coordinate = model.coordinate(of: stop) else { return nil }
+                let style: MapPin.Style = i == 0 ? .lobbyStart
+                    : (i == chosen.count - 1 ? .destination(name: model.name(of: stop)) : .waypoint(name: model.name(of: stop)))
+                return MapPin(id: stop.id.uuidString, coordinate: coordinate, style: style)
+            }
+        } else if let me = model.userLocation?.coordinate {
+            pins = [MapPin(id: "me", coordinate: me,
                            style: .simpleDot(color: UIColor(DS.Map.startMarker), size: 16), anchorBottom: false)]
+        } else {
+            pins = []
         }
-        let chosen = model.chosenStops
-        return chosen.enumerated().compactMap { i, stop in
-            guard let coordinate = model.coordinate(of: stop) else { return nil }
-            let style: MapPin.Style = i == 0 ? .lobbyStart
-                : (i == chosen.count - 1 ? .destination(name: model.name(of: stop)) : .waypoint(name: model.name(of: stop)))
-            return MapPin(id: stop.id.uuidString, coordinate: coordinate, style: style)
+        if let pin = droppedPin {
+            pins.append(MapPin(id: "dropped", coordinate: pin.coordinate,
+                               style: .simpleDot(color: UIColor(DS.Accent.base), size: 20), anchorBottom: false))
         }
+        return pins
     }
 
     private var routeSummary: String {
@@ -128,7 +161,9 @@ struct RidePlannerView<PrimaryAction: View>: View {
 
     @ViewBuilder
     private var topChrome: some View {
-        if model.hasDestination {
+        if let id = choosingStopID {
+            choosingPill(for: id)
+        } else if model.hasDestination {
             PlannerStopsCard(
                 model: model,
                 onBack: { model.clearDestination() },
@@ -165,6 +200,50 @@ struct RidePlannerView<PrimaryAction: View>: View {
         .dsGlass(in: Capsule(), interactive: true)
     }
 
+    private func choosingPill(for id: UUID) -> some View {
+        HStack(spacing: 0) {
+            backButton(label: Text("Cancel")) { cancelChoosingOnMap() }
+            Text(choosingPrompt(for: id))
+                .dsText(.locationTitle)
+                .foregroundStyle(DS.Text.primary)
+                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+        }
+        .padding(.trailing, DS.Space.p4)
+        .dsGlass(in: Capsule())
+    }
+
+    private func role(of id: UUID) -> PlannerStopRole {
+        model.stops.first { $0.id == id }.map(model.role(of:)) ?? .stop
+    }
+
+    private func choosingPrompt(for id: UUID) -> LocalizedStringKey {
+        switch role(of: id) {
+        case .start:       "Move the map to the start"
+        case .stop:        "Move the map to the stop"
+        case .destination: "Move the map to the destination"
+        }
+    }
+
+    /// The fixed pin for "Choose on map", its tip on the camera target: the centre of the map
+    /// area left between the top chrome and the sheet, which is what the map padding defines.
+    private var crosshair: some View {
+        GeometryReader { geo in
+            let top = topChromeBottom + DS.Space.p2
+            let bottom = geo.size.height - mapBottomPadding
+            VStack(spacing: 0) {
+                ZStack {
+                    Circle().fill(DS.Accent.base).frame(width: 30, height: 30)
+                    Circle().fill(DS.Text.onAccent).frame(width: 10, height: 10)
+                }
+                Triangle().fill(DS.Accent.base).frame(width: 12, height: 8).offset(y: -1)
+            }
+            .dsShadow(DS.Shadow.card)
+            // 37 pt of art: the tail's tip sits on the point.
+            .position(x: geo.size.width / 2, y: (top + bottom) / 2 - 37 / 2)
+        }
+        .accessibilityHidden(true)
+    }
+
     private func backButton(label: Text, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "chevron.left")
@@ -183,10 +262,17 @@ struct RidePlannerView<PrimaryAction: View>: View {
         DSMapSheet(
             detent: $detent,
             bottomInset: bottomInset,
-            onRestingHeightChange: { sheetRestingHeight = $0 }
+            onRestingHeightChange: { height in
+                sheetRestingHeight = height
+                if droppedPin == nil { mapBottomPadding = height }
+            }
         ) {
             Group {
-                if !model.hasDestination {
+                if let id = choosingStopID {
+                    chooseOnMapCard(for: id)
+                } else if droppedPin != nil {
+                    droppedPinCard
+                } else if !model.hasDestination {
                     exploreHeader
                 } else {
                     routeHeader
@@ -196,7 +282,9 @@ struct RidePlannerView<PrimaryAction: View>: View {
             .padding(.bottom, DS.Space.p3)
         } content: {
             Group {
-                if !model.hasDestination {
+                if choosingStopID != nil || droppedPin != nil {
+                    EmptyView()
+                } else if !model.hasDestination {
                     recentRows(Array(recents.dropFirst(2)))
                 } else {
                     detailsContent
@@ -473,10 +561,138 @@ struct RidePlannerView<PrimaryAction: View>: View {
         .padding(.top, DS.Space.p1)
     }
 
+    // MARK: Dropped pin
+
+    private var droppedPinCard: some View {
+        PlannerPlaceCard(eyebrow: "Dropped pin", candidate: droppedPin, actions: droppedPinActions,
+                         onClose: clearDroppedPin)
+    }
+
+    /// With a route, the likely wish is a stop on the way; before one, it's where to ride to.
+    private var droppedPinActions: [PlannerPlaceAction] {
+        let setDestination = PlannerPlaceAction(id: "destination", title: "Set as destination", systemImage: "flag.fill") {
+            usePin { model.choose($0, for: model.destinationID) }
+        }
+        let setStart = PlannerPlaceAction(id: "start", title: "Start here", systemImage: "location.fill") {
+            usePin { model.choose($0, for: model.stops[0].id) }
+        }
+        guard model.hasDestination else { return [setDestination, setStart] }
+        let endHere = PlannerPlaceAction(id: "destination", title: "End here", systemImage: "flag.fill") {
+            usePin { model.choose($0, for: model.destinationID) }
+        }
+        guard model.canAddStop else { return [endHere, setStart] }
+        let addStop = PlannerPlaceAction(id: "stop", title: "Add as stop", systemImage: "plus") {
+            usePin { place in
+                if let id = model.addStop() { model.choose(place, for: id) }
+            }
+        }
+        return [addStop, setStart, endHere]
+    }
+
+    private func dropPin(at coordinate: CLLocationCoordinate2D) {
+        guard choosingStopID == nil else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        titleFocused = false
+        droppedPin = PlaceCandidate(coordinate: coordinate)
+        withAnimation(reduceMotion ? nil : DS.Motion.spring) { detent = .low }
+        lookUp(coordinate, after: .zero) { place in
+            guard let pin = droppedPin, pin.coordinate.isSame(as: coordinate) else { return }
+            droppedPin?.place = place
+            droppedPin?.isResolving = false
+        }
+    }
+
+    private func usePin(_ apply: (PlaceResult) -> Void) {
+        guard let pin = droppedPin else { return }
+        apply(pin.resolvedPlace)
+        recents = RecentDestinations.load()
+        clearDroppedPin()
+    }
+
+    private func clearDroppedPin() {
+        geocodeTask?.cancel()
+        droppedPin = nil
+        mapBottomPadding = sheetRestingHeight
+    }
+
+    // MARK: Choose on map
+
+    private func chooseOnMapCard(for id: UUID) -> some View {
+        let (eyebrow, title, icon): (LocalizedStringKey, LocalizedStringKey, String) = switch role(of: id) {
+        case .start:       ("Choose start", "Start here", "location.fill")
+        case .stop:        ("Choose stop", "Add this stop", "plus")
+        case .destination: ("Choose destination", "Set as destination", "flag.fill")
+        }
+        return PlannerPlaceCard(
+            eyebrow: eyebrow,
+            candidate: mapCenter,
+            actions: [PlannerPlaceAction(id: "choose", title: title, systemImage: icon) { finishChoosingOnMap() }],
+            onClose: cancelChoosingOnMap
+        )
+    }
+
+    private func startChoosingOnMap(for id: UUID) {
+        closeSearch()
+        clearDroppedPin()
+        mapCenter = nil
+        choosingStopID = id
+        detent = .low
+        // Start from the stop's current spot, else the rider; moving the camera also reports
+        // where it came to rest, which names the first spot.
+        if let stop = model.stops.first(where: { $0.id == id }), let c = model.coordinate(of: stop) {
+            model.cameraCommand = .focus(lat: c.latitude, lng: c.longitude, zoom: 15)
+        } else if let c = model.userLocation?.coordinate {
+            model.cameraCommand = .focus(lat: c.latitude, lng: c.longitude, zoom: 15)
+        }
+    }
+
+    private func mapCameToRest(at target: CLLocationCoordinate2D) {
+        guard choosingStopID != nil else { return }
+        mapCenter = PlaceCandidate(coordinate: target)
+        lookUp(target, after: .milliseconds(250)) { place in
+            guard let center = mapCenter, center.coordinate.isSame(as: target) else { return }
+            mapCenter?.place = place
+            mapCenter?.isResolving = false
+        }
+    }
+
+    private func finishChoosingOnMap() {
+        guard let id = choosingStopID, let center = mapCenter else { return }
+        model.choose(center.resolvedPlace, for: id)
+        recents = RecentDestinations.load()
+        geocodeTask?.cancel()
+        choosingStopID = nil
+        mapCenter = nil
+    }
+
+    private func cancelChoosingOnMap() {
+        guard let id = choosingStopID else { return }
+        geocodeTask?.cancel()
+        model.discardIfEmpty(id)
+        choosingStopID = nil
+        mapCenter = nil
+        if model.hasRoute { model.fitCameraToRoute() }
+    }
+
+    /// Street name for a spot, a moment after the map settles so a pan doesn't fire a lookup per
+    /// frame. A newer lookup cancels the one before.
+    private func lookUp(_ coordinate: CLLocationCoordinate2D, after delay: Duration,
+                        apply: @escaping (PlaceResult?) -> Void) {
+        geocodeTask?.cancel()
+        geocodeTask = Task {
+            if delay > .zero { try? await Task.sleep(for: delay) }
+            guard !Task.isCancelled else { return }
+            let place = await GooglePlacesService.reverseGeocode(coordinate)
+            guard !Task.isCancelled else { return }
+            apply(place)
+        }
+    }
+
     // MARK: Search
 
     private func openSearch(_ id: UUID) {
         titleFocused = false
+        clearDroppedPin()
         searchStopID = id
     }
 
@@ -493,5 +709,11 @@ struct RidePlannerView<PrimaryAction: View>: View {
 
     private static func distanceText(_ meters: Double) -> String {
         meters < 1000 ? "\(Int(meters)) m" : String(format: "%.1f km", meters / 1000)
+    }
+}
+
+private extension CLLocationCoordinate2D {
+    func isSame(as other: CLLocationCoordinate2D) -> Bool {
+        latitude == other.latitude && longitude == other.longitude
     }
 }

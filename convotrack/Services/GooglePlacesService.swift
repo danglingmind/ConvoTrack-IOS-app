@@ -74,12 +74,13 @@ enum GooglePlacesService {
         )
     }
 
-    /// The first two parts of an address that aren't house or plot numbers ("67/1", "263/3").
+    /// The first two parts of an address that aren't house or plot numbers ("67/1", "263/3"), or
+    /// Google's "Unnamed Road", which names nothing a rider could look for.
     static func shortName(fromAddress address: String) -> String {
         let parts = address.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
         let named = parts.filter { part in
             let digits = part.filter(\.isNumber).count
-            return digits * 2 < part.count
+            return digits * 2 < part.count && part.caseInsensitiveCompare("Unnamed Road") != .orderedSame
         }
         let picked = (named.isEmpty ? parts : named).prefix(2)
         return picked.joined(separator: ", ")

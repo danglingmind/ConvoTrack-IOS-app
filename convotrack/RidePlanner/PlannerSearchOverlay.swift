@@ -10,6 +10,8 @@ struct PlannerSearchOverlay: View {
     let recents: [PlaceResult]
     var onPick: (PlaceResult) -> Void
     var onUseCurrentLocation: () -> Void
+    /// Place the stop by moving the map under a fixed pin, for spots search can't name.
+    var onChooseOnMap: () -> Void
     var onCancel: () -> Void
 
     @State private var query = ""
@@ -42,6 +44,7 @@ struct PlannerSearchOverlay: View {
                             row(icon: "location.fill", title: Text("Your location"), subtitle: nil, distance: nil,
                                 action: onUseCurrentLocation)
                         }
+                        chooseOnMapRow
                         if !recents.isEmpty {
                             DSSectionHeading("Recent")
                                 .padding(.top, DS.Space.p3)
@@ -52,8 +55,10 @@ struct PlannerSearchOverlay: View {
                             .dsText(.body)
                             .foregroundStyle(DS.Text.muted)
                             .padding(.vertical, DS.Space.p6)
+                        chooseOnMapRow
                     } else {
                         ForEach(results) { place in placeRow(place, icon: "mappin") }
+                        chooseOnMapRow
                     }
                 }
                 .padding(.horizontal, DS.Space.screenInset)
@@ -105,6 +110,10 @@ struct PlannerSearchOverlay: View {
         .frame(minHeight: 52)
         .background(DS.Surface.fieldFocused, in: Capsule())
         .overlay(Capsule().stroke(DS.Border.focus, lineWidth: DS.BorderWidth.emphasis))
+    }
+
+    private var chooseOnMapRow: some View {
+        row(icon: "map", title: Text("Choose on map"), subtitle: nil, distance: nil, action: onChooseOnMap)
     }
 
     private func placeRow(_ place: PlaceResult, icon: String) -> some View {
