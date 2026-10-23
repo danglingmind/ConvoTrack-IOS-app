@@ -50,6 +50,24 @@ struct MapPin: Identifiable {
     }
 }
 
+// MARK: - Route bubble
+
+/// A time label on a route alternative, Google Maps style: the selected route shows its
+/// duration, the others how they compare. Tapping one selects its route, which is far easier to
+/// hit than the line itself.
+struct RouteBubble: Equatable {
+    let routeIndex: Int
+    let coordinate: CLLocationCoordinate2D
+    let text: String
+    let isSelected: Bool
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.routeIndex == rhs.routeIndex && lhs.text == rhs.text && lhs.isSelected == rhs.isSelected
+            && lhs.coordinate.latitude == rhs.coordinate.latitude
+            && lhs.coordinate.longitude == rhs.coordinate.longitude
+    }
+}
+
 // MARK: - Camera command
 
 struct MapCameraCommand {
@@ -161,6 +179,12 @@ struct GoogleMapView: UIViewRepresentable {
     /// this is just its bottom edge on screen). Edge indicators clamp below it instead of sliding
     /// up behind the turn-by-turn banner and leaderboard. 0 leaves the default margin in place.
     var topOverlayHeight: CGFloat = 0
+    /// Insets for chrome floating over a full-bleed map (the planner's top card and its sheet).
+    /// Camera targets, `fit` and the Google logo all keep to the padded area, so the route is
+    /// framed in the part of the map people can see and the logo sits above the sheet.
+    var mapPadding: UIEdgeInsets = .zero
+    /// Time labels on the route alternatives; tapping one calls `onSelectRoute`.
+    var routeBubbles: [RouteBubble] = []
 
     /// Height of the tallest stop-pin art drawn ABOVE its coordinate. Stop pins are
     /// bottom-anchored, so this is simply the tallest baked image: `DestinationPin` measures
@@ -207,6 +231,10 @@ struct GoogleMapView: UIViewRepresentable {
         c.onSelectRoute = onSelectRoute
         c.onEdgeIndicators = onEdgeIndicators
         c.topOverlayHeight = topOverlayHeight
+        if c.basePadding != mapPadding {
+            c.basePadding = mapPadding
+            mapView.padding = mapPadding
+        }
         mapView.isUserInteractionEnabled = isInteractive
 
         // Dim, tappable alternatives sit below the bright selected route.
@@ -216,6 +244,7 @@ struct GoogleMapView: UIViewRepresentable {
         c.applyRoute(routeCoords,         to: mapView, key: &c.routeVersion,         line: &c.routeLine,         color: UIColor(DS.Map.routeCore),    width: Coordinator.routeFaceWidth, dashed: false, zIndex: 100)
         c.applyRouteDecorations(routeCoords: routeCoords, originalCoords: originalRouteCoords, stopCoords: stopCoords, isNavigating: isNavigating, to: mapView)
         c.applyPins(pins, to: mapView)
+        c.applyRouteBubbles(routeBubbles, to: mapView)
 
         if let cmd = cameraCommand, cmd.id != c.lastCameraId {
             c.lastCameraId = cmd.id
@@ -273,6 +302,8 @@ extension GoogleMapView {
         var onSelectRoute: ((Int) -> Void)?
         var onEdgeIndicators: (([EdgeIndicator]) -> Void)?
         var topOverlayHeight: CGFloat = 0
+        /// `GoogleMapView.mapPadding`; what a centred camera returns the padding to.
+        var basePadding: UIEdgeInsets = .zero
         private var lastEmittedIndicators: [EdgeIndicator] = []
         /// Edge-indicator recomputes are throttled because they sit in a self-sustaining loop:
         /// `didChange` fires once per frame of every camera animation → compute → emit → SwiftUI
@@ -315,6 +346,11 @@ extension GoogleMapView {
         // Dim, tappable alternative routes (userData carries the global index)
         var altLines:   [GMSPolyline] = []
         var altVersion: Int = 0
+
+        // Time bubbles on the alternatives (userData carries the route index)
+        var bubbleMarkers: [GMSMarker] = []
+        var lastBubbles:   [RouteBubble] = []
+        var bubbleLabelSize: CGFloat = 0
 
         var markers:       [String: GMSMarker] = [:]
         var pinRenderKeys: [String: Int]        = [:]   // styleHash — gates icon re-bake
@@ -386,14 +422,38 @@ extension GoogleMapView {
                 let path = GMSMutablePath()
                 coords.forEach { path.add($0) }
                 let line = GMSPolyline(path: path)
-                line.strokeWidth = 4
-                line.strokeColor = UIColor(white: 0.78, alpha: 0.42)
+                line.strokeWidth = 5
+                line.strokeColor = UIColor(DS.Map.routeAlternative)
                 line.geodesic    = false
                 line.zIndex      = 97   // below selected (100) and original (98)
                 line.isTappable  = true
                 line.userData    = i
                 line.map         = mapView
                 altLines.append(line)
+            }
+        }
+
+        // MARK: Route bubbles
+
+        func applyRouteBubbles(_ bubbles: [RouteBubble], to mapView: GMSMapView) {
+            guard bubbles != lastBubbles || bubbleLabelSize != Self.pinLabelSize else { return }
+            lastBubbles = bubbles
+            bubbleLabelSize = Self.pinLabelSize
+
+            bubbleMarkers.forEach { $0.map = nil }
+            bubbleMarkers = bubbles.compactMap { bubble in
+                let art = RouteBubbleArt(text: bubble.text, isSelected: bubble.isSelected,
+                                         labelSize: Self.pinLabelSize + 2)
+                guard let image = renderSwiftUIFit(art) else { return nil }
+                let marker = GMSMarker(position: bubble.coordinate)
+                marker.icon = image
+                marker.groundAnchor = CGPoint(x: 0.5, y: 1)   // the tail's tip
+                // Above the alternatives and riders, below the stop pins, which are the fixed
+                // landmarks and must never be covered.
+                marker.zIndex = bubble.isSelected ? 52 : 50
+                marker.userData = bubble.routeIndex
+                marker.map = mapView
+                return marker
             }
         }
 
@@ -701,7 +761,7 @@ extension GoogleMapView {
                 if case .roadAhead = framing, mapView.bounds.height > 0 {
                     mapView.padding = UIEdgeInsets(top: mapView.bounds.height * 0.35, left: 0, bottom: 0, right: 0)
                 } else {
-                    mapView.padding = .zero
+                    mapView.padding = basePadding
                 }
                 let pos = GMSCameraPosition(latitude: lat, longitude: lng, zoom: zoom, bearing: bearing, viewingAngle: tilt)
                 if animated { mapView.animate(to: pos) } else { mapView.camera = pos }
@@ -1067,6 +1127,13 @@ extension GoogleMapView {
             }
         }
 
+        // So does tapping its time bubble. Every other marker keeps the SDK's default handling.
+        func mapView(_ mapView: GMSMapView, didTap marker: GMSMarker) -> Bool {
+            guard let idx = marker.userData as? Int else { return false }
+            onSelectRoute?(idx)
+            return true
+        }
+
         // MARK: - Off-screen rider edge indicators
 
         /// Projects each off-screen rider to a clamped point on the screen border,
@@ -1185,5 +1252,39 @@ extension GoogleMapView {
             guard t.isFinite, t >= 0 else { return nil }
             return CGPoint(x: origin.x + dx * t, y: origin.y + dy * t)
         }
+    }
+}
+
+// MARK: - Route bubble art
+
+/// Pill with a tail pointing at the route. Lime for the selected route, raised surface for the
+/// others, the same split as the lines themselves. No shadow: baked art can't draw outside its
+/// own bounds (see `renderBody`).
+struct RouteBubbleArt: View {
+    let text: String
+    let isSelected: Bool
+    var labelSize: CGFloat = DS.Map.minLabelSize + 2
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(text)
+                .font(.system(size: labelSize, weight: .bold))
+                .monospacedDigit()
+                .foregroundColor(isSelected ? DS.Text.onAccent : DS.Text.label.base)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(isSelected ? DS.Accent.base : DS.Surface.raised,
+                            in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(isSelected ? Color.clear : DS.Border.strongColor, lineWidth: 1)
+                )
+            Triangle()
+                .fill(isSelected ? DS.Accent.base : DS.Surface.raised)
+                .frame(width: 10, height: 6)
+                .offset(y: -1)
+        }
+        // Room around the art so the bubble is a comfortable target.
+        .padding(.horizontal, 4)
     }
 }

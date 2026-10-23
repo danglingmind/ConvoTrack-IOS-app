@@ -1,0 +1,497 @@
+import SwiftUI
+import CoreLocation
+
+/// The map-first ride planner (`design/CREATE_RIDE_REDESIGN.md`): a full-bleed map, a search pill
+/// that becomes the stops card once a destination is picked, and a resizable sheet with the
+/// route summary and the ride's details. The screen that hosts it supplies the primary action
+/// (Create ride / Save changes) and does the saving.
+struct RidePlannerView<PrimaryAction: View>: View {
+    @ObservedObject var model: RidePlannerModel
+    let riderCap: Int
+    let isPremium: Bool
+    var onUpgrade: () -> Void
+    var onClose: () -> Void
+    @ViewBuilder var primaryAction: PrimaryAction
+
+    @State private var detent: DSMapSheetDetent = .low
+    /// The stop whose search is open.
+    @State private var searchStopID: UUID?
+    @State private var stopsExpanded = false
+    @State private var topChromeBottom: CGFloat = 0
+    @State private var sheetRestingHeight: CGFloat = 0
+    @State private var homeIndicatorInset: CGFloat = 0
+    @State private var recents = RecentDestinations.load()
+    @FocusState private var titleFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { proxy in
+            // With the keyboard up the safe area's bottom is the keyboard, not the home indicator.
+            let keyboardUp = proxy.safeAreaInsets.bottom > homeIndicatorInset + 1
+            ZStack(alignment: .top) {
+                map
+                    .ignoresSafeArea()
+
+                if searchStopID == nil {
+                    topChrome
+                        .padding(.horizontal, DS.Space.p3)
+                        .padding(.top, DS.Space.p1)
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: {
+                            topChromeBottom = $0
+                        }
+                        .transition(.opacity)
+
+                    sheet(bottomInset: keyboardUp ? 0 : homeIndicatorInset)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                        .transition(.move(edge: .bottom))
+                }
+
+                if let id = searchStopID, let stop = model.stops.first(where: { $0.id == id }) {
+                    PlannerSearchOverlay(
+                        role: model.role(of: stop),
+                        offersCurrentLocation: model.offersCurrentLocation(for: id),
+                        recents: recents,
+                        onPick: { place in pick(place, for: id) },
+                        onUseCurrentLocation: {
+                            model.useCurrentLocation(for: id)
+                            closeSearch()
+                        },
+                        onCancel: {
+                            model.discardIfEmpty(id)
+                            closeSearch()
+                        }
+                    )
+                    .transition(.opacity)
+                }
+            }
+        }
+        .background {
+            // The home indicator's inset, read where the keyboard can't change it.
+            Color.clear
+                .ignoresSafeArea(.keyboard)
+                .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { homeIndicatorInset = $0 }
+        }
+        .dsAnimation(DS.Motion.standard, value: searchStopID)
+        .dsAnimation(DS.Motion.standard, value: model.hasDestination)
+        .onAppear { model.locateUser() }
+    }
+
+    // MARK: Map
+
+    private var map: some View {
+        GoogleMapView(
+            routeCoords: model.routeCoordinates,
+            pins: pins,
+            cameraCommand: model.cameraCommand,
+            isInteractive: true,
+            alternativeRoutes: model.routes.map(\.coordinates),
+            selectedRouteIndex: model.selectedRouteIndex,
+            onSelectRoute: { index in
+                DSHaptic.selection()
+                model.selectRoute(index)
+            },
+            mapPadding: UIEdgeInsets(top: topChromeBottom + DS.Space.p2, left: 0,
+                                     bottom: sheetRestingHeight, right: 0),
+            routeBubbles: routeBubbles
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Map"))
+        .accessibilityValue(Text(routeSummary))
+    }
+
+    private var pins: [MapPin] {
+        guard model.hasDestination else {
+            guard let me = model.userLocation?.coordinate else { return [] }
+            return [MapPin(id: "me", coordinate: me,
+                           style: .simpleDot(color: UIColor(DS.Map.startMarker), size: 16), anchorBottom: false)]
+        }
+        let chosen = model.chosenStops
+        return chosen.enumerated().compactMap { i, stop in
+            guard let coordinate = model.coordinate(of: stop) else { return nil }
+            let style: MapPin.Style = i == 0 ? .lobbyStart
+                : (i == chosen.count - 1 ? .destination(name: model.name(of: stop)) : .waypoint(name: model.name(of: stop)))
+            return MapPin(id: stop.id.uuidString, coordinate: coordinate, style: style)
+        }
+    }
+
+    private var routeSummary: String {
+        guard model.hasDestination else { return "" }
+        var parts = model.chosenStops.map { model.name(of: $0) }
+        if model.hasRoute {
+            parts.append(RideDuration.inline(Int(model.durationSeconds)))
+            parts.append(Self.distanceText(model.distanceMeters))
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    // MARK: Top chrome
+
+    @ViewBuilder
+    private var topChrome: some View {
+        if model.hasDestination {
+            PlannerStopsCard(
+                model: model,
+                onBack: { model.clearDestination() },
+                onEdit: { openSearch($0) },
+                onAddStop: { if let id = model.addStop() { openSearch(id) } },
+                isExpanded: $stopsExpanded
+            )
+        } else {
+            searchPill
+        }
+    }
+
+    private var searchPill: some View {
+        HStack(spacing: 0) {
+            backButton(label: Text("Back"), action: onClose)
+            Button { openSearch(model.destinationID) } label: {
+                HStack(spacing: DS.Space.p2) {
+                    Image(systemName: "magnifyingglass")
+                        .dsIcon(DS.IconSize.md)
+                        .foregroundStyle(DS.Text.muted)
+                        .accessibilityHidden(true)
+                    Text("Where are you riding?")
+                        .dsText(.locationTitle)
+                        .foregroundStyle(DS.Text.placeholder)
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Search for a destination"))
+        }
+        .padding(.trailing, DS.Space.p4)
+        .dsGlass(in: Capsule(), interactive: true)
+    }
+
+    private func backButton(label: Text, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "chevron.left")
+                .dsIcon(DS.IconSize.md, weight: .semibold)
+                .foregroundStyle(DS.Text.primary)
+                .frame(width: DS.Target.minimum + DS.Space.p1, height: 52)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    // MARK: Sheet
+
+    private func sheet(bottomInset: CGFloat) -> some View {
+        DSMapSheet(
+            detent: $detent,
+            bottomInset: bottomInset,
+            onRestingHeightChange: { sheetRestingHeight = $0 }
+        ) {
+            Group {
+                if !model.hasDestination {
+                    exploreHeader
+                } else {
+                    routeHeader
+                }
+            }
+            .padding(.horizontal, DS.Space.screenInset)
+            .padding(.bottom, DS.Space.p3)
+        } content: {
+            Group {
+                if !model.hasDestination {
+                    recentRows(Array(recents.dropFirst(2)))
+                } else {
+                    detailsContent
+                }
+            }
+            .padding(.horizontal, DS.Space.screenInset)
+            .padding(.bottom, DS.Space.p6)
+        } accessory: {
+            DSFloatingButton(
+                systemImage: model.hasRoute ? "arrow.up.left.and.arrow.down.right" : "location.fill",
+                label: model.hasRoute ? "Show whole route" : "Show my location",
+                variant: .accentIcon
+            ) {
+                if model.hasRoute { model.fitCameraToRoute() } else { model.focusOnUser() }
+            }
+        }
+    }
+
+    // Before a destination: an invitation and the last places the rider planned rides to.
+    private var exploreHeader: some View {
+        VStack(alignment: .leading, spacing: DS.Space.p1) {
+            Text("Plan a ride")
+                .dsText(.cardTitle)
+                .foregroundStyle(DS.Text.primary)
+                .accessibilityAddTraits(.isHeader)
+            Text("Search for where the pack is heading.")
+                .dsText(.bodySmall)
+                .foregroundStyle(DS.Text.muted)
+                .padding(.bottom, DS.Space.p2)
+            recentRows(Array(recents.prefix(2)))
+        }
+    }
+
+    private func recentRows(_ places: [PlaceResult]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(places) { place in
+                Button { pick(place, for: model.destinationID) } label: {
+                    HStack(spacing: DS.Space.p3) {
+                        Image(systemName: "clock")
+                            .dsIcon(DS.IconSize.sm)
+                            .foregroundStyle(DS.Text.muted)
+                            .accessibilityHidden(true)
+                        Text(place.name)
+                            .dsText(.locationTitle)
+                            .foregroundStyle(DS.Text.primary)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if let me = model.userLocation {
+                            Text(Self.distanceText(me.distance(from: place.location)))
+                                .dsText(.dataMono)
+                                .foregroundStyle(DS.Text.muted)
+                        }
+                    }
+                    .frame(minHeight: DS.Target.minimum)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .overlay(alignment: .top) { DSDivider() }
+                .accessibilityHint(Text("Plans a ride to this place"))
+            }
+        }
+    }
+
+    // With a destination: the route at a glance, the ride's name, and the primary action.
+    private var routeHeader: some View {
+        VStack(alignment: .leading, spacing: DS.Space.p3) {
+            routeSummaryBlock
+            titleRow
+            primaryAction
+        }
+    }
+
+    @ViewBuilder
+    private var routeSummaryBlock: some View {
+        if model.isRouting && !model.hasRoute {
+            HStack(spacing: DS.Space.p2) {
+                ProgressView().tint(DS.Accent.base)
+                Text("Finding routes…").dsText(.body).foregroundStyle(DS.Text.secondary)
+            }
+            .frame(minHeight: 52, alignment: .leading)
+        } else if model.routeFailed {
+            VStack(alignment: .leading, spacing: DS.Space.p1) {
+                Text("No route found").dsText(.rowTitle).foregroundStyle(DS.Text.primary)
+                Text("Google couldn't find a road between these places. Try another destination or start.")
+                    .dsText(.bodySmall)
+                    .foregroundStyle(DS.Text.muted)
+                Button("Try again") { model.recalculateRoute() }
+                    .dsText(.link)
+                    .foregroundStyle(DS.Accent.base)
+                    .frame(minHeight: DS.Target.minimum)
+            }
+        } else if model.isWaitingForLocation {
+            VStack(alignment: .leading, spacing: DS.Space.p1) {
+                Text("Finding your location…").dsText(.rowTitle).foregroundStyle(DS.Text.primary)
+                Text("Turn on Location Services for ConvoTrack, or choose a place instead.")
+                    .dsText(.bodySmall)
+                    .foregroundStyle(DS.Text.muted)
+                Button("Choose a place") {
+                    if let stop = model.stops.first(where: \.isCurrentLocation) { openSearch(stop.id) }
+                }
+                    .dsText(.link)
+                    .foregroundStyle(DS.Accent.base)
+                    .frame(minHeight: DS.Target.minimum)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: DS.Space.p2) {
+                    Text(RideDuration.inline(Int(model.durationSeconds)))
+                        .dsText(.metricValue)
+                        .foregroundStyle(DS.Accent.base)
+                    Text("(\(Self.distanceText(model.distanceMeters)))")
+                        .dsText(.body)
+                        .foregroundStyle(DS.Text.secondary)
+                    if model.isRouting {
+                        ProgressView().controlSize(.small).tint(DS.Accent.base)
+                    }
+                }
+                Text(routeLabel)
+                    .dsText(.bodySmall)
+                    .foregroundStyle(DS.Text.muted)
+                    // One line: a wrap would grow the resting sheet and nudge the map each time
+                    // a different route is picked. The route list shows the full name.
+                    .lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// Which route is selected, and, while there's a choice, how to change it.
+    /// Which route is selected and the road it takes.
+    private var routeLabel: String {
+        let stops = max(model.chosenStops.count - 2, 0)
+        if stops > 0 {
+            return stops == 1 ? String(localized: "Via 1 stop") : String(localized: "Via \(stops) stops")
+        }
+        let selected = model.routes.indices.contains(model.selectedRouteIndex) ? model.routes[model.selectedRouteIndex] : nil
+        let which = selected.map(routeTag) ?? String(localized: "Best route")
+        if let summary = selected?.summary {
+            return String(localized: "\(which) · via \(summary)")
+        }
+        return which
+    }
+
+    /// "Fastest route", or how much slower than the fastest.
+    private func routeTag(_ option: RouteOption) -> String {
+        let fastest = model.routes.map(\.durationSeconds).min() ?? option.durationSeconds
+        let slower = Int(((option.durationSeconds - fastest) / 60).rounded())
+        return slower <= 0 ? String(localized: "Fastest route") : String(localized: "\(slower) min slower")
+    }
+
+    // MARK: Alternatives
+
+    /// The selected route's bubble reads its duration; the others read the difference from it,
+    /// which is the number a rider is actually weighing.
+    private var routeBubbles: [RouteBubble] {
+        guard model.routes.count > 1, model.bubbleAnchors.count == model.routes.count else { return [] }
+        let selected = model.durationSeconds
+        return model.routes.indices.map { i in
+            let isSelected = i == model.selectedRouteIndex
+            let text: String
+            if isSelected {
+                text = RideDuration.inline(Int(model.routes[i].durationSeconds))
+            } else {
+                let delta = Int(((model.routes[i].durationSeconds - selected) / 60).rounded())
+                text = delta == 0 ? String(localized: "Same time")
+                    : delta > 0 ? "+\(delta) min" : "\u{2212}\(-delta) min"
+            }
+            return RouteBubble(routeIndex: i, coordinate: model.bubbleAnchors[i], text: text, isSelected: isSelected)
+        }
+    }
+
+    /// The same choice as the bubbles, as a list: readable at any text size and reachable with
+    /// VoiceOver, which can't touch a line on the map.
+    @ViewBuilder
+    private var routeList: some View {
+        if model.routes.count > 1 {
+            VStack(alignment: .leading, spacing: 0) {
+                DSSectionHeading("Routes")
+                    .padding(.bottom, DS.Space.p2)
+                ForEach(Array(model.routes.enumerated()), id: \.element.id) { index, option in
+                    routeRow(option, isSelected: index == model.selectedRouteIndex) {
+                        DSHaptic.selection()
+                        model.selectRoute(index)
+                    }
+                }
+            }
+        }
+    }
+
+    private func routeRow(_ option: RouteOption, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: DS.Space.p3) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .dsIcon(DS.IconSize.md)
+                    .foregroundStyle(isSelected ? AnyShapeStyle(DS.Accent.base) : AnyShapeStyle(DS.Text.subtle))
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: DS.Space.p2) {
+                        Text(RideDuration.inline(Int(option.durationSeconds)))
+                            .dsText(.rowTitle)
+                            .foregroundStyle(isSelected ? AnyShapeStyle(DS.Accent.base) : AnyShapeStyle(DS.Text.primary))
+                        Text(Self.distanceText(option.distanceMeters))
+                            .dsText(.bodySmall)
+                            .foregroundStyle(DS.Text.secondary)
+                    }
+                    Text(option.summary.map { String(localized: "\(routeTag(option)) · via \($0)") } ?? routeTag(option))
+                        .dsText(.helper)
+                        .foregroundStyle(DS.Text.muted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.vertical, DS.Space.p2)
+            .frame(minHeight: DS.Target.minimum)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .top) { DSDivider() }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var titleRow: some View {
+        HStack(spacing: DS.Space.p2) {
+            HStack(spacing: DS.Space.p2) {
+                Image(systemName: "pencil")
+                    .dsIcon(DS.IconSize.sm)
+                    .foregroundStyle(DS.Text.muted)
+                    .accessibilityHidden(true)
+                TextField("", text: $model.title, prompt: Text("Ride name").foregroundStyle(DS.Text.placeholder))
+                    .dsText(.locationTitle)
+                    .foregroundStyle(DS.Text.primary)
+                    .tint(DS.Accent.base)
+                    .focused($titleFocused)
+                    .submitLabel(.done)
+                    .accessibilityLabel(Text("Ride name"))
+            }
+            .padding(.horizontal, DS.Space.p3)
+            .frame(minHeight: DS.Target.minimum + DS.Space.p1)
+            .background(titleFocused ? DS.Surface.fieldFocused : DS.Surface.field,
+                        in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                    .stroke(titleFocused ? AnyShapeStyle(DS.Border.focus) : AnyShapeStyle(DS.Border.default),
+                            lineWidth: titleFocused ? DS.BorderWidth.focus : DS.BorderWidth.default)
+            )
+
+            // Shortcut to the rider limit, which lives further down the sheet.
+            Button {
+                titleFocused = false
+                withAnimation(reduceMotion ? nil : DS.Motion.spring) { detent = .medium }
+            } label: {
+                HStack(spacing: DS.Space.p1) {
+                    Image(systemName: "person.2.fill").dsIcon(DS.IconSize.sm)
+                    Text("\(model.maxRiders)").dsText(.bodyStrong).monospacedDigit()
+                }
+                .foregroundStyle(DS.Text.primary)
+                .padding(.horizontal, DS.Space.p3)
+                .frame(minWidth: DS.Target.minimum, minHeight: DS.Target.minimum + DS.Space.p1)
+                .background(DS.Surface.field, in: RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Max riders, \(model.maxRiders)"))
+            .accessibilityHint(Text("Shows the rider limit"))
+        }
+    }
+
+    private var detailsContent: some View {
+        VStack(alignment: .leading, spacing: DS.Space.p3) {
+            DSDivider()
+            routeList
+            RiderLimitSection(maxRiders: $model.maxRiders, riderCap: riderCap, isPremium: isPremium,
+                              onUpgrade: onUpgrade)
+        }
+        .padding(.top, DS.Space.p1)
+    }
+
+    // MARK: Search
+
+    private func openSearch(_ id: UUID) {
+        titleFocused = false
+        searchStopID = id
+    }
+
+    private func closeSearch() {
+        searchStopID = nil
+    }
+
+    private func pick(_ place: PlaceResult, for id: UUID) {
+        model.choose(place, for: id)
+        recents = RecentDestinations.load()
+        detent = .low
+        closeSearch()
+    }
+
+    private static func distanceText(_ meters: Double) -> String {
+        meters < 1000 ? "\(Int(meters)) m" : String(format: "%.1f km", meters / 1000)
+    }
+}

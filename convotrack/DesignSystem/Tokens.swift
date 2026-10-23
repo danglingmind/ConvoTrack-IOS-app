@@ -187,7 +187,9 @@ extension DS {
         static let routeCore = Accent.base
         static let routeGlow = Accent.base.opacity(0.3)
         static let routePlanned = Accent.base.opacity(0.28)
-        static let routeAlternative = Color(rgb: 0xB4B9C1, opacity: 0.40)
+        /// 55%: 3.6:1 against `background`. At the old 40% it was 2.5:1, under the 3:1 a graphic
+        /// people have to find and tap needs (WCAG 1.4.11).
+        static let routeAlternative = Color(rgb: 0xB4B9C1, opacity: 0.55)
         static let routeConnector = Accent.base.opacity(0.75)
         static let startMarker = Status.success
         static let stopMarker = Accent.deep

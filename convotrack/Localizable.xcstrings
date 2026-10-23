@@ -16,6 +16,9 @@
     "· FULL" : {
 
     },
+    "(%@)" : {
+
+    },
     "**%@** is **%@** behind the leader." : {
       "localizations" : {
         "en" : {
@@ -30,6 +33,9 @@
 
     },
     "#%lld" : {
+
+    },
+    "%@ · Tap a grey line to switch" : {
 
     },
     "%@ / %@" : {
@@ -126,6 +132,9 @@
 
     },
     "%lld days of ConvoTrack, on us. Go Pro any time to keep riding after it ends." : {
+
+    },
+    "%lld min slower" : {
 
     },
     "%lld mo" : {
@@ -236,6 +245,9 @@
     "Active ride" : {
 
     },
+    "Add a stop" : {
+
+    },
     "Add start & destination" : {
 
     },
@@ -274,6 +286,9 @@
 
     },
     "Back" : {
+
+    },
+    "Best route" : {
 
     },
     "Best value" : {
@@ -333,10 +348,22 @@
     "Cancel request" : {
 
     },
+    "Change destination" : {
+
+    },
     "Check your connection." : {
 
     },
+    "Choose a different place" : {
+
+    },
+    "Choose a start point" : {
+
+    },
     "Clear place" : {
+
+    },
+    "Clear search" : {
 
     },
     "Close" : {
@@ -352,6 +379,9 @@
 
     },
     "Code verified" : {
+
+    },
+    "Collapsed" : {
 
     },
     "Connected" : {
@@ -471,6 +501,9 @@
     "Destination" : {
 
     },
+    "Destination, %@" : {
+
+    },
     "Discover new roads" : {
 
     },
@@ -576,6 +609,12 @@
     "Fastest" : {
 
     },
+    "Fastest route" : {
+
+    },
+    "Finding routes…" : {
+
+    },
     "Follow route" : {
 
     },
@@ -605,6 +644,9 @@
 
     },
     "Fuel stop" : {
+
+    },
+    "Full height" : {
 
     },
     "Full ride history archive" : {
@@ -650,6 +692,9 @@
     "Good ride. Your free trial ends today — go Pro to keep riding." : {
 
     },
+    "Google couldn't find a road between these places. Try another destination or start." : {
+
+    },
     "Group split" : {
 
     },
@@ -662,6 +707,9 @@
           }
         }
       }
+    },
+    "Half height" : {
+
     },
     "Head to the %@" : {
 
@@ -753,6 +801,9 @@
     "Locked" : {
 
     },
+    "Map" : {
+
+    },
     "Map showing a new rider joining the group." : {
 
     },
@@ -772,6 +823,9 @@
 
     },
     "Max riders" : {
+
+    },
+    "Max riders, %lld" : {
 
     },
     "Meet point" : {
@@ -807,19 +861,22 @@
     "Needs ConvoTrack Pro" : {
 
     },
-    "New Ride" : {
-
-    },
     "No monthly ride cap, ever" : {
 
     },
     "No monthly ride limit" : {
 
     },
+    "No places match “%@”. Check the spelling or try a nearby town." : {
+
+    },
     "No ride cap" : {
 
     },
     "No rides yet" : {
+
+    },
+    "No route found" : {
 
     },
     "Nobody gets left behind." : {
@@ -880,10 +937,16 @@
     "PLAN" : {
       "comment" : "Plan card title when the billing period is unknown"
     },
+    "Plan a ride" : {
+
+    },
     "Plan it. Ride it. Together." : {
 
     },
     "Plan, join and track rides with your tribe." : {
+
+    },
+    "Plans a ride to this place" : {
 
     },
     "Play background animation" : {
@@ -923,6 +986,9 @@
 
     },
     "Ready to Connect" : {
+
+    },
+    "Recent" : {
 
     },
     "Recent rides" : {
@@ -1006,10 +1072,16 @@
     "Ride leader" : {
 
     },
+    "Ride name" : {
+
+    },
     "Ride Summary" : {
 
     },
     "Ride title" : {
+
+    },
+    "Ride to %@" : {
 
     },
     "Ride together" : {
@@ -1072,6 +1144,12 @@
     "Search destination…" : {
 
     },
+    "Search for a destination" : {
+
+    },
+    "Search for where the pack is heading." : {
+
+    },
     "Search start point…" : {
 
     },
@@ -1102,16 +1180,25 @@
     "Share summary" : {
 
     },
+    "Sheet grabber" : {
+
+    },
     "Show" : {
 
     },
     "Show emergency on map" : {
 
     },
+    "Show my location" : {
+
+    },
     "Show QR code" : {
 
     },
     "Show QR Code" : {
+
+    },
+    "Show whole route" : {
 
     },
     "Shows ConvoTrack Pro plans" : {
@@ -1127,6 +1214,9 @@
 
     },
     "Shows the next alert" : {
+
+    },
+    "Shows the rider limit" : {
 
     },
     "Shows the riders" : {
@@ -1174,6 +1264,12 @@
     "Start ride" : {
 
     },
+    "Start, %@" : {
+
+    },
+    "Starting point" : {
+
+    },
     "Stop" : {
 
     },
@@ -1183,7 +1279,13 @@
     "Stop 1" : {
 
     },
+    "Stop, %@" : {
+
+    },
     "Summary unavailable" : {
+
+    },
+    "Swipe up or down to resize" : {
 
     },
     "Sync" : {
@@ -1265,6 +1367,9 @@
     "Trial · today" : {
 
     },
+    "Try again" : {
+
+    },
     "Turn on voice guidance" : {
 
     },
@@ -1289,6 +1394,12 @@
     "Verifying code…" : {
 
     },
+    "Via %lld stops" : {
+
+    },
+    "Via 1 stop" : {
+
+    },
     "Waiting" : {
 
     },
@@ -1308,6 +1419,12 @@
       "comment" : "Plan card title"
     },
     "Welcome to ConvoTrack Pro." : {
+
+    },
+    "Where are you riding?" : {
+
+    },
+    "Where does the ride start?" : {
 
     },
     "wk" : {
@@ -1353,6 +1470,9 @@
 
     },
     "Your free trial has started" : {
+
+    },
+    "Your location" : {
 
     },
     "Your membership is active" : {

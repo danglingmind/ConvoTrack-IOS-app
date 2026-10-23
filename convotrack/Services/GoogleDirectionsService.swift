@@ -29,6 +29,8 @@ struct RouteOption: Identifiable {
     let distanceMeters: Double
     let durationSeconds: TimeInterval
     let label: String?   // Routes API routeLabels, e.g. DEFAULT_ROUTE / FUEL_EFFICIENT
+    /// Routes API `description`: the main road, e.g. "NH44". For telling alternatives apart.
+    var summary: String? = nil
 }
 
 // MARK: - Service
@@ -94,6 +96,70 @@ enum GoogleDirectionsService {
             throw URLError(.cannotParseResponse)
         }
         return directionsResult(from: leg)
+    }
+
+    /// One route through every stop in order (start, any middle stops, destination), in a single
+    /// request with `intermediates`. Requesting each leg on its own and stitching them cost one
+    /// call per leg and let each leg be routed without knowing how the rider arrived at its start.
+    /// Google returns no alternatives once intermediates are present, so this has none either.
+    static func route(
+        through stops: [CLLocationCoordinate2D],
+        trafficAware: Bool = true
+    ) async throws -> DirectionsResult {
+        guard let origin = stops.first, let destination = stops.last, stops.count >= 2 else {
+            throw URLError(.badURL)
+        }
+        let url = URL(string: "https://routes.googleapis.com/directions/v2:computeRoutes")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(GoogleMapsConfig.apiKey, forHTTPHeaderField: "X-Goog-Api-Key")
+        request.setValue(
+            "routes.legs.distanceMeters,routes.legs.duration," +
+            "routes.legs.steps.distanceMeters,routes.legs.steps.endLocation," +
+            "routes.legs.steps.navigationInstruction,routes.legs.steps.polyline",
+            forHTTPHeaderField: "X-Goog-FieldMask"
+        )
+
+        func waypoint(_ c: CLLocationCoordinate2D) -> [String: Any] {
+            ["location": ["latLng": ["latitude": c.latitude, "longitude": c.longitude]]]
+        }
+        var body: [String: Any] = [
+            "origin": waypoint(origin),
+            "destination": waypoint(destination),
+            "travelMode": "DRIVE",
+            "routingPreference": trafficAware ? "TRAFFIC_AWARE" : "TRAFFIC_UNAWARE",
+            "polylineQuality": "HIGH_QUALITY",
+            "computeAlternativeRoutes": false,
+            "languageCode": "en-US",
+            "units": "METRIC"
+        ]
+        let middle = stops.dropFirst().dropLast()
+        if !middle.isEmpty { body["intermediates"] = middle.map(waypoint) }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, urlResponse) = try await URLSession.shared.data(for: request)
+        if let http = urlResponse as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        let response = try JSONDecoder().decode(RoutesResponse.self, from: data)
+        guard let legs = response.routes.first?.legs, !legs.isEmpty else {
+            throw URLError(.cannotParseResponse)
+        }
+
+        // One leg per gap between stops. Each leg starts on the point the previous one ended on,
+        // so that shared vertex is dropped rather than drawn twice.
+        let results = legs.map(directionsResult(from:))
+        var coords: [CLLocationCoordinate2D] = []
+        for (i, leg) in results.enumerated() {
+            coords += i == 0 ? leg.coordinates : Array(leg.coordinates.dropFirst())
+        }
+        return DirectionsResult(
+            coordinates:     coords,
+            distanceMeters:  results.reduce(0) { $0 + $1.distanceMeters },
+            durationSeconds: results.reduce(0) { $0 + $1.durationSeconds },
+            steps:           results.flatMap(\.steps)
+        )
     }
 
     /// The same alternatives `alternativeRoutes` offers the ride leader, but carrying each one's
@@ -188,7 +254,7 @@ enum GoogleDirectionsService {
         // Whole-route fields (one polyline per alternative) — no per-step data needed here
         request.setValue(
             "routes.polyline.encodedPolyline,routes.distanceMeters," +
-            "routes.duration,routes.routeLabels",
+            "routes.duration,routes.routeLabels,routes.description",
             forHTTPHeaderField: "X-Goog-FieldMask"
         )
 
@@ -220,9 +286,19 @@ enum GoogleDirectionsService {
                 coordinates:     decodePolyline(encoded),
                 distanceMeters:  Double(route.distanceMeters ?? 0),
                 durationSeconds: parseDuration(route.duration ?? "0s"),
-                label:           route.routeLabels?.first
+                label:           route.routeLabels?.first,
+                summary:         route.description.flatMap(shortRouteDescription)
             )
         }
+    }
+
+    /// One name per road: Google lists a road's aliases with a slash ("Doddaballapur Rd/
+    /// Doddaballapura Main Rd"), which only makes the label too long to read at a glance.
+    private static func shortRouteDescription(_ raw: String) -> String? {
+        let roads = raw.components(separatedBy: " and ").map {
+            $0.components(separatedBy: "/").first?.trimmingCharacters(in: .whitespaces) ?? ""
+        }.filter { !$0.isEmpty }
+        return roads.isEmpty ? nil : roads.joined(separator: " and ")
     }
 
     // Routes API duration comes as "123s" or "1.5s"
@@ -315,6 +391,7 @@ private struct RoutesResponse: Decodable {
         let distanceMeters: Int?
         let duration: String?
         let routeLabels: [String]?
+        let description: String?
     }
 
     struct RoutePolyline: Decodable {

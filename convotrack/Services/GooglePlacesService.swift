@@ -47,9 +47,59 @@ enum GooglePlacesService {
             )
         }
     }
+
+    /// The street-level place at a coordinate, named the way a rider would say it ("KG Halli,
+    /// D' Souza Layout") rather than as a full postal address. Used to give "Your location" a
+    /// real name before it is saved as a ride's start: every rider in the ride reads that name,
+    /// and to them "Your location" would mean their own.
+    static func reverseGeocode(_ coordinate: CLLocationCoordinate2D) async -> PlaceResult? {
+        var components = URLComponents(string: "https://maps.googleapis.com/maps/api/geocode/json")!
+        components.queryItems = [
+            URLQueryItem(name: "latlng", value: "\(coordinate.latitude),\(coordinate.longitude)"),
+            URLQueryItem(name: "result_type", value: "street_address|route|premise|sublocality|locality"),
+            URLQueryItem(name: "key", value: GoogleMapsConfig.apiKey)
+        ]
+        guard let url = components.url,
+              let (data, urlResponse) = try? await URLSession.shared.data(from: url),
+              (urlResponse as? HTTPURLResponse).map({ (200...299).contains($0.statusCode) }) != false,
+              let response = try? JSONDecoder().decode(GeocodeResponse.self, from: data),
+              let first = response.results.first else {
+            return nil
+        }
+        return PlaceResult(
+            id:               first.placeId,
+            name:             shortName(fromAddress: first.formattedAddress),
+            coordinate:       coordinate,
+            formattedAddress: first.formattedAddress
+        )
+    }
+
+    /// The first two parts of an address that aren't house or plot numbers ("67/1", "263/3").
+    static func shortName(fromAddress address: String) -> String {
+        let parts = address.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        let named = parts.filter { part in
+            let digits = part.filter(\.isNumber).count
+            return digits * 2 < part.count
+        }
+        let picked = (named.isEmpty ? parts : named).prefix(2)
+        return picked.joined(separator: ", ")
+    }
 }
 
 // MARK: - Response models (private)
+
+private struct GeocodeResponse: Decodable {
+    let results: [Item]
+
+    struct Item: Decodable {
+        let placeId: String
+        let formattedAddress: String
+        enum CodingKeys: String, CodingKey {
+            case placeId          = "place_id"
+            case formattedAddress = "formatted_address"
+        }
+    }
+}
 
 private struct PlacesResponse: Decodable {
     let results: [PlaceItem]

@@ -209,8 +209,6 @@ struct RideRouteForm: View {
     var onSelectRoute: (Int) -> Void
     var onUpgrade: () -> Void
 
-    private var atRiderCap: Bool { maxRiders >= riderCap && !isPremium }
-
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Space.sectionGap) {
             titleField
@@ -391,6 +389,23 @@ struct RideRouteForm: View {
 
     // MARK: Max riders
 
+    private var ridersSection: some View {
+        RiderLimitSection(maxRiders: $maxRiders, riderCap: riderCap, isPremium: isPremium, onUpgrade: onUpgrade)
+    }
+}
+
+// MARK: - Rider limit
+
+/// Max riders stepper with the plan's limit under it. Shared by the route form and the ride
+/// planner's sheet.
+struct RiderLimitSection: View {
+    @Binding var maxRiders: Int
+    let riderCap: Int
+    let isPremium: Bool
+    var onUpgrade: () -> Void
+
+    private var atRiderCap: Bool { maxRiders >= riderCap && !isPremium }
+
     /// The limit is always visible, not only once the rider walks into it. Free riders get a quiet
     /// way into the paywall; Pro riders just see what their plan allows.
     @ViewBuilder private var riderPlanLine: some View {
@@ -415,7 +430,7 @@ struct RideRouteForm: View {
         }
     }
 
-    private var ridersSection: some View {
+    var body: some View {
         VStack(alignment: .leading, spacing: DS.Space.p3) {
             DSStepperRow(
                 title: "Max riders",
