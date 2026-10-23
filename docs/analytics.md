@@ -69,6 +69,7 @@ Names are past tense, `snake_case`. Add an event in **all** places: this table, 
 | `ride_joined` | server | `rider_count` (after joining), `rejoin`, `plan` |
 | `ride_started` | server | `rider_count`, `distance_km`, `lobby_minutes` |
 | `ride_ended` | server | `duration_min`, `rider_count`, `distance_km`, `max_split_km`, `server_state_lost` |
+| `ride_completed` | server | `duration_min`, `rider_count`, `is_leader`. **One per rider still in the ride when it ends**, so joiners count too. Use this for "took part in a ride" retention and the north star |
 | `ride_left` / `rider_removed` / `ride_deleted` | server | `ride_status` |
 | `create_ride_failed` | iOS, Android | `plan_limit` |
 | `join_failed` | iOS, Android | `reason` (server error code, or `request_failed`) |
@@ -109,7 +110,7 @@ Play token is verified. It can fire more than once per purchase (restore, re-act
 ## What to measure
 
 **North-star metric: Weekly Group Rides**, i.e. distinct rides per week with `ride_ended` and
-`rider_count >= 2`. It rises only when riders invite riders and rides actually happen.
+`rider_count >= 2`. For rider-level retention use `ride_completed` as the return event. It rises only when riders invite riders and rides actually happen.
 
 ### AARRR
 
