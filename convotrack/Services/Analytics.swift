@@ -20,7 +20,7 @@ import UIKit
 enum Analytics {
     /// The PostHog project API key. It is a public, write-only token, safe to ship in the binary
     /// (same as the Maps and Clerk keys). Empty = analytics is off.
-    static let apiKey = ""
+    static let apiKey = "phc_zvvzEU6Es8pNGoDKJnAbBwH8gfJ6pt5ENq3BLoD96n3D"
     /// `https://us.i.posthog.com` or `https://eu.i.posthog.com`, matching the project's region.
     static let host = "https://us.i.posthog.com"
 
