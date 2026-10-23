@@ -1,6 +1,6 @@
 # Create / Edit Ride — map-first redesign
 
-Status: phases 1–8 built on iOS and tested in the simulator (phases 1–7 also against the live backend: create, edit save/discard/delete). Android port (phase 9) built on branch `create-ride-map-planner` in convotrack-android; create flow tested on the emulator, Edit not yet run against a real ride. iOS first, then the Android port (`convotrack-android` `ui/ride/CreateRideScreen.kt`, `EditRideScreen.kt`, `RouteForm.kt`).
+Status: phases 1–8 built on iOS and tested in the simulator (phases 1–7 also against the live backend: create, edit save/discard/delete). Android port (phase 9) built on branch `create-ride-map-planner` in convotrack-android; create and Edit (save, discard, delete) tested on the emulator against the live backend. iOS first, then the Android port (`convotrack-android` `ui/ride/CreateRideScreen.kt`, `EditRideScreen.kt`, `RouteForm.kt`).
 
 ## Thesis
 
