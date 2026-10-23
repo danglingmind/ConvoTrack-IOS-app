@@ -35,13 +35,23 @@
     "#%lld" : {
 
     },
-    "%@ · Tap a grey line to switch" : {
-
+    "%@ · via %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · via %2$@"
+          }
+        }
+      }
     },
     "%@ / %@" : {
 
     },
     "%@ ahead" : {
+
+    },
+    "%@ along your route" : {
 
     },
     "%@ behind" : {
@@ -81,6 +91,9 @@
 
     },
     "%@ made way for a newer one" : {
+
+    },
+    "%@ near the map" : {
 
     },
     "%@ needs help — head to their location" : {
@@ -172,6 +185,12 @@
         }
       }
     },
+    "%lld stops" : {
+
+    },
+    "%lld stops on the way" : {
+
+    },
     "%lld weeks" : {
       "comment" : "Billing period noun, plural"
     },
@@ -201,6 +220,9 @@
 
     },
     "+%lld" : {
+
+    },
+    "+%lld min detour" : {
 
     },
     "+%lld more" : {
@@ -248,10 +270,13 @@
     "Add a stop" : {
 
     },
-    "Add start & destination" : {
+    "Add as stop" : {
 
     },
     "Add stop" : {
+
+    },
+    "Add this stop" : {
 
     },
     "After that, creating and joining rides needs Pro." : {
@@ -280,6 +305,12 @@
 
     },
     "Avg speed" : {
+
+    },
+    "Avoid highways" : {
+
+    },
+    "Avoid tolls" : {
 
     },
     "Awards" : {
@@ -354,13 +385,28 @@
     "Check your connection." : {
 
     },
+    "Choose a destination" : {
+
+    },
     "Choose a different place" : {
+
+    },
+    "Choose a place" : {
 
     },
     "Choose a start point" : {
 
     },
-    "Clear place" : {
+    "Choose destination" : {
+
+    },
+    "Choose on map" : {
+
+    },
+    "Choose start" : {
+
+    },
+    "Choose stop" : {
 
     },
     "Clear search" : {
@@ -504,6 +550,12 @@
     "Destination, %@" : {
 
     },
+    "Discard changes" : {
+
+    },
+    "Discard your changes?" : {
+
+    },
     "Discover new roads" : {
 
     },
@@ -528,13 +580,13 @@
     "Done" : {
 
     },
+    "Dropped pin" : {
+
+    },
     "Duration" : {
 
     },
     "e.g. Midnight Canyon Run" : {
-
-    },
-    "e.g., Midnight Canyon Run" : {
 
     },
     "Edit profile" : {
@@ -546,9 +598,6 @@
     "Edit ride" : {
 
     },
-    "Edit Ride" : {
-
-    },
     "Emergency" : {
 
     },
@@ -556,6 +605,9 @@
 
     },
     "Enable camera access in Settings to scan QR codes." : {
+
+    },
+    "End here" : {
 
     },
     "End ride" : {
@@ -606,16 +658,25 @@
     "Failed to Save Ride" : {
 
     },
-    "Fastest" : {
+    "Fastest route" : {
 
     },
-    "Fastest route" : {
+    "Finding address…" : {
 
     },
     "Finding routes…" : {
 
     },
+    "Finding your location…" : {
+
+    },
+    "Folds the stop list" : {
+
+    },
     "Follow route" : {
+
+    },
+    "Food" : {
 
     },
     "Food stop" : {
@@ -641,6 +702,9 @@
 
     },
     "Free trial, ends today" : {
+
+    },
+    "Fuel" : {
 
     },
     "Fuel stop" : {
@@ -753,6 +817,9 @@
     "Just me and one other" : {
 
     },
+    "Keep editing" : {
+
+    },
     "KM" : {
 
     },
@@ -834,9 +901,6 @@
     "Membership & Billing" : {
 
     },
-    "min" : {
-
-    },
     "mo" : {
       "comment" : "Compact billing period: one month"
     },
@@ -852,6 +916,24 @@
     "More" : {
 
     },
+    "Move down" : {
+
+    },
+    "Move the map to choose a spot" : {
+
+    },
+    "Move the map to the destination" : {
+
+    },
+    "Move the map to the start" : {
+
+    },
+    "Move the map to the stop" : {
+
+    },
+    "Move up" : {
+
+    },
     "Multiplayer navigation" : {
 
     },
@@ -859,6 +941,15 @@
 
     },
     "Needs ConvoTrack Pro" : {
+
+    },
+    "No detour" : {
+
+    },
+    "No highways" : {
+
+    },
+    "No highways or tolls" : {
 
     },
     "No monthly ride cap, ever" : {
@@ -879,6 +970,9 @@
     "No route found" : {
 
     },
+    "No tolls" : {
+
+    },
     "Nobody gets left behind." : {
 
     },
@@ -886,6 +980,12 @@
 
     },
     "Not sure yet" : {
+
+    },
+    "Nothing found close to this route." : {
+
+    },
+    "Nothing found here. Move the map and try again." : {
 
     },
     "Notifications" : {
@@ -932,6 +1032,9 @@
 
     },
     "Photo: %@ · Google" : {
+
+    },
+    "Pinned location" : {
 
     },
     "PLAN" : {
@@ -1018,10 +1121,13 @@
     "Regroup replaced" : {
 
     },
-    "Remove from ride" : {
+    "Remove" : {
 
     },
-    "Remove stop %lld" : {
+    "Remove %@" : {
+
+    },
+    "Remove from ride" : {
 
     },
     "Removed From Ride" : {
@@ -1078,9 +1184,6 @@
     "Ride Summary" : {
 
     },
-    "Ride title" : {
-
-    },
     "Ride to %@" : {
 
     },
@@ -1111,16 +1214,16 @@
     "Riding" : {
 
     },
-    "Route" : {
+    "Route options" : {
 
     },
-    "Route preview" : {
-
-    },
-    "Route preview map" : {
+    "Routes" : {
 
     },
     "SAM" : {
+
+    },
+    "Same time" : {
 
     },
     "Save" : {
@@ -1129,7 +1232,7 @@
     "Save %@" : {
 
     },
-    "Save ride" : {
+    "Save changes" : {
 
     },
     "Scan QR code" : {
@@ -1141,19 +1244,10 @@
     "Scenic stop" : {
 
     },
-    "Search destination…" : {
-
-    },
     "Search for a destination" : {
 
     },
     "Search for where the pack is heading." : {
-
-    },
-    "Search start point…" : {
-
-    },
-    "Search stop…" : {
 
     },
     "Secured by the App Store · Cancel anytime" : {
@@ -1166,6 +1260,9 @@
 
     },
     "See where your whole pack is, second by second — even the ones you can't see." : {
+
+    },
+    "Set as destination" : {
 
     },
     "Share a link. They're on the map. No group chat chaos." : {
@@ -1184,6 +1281,9 @@
 
     },
     "Show" : {
+
+    },
+    "Show all" : {
 
     },
     "Show emergency on map" : {
@@ -1205,6 +1305,9 @@
 
     },
     "Shows ConvoTrack Pro plans for bigger packs" : {
+
+    },
+    "Shows every stop" : {
 
     },
     "Shows it on the map" : {
@@ -1252,6 +1355,9 @@
     "START" : {
 
     },
+    "Start here" : {
+
+    },
     "Start location" : {
 
     },
@@ -1273,16 +1379,23 @@
     "Stop" : {
 
     },
-    "Stop %lld" : {
-
+    "Stop %lld, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stop %1$lld, %2$@"
+          }
+        }
+      }
     },
     "Stop 1" : {
 
     },
-    "Stop, %@" : {
+    "Summary unavailable" : {
 
     },
-    "Summary unavailable" : {
+    "Swap start and destination" : {
 
     },
     "Swipe up or down to resize" : {
@@ -1337,6 +1450,9 @@
     "The ride leader removed you from this ride." : {
 
     },
+    "The ride stays as it was saved." : {
+
+    },
     "the scenic stop" : {
 
     },
@@ -1370,6 +1486,9 @@
     "Try again" : {
 
     },
+    "Turn on Location Services for ConvoTrack, or choose a place instead." : {
+
+    },
     "Turn on voice guidance" : {
 
     },
@@ -1394,10 +1513,16 @@
     "Verifying code…" : {
 
     },
+    "via %@" : {
+
+    },
     "Via %lld stops" : {
 
     },
     "Via 1 stop" : {
+
+    },
+    "Viewpoints" : {
 
     },
     "Waiting" : {
@@ -1422,9 +1547,6 @@
 
     },
     "Where are you riding?" : {
-
-    },
-    "Where does the ride start?" : {
 
     },
     "wk" : {
