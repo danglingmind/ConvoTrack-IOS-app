@@ -66,6 +66,29 @@ final class RidePlannerModel: ObservableObject {
     private var suggestedTitle: String?
     private var routeTask: Task<Void, Never>?
 
+    /// What was saved, for Edit Ride's "discard changes?" and its Save button. Nil when creating.
+    private var savedSnapshot: Snapshot?
+    /// The rider picked an alternative themselves. Tracked apart from the snapshot because a
+    /// re-fetched route can differ from the saved one by a few metres without anyone touching it.
+    @Published private(set) var riderPickedRoute = false
+
+    private struct Snapshot: Equatable {
+        let title: String
+        let maxRiders: Int
+        let stops: [String]
+    }
+
+    private var snapshot: Snapshot {
+        Snapshot(title: title.trimmingCharacters(in: .whitespaces), maxRiders: maxRiders,
+                 stops: stops.map { $0.isCurrentLocation ? "me" : ($0.place?.id ?? "") })
+    }
+
+    /// Edit Ride: something differs from what was saved.
+    var hasChanges: Bool {
+        guard let savedSnapshot else { return false }
+        return riderPickedRoute || snapshot != savedSnapshot
+    }
+
     init() {}
 
     /// Edit Ride: start from a saved ride's stops and route.
@@ -83,6 +106,7 @@ final class RidePlannerModel: ObservableObject {
             distanceMeters = ride.distanceMeters
             durationSeconds = TimeInterval(ride.estimatedDurationSeconds)
         }
+        savedSnapshot = snapshot
     }
 
     // MARK: Derived
@@ -274,7 +298,7 @@ final class RidePlannerModel: ObservableObject {
             if options.count > 1 {
                 routes = options
                 bubbleAnchors = Self.bubbleAnchors(for: options.map(\.coordinates))
-                selectRoute(preferStoredMatch ? Self.closestIndex(options, toDistance: storedDistance) : 0)
+                applyRoute(preferStoredMatch ? Self.closestIndex(options, toDistance: storedDistance) : 0)
                 fitCameraToRoute()
                 return
             }
@@ -307,9 +331,15 @@ final class RidePlannerModel: ObservableObject {
         isRouting = false
     }
 
-    /// Makes the alternative at `index` the route. Selecting one doesn't move the camera: every
+    /// The rider picked the alternative at `index`. Selecting one doesn't move the camera: every
     /// alternative shares the same two ends, so the view already shows it.
     func selectRoute(_ index: Int) {
+        guard routes.indices.contains(index), index != selectedRouteIndex else { return }
+        riderPickedRoute = true
+        applyRoute(index)
+    }
+
+    private func applyRoute(_ index: Int) {
         guard routes.indices.contains(index) else { return }
         selectedRouteIndex = index
         let option = routes[index]

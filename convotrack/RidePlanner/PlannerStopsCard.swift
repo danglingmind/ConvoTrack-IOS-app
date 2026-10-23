@@ -7,6 +7,8 @@ import SwiftUI
 struct PlannerStopsCard: View {
     @ObservedObject var model: RidePlannerModel
     var onBack: () -> Void
+    /// "Change destination" when Back returns to the empty map; "Back" when it leaves the screen.
+    var backLabel: LocalizedStringKey = "Change destination"
     var onEdit: (UUID) -> Void
     var onAddStop: () -> Void
     /// Owned by the planner: the card leaves the screen while a search is open, and the list
@@ -187,7 +189,7 @@ struct PlannerStopsCard: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text("Change destination"))
+        .accessibilityLabel(Text(backLabel))
     }
 
     private var swapButton: some View {

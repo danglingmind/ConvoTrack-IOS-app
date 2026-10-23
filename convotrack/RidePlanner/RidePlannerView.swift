@@ -6,11 +6,21 @@ import CoreLocation
 /// route summary and the ride's details. The screen that hosts it supplies the primary action
 /// (Create ride / Save changes) and does the saving.
 struct RidePlannerView<PrimaryAction: View>: View {
+    enum Mode {
+        /// A new ride: Back from the route returns to the empty map, as in Google Maps.
+        case create
+        /// A saved ride: there's no empty map to go back to, so Back leaves the screen.
+        case edit
+    }
+
     @ObservedObject var model: RidePlannerModel
     let riderCap: Int
     let isPremium: Bool
+    var mode: Mode = .create
     var onUpgrade: () -> Void
     var onClose: () -> Void
+    /// Adds a ⋯ menu to the route summary with a destructive "Delete ride". Nil hides it.
+    var onDelete: (() -> Void)? = nil
     @ViewBuilder var primaryAction: PrimaryAction
 
     @State private var detent: DSMapSheetDetent = .low
@@ -166,7 +176,8 @@ struct RidePlannerView<PrimaryAction: View>: View {
         } else if model.hasDestination {
             PlannerStopsCard(
                 model: model,
-                onBack: { model.clearDestination() },
+                onBack: { mode == .edit ? onClose() : model.clearDestination() },
+                backLabel: mode == .edit ? "Back" : "Change destination",
                 onEdit: { openSearch($0) },
                 onAddStop: { if let id = model.addStop() { openSearch(id) } },
                 isExpanded: $stopsExpanded
@@ -351,9 +362,33 @@ struct RidePlannerView<PrimaryAction: View>: View {
     // With a destination: the route at a glance, the ride's name, and the primary action.
     private var routeHeader: some View {
         VStack(alignment: .leading, spacing: DS.Space.p3) {
-            routeSummaryBlock
+            HStack(alignment: .top, spacing: DS.Space.p2) {
+                routeSummaryBlock
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                moreMenu
+            }
             titleRow
             primaryAction
+        }
+    }
+
+    /// Destructive actions stay out of the way of the primary one: in a menu, behind a
+    /// confirmation the host presents.
+    @ViewBuilder
+    private var moreMenu: some View {
+        if let onDelete {
+            Menu {
+                Button("Delete ride", systemImage: "trash", role: .destructive, action: onDelete)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .dsIcon(DS.IconSize.md, weight: .semibold)
+                    .foregroundStyle(DS.Text.primary)
+                    .frame(width: 36, height: 36)
+                    .background(DS.Surface.field, in: Circle())
+                    .frame(width: DS.Target.minimum, height: DS.Target.minimum)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(Text("More"))
         }
     }
 

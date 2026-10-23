@@ -1,6 +1,6 @@
 # Create / Edit Ride — map-first redesign
 
-Status: phases 1–6 built on iOS (Create Ride only; Edit Ride still on the old form). iOS first, then the Android port (`convotrack-android` `ui/ride/CreateRideScreen.kt`, `EditRideScreen.kt`, `RouteForm.kt`).
+Status: phases 1–7 built on iOS (Create and Edit Ride on the planner; Edit not yet exercised against a real ride). iOS first, then the Android port (`convotrack-android` `ui/ride/CreateRideScreen.kt`, `EditRideScreen.kt`, `RouteForm.kt`).
 
 ## Thesis
 
