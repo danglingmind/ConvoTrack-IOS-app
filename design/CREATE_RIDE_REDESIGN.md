@@ -1,6 +1,6 @@
 # Create / Edit Ride — map-first redesign
 
-Status: phases 1–7 built on iOS and tested in the simulator against the live backend (create, edit: save, discard, delete). iOS first, then the Android port (`convotrack-android` `ui/ride/CreateRideScreen.kt`, `EditRideScreen.kt`, `RouteForm.kt`).
+Status: phases 1–8 built on iOS and tested in the simulator (phases 1–7 also against the live backend: create, edit save/discard/delete). Android port (phase 9) not started; Android navigation already understands route options. iOS first, then the Android port (`convotrack-android` `ui/ride/CreateRideScreen.kt`, `EditRideScreen.kt`, `RouteForm.kt`).
 
 ## Thesis
 
@@ -173,3 +173,27 @@ into a ⋯ menu at top right (destructive role, confirmation kept).
    maps-compose `contentPadding` for the logo; same model shape in the ViewModel.
 10. **Verification.** Build, run on the iPhone 17 simulator, walk create and edit, VoiceOver
     pass, largest Dynamic Type, Reduce Motion / Transparency.
+
+## Phase 8 notes
+
+- **Category chips** (Fuel · Food · Viewpoints) use Places API (New) `searchText`: under the
+  search pill they search around the map's centre; in a stop's search they search along the route
+  (`searchAlongRouteParameters`) and show each place's detour.
+- **Detours are traffic-free on both sides.** Places times its routing-summary legs without
+  traffic whatever `routingPreference` says (measured: identical figures either way), so the route
+  is re-timed traffic-free for the baseline. Against the planner's traffic-aware time every detour
+  read ~12 min short. Detours are shown only for a direct route (no stops between).
+- **Avoid highways / tolls** are planning options in the sheet. They are **not stored with the
+  ride** (the backend has no field), so:
+  - Navigation (iOS and Android) re-derives turns by also trying those options when the default
+    match fails (see CLAUDE.md, "Turns for a saved route"). Rides with stops between already have
+    no alternatives to match, so a route option there means "Follow route" with no turn prompts.
+  - Reopening Edit Ride starts with the options off and preselects the closest default
+    alternative; saving without re-enabling them can move the route back onto highways.
+  - A backend field (`routeAvoidances`) would fix both; worth adding with the Android port.
+- **Two-wheeler check (not adopted).** Routes API `TWO_WHEELER` works in India with alternatives
+  and traffic (Bangalore → Nandi Hills: 61.1 km NH 44 / 1h55 vs DRIVE 58.0 km Bellary Rd / 1h40,
+  three alternatives). Not switched on: navigation, the Android app and the backend's GPS snapping
+  all route as `DRIVE`, so a two-wheeler plan would hit the same turn-matching gap as route
+  options, on every ride. Adopt it everywhere at once (planner, both navigations, server snapping)
+  or not at all.

@@ -39,6 +39,10 @@ final class RidePlannerModel: ObservableObject {
 
     @Published var title = ""
     @Published var maxRiders = 5
+    /// Road types to keep off. Not stored with the ride: the route it produces is what's saved.
+    @Published var avoid: RouteAvoidances = .none {
+        didSet { if avoid != oldValue { recalculateRoute() } }
+    }
 
     // MARK: Stops
 
@@ -76,11 +80,13 @@ final class RidePlannerModel: ObservableObject {
         let title: String
         let maxRiders: Int
         let stops: [String]
+        let avoid: RouteAvoidances
     }
 
     private var snapshot: Snapshot {
         Snapshot(title: title.trimmingCharacters(in: .whitespaces), maxRiders: maxRiders,
-                 stops: stops.map { $0.isCurrentLocation ? "me" : ($0.place?.id ?? "") })
+                 stops: stops.map { $0.isCurrentLocation ? "me" : ($0.place?.id ?? "") },
+                 avoid: avoid)
     }
 
     /// Edit Ride: something differs from what was saved.
@@ -293,7 +299,7 @@ final class RidePlannerModel: ObservableObject {
         // Direct start → destination: offer the alternatives. Google returns none once there are
         // intermediate stops.
         if coords.count == 2,
-           let options = try? await GoogleDirectionsService.alternativeRoutes(from: coords[0], to: coords[1]) {
+           let options = try? await GoogleDirectionsService.alternativeRoutes(from: coords[0], to: coords[1], avoiding: avoid) {
             guard !Task.isCancelled else { return }
             if options.count > 1 {
                 routes = options
@@ -305,7 +311,7 @@ final class RidePlannerModel: ObservableObject {
         }
 
         do {
-            let result = try await GoogleDirectionsService.route(through: coords)
+            let result = try await GoogleDirectionsService.route(through: coords, avoiding: avoid)
             guard !Task.isCancelled else { return }
             routes = []
             bubbleAnchors = []

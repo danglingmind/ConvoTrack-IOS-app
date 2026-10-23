@@ -27,6 +27,10 @@ struct RidePlannerView<PrimaryAction: View>: View {
     /// The stop whose search is open.
     @State private var searchStopID: UUID?
     @State private var stopsExpanded = false
+    /// A category chip tapped on the empty map, handed to the search it opens.
+    @State private var searchCategory: PlaceCategory?
+    /// Where the camera last came to rest, so "near the map" means what's on screen.
+    @State private var mapTarget: CLLocationCoordinate2D?
     /// A pin the rider dropped with a long-press, waiting for them to say what it is.
     @State private var droppedPin: PlaceCandidate?
     /// The stop being placed by moving the map under a fixed pin ("Choose on map").
@@ -89,7 +93,12 @@ struct RidePlannerView<PrimaryAction: View>: View {
                         onCancel: {
                             model.discardIfEmpty(id)
                             closeSearch()
-                        }
+                        },
+                        searchCenter: mapTarget ?? model.userLocation?.coordinate,
+                        route: model.role(of: stop) == .stop && model.hasRoute ? model.routeCoordinates : [],
+                        measuresDetours: model.chosenStops.count == 2,
+                        avoid: model.avoid,
+                        initialCategory: searchCategory
                     )
                     .transition(.opacity)
                 }
@@ -187,7 +196,19 @@ struct RidePlannerView<PrimaryAction: View>: View {
         }
     }
 
+    /// The empty map's search, with the category chips under it.
     private var searchPill: some View {
+        VStack(alignment: .leading, spacing: DS.Space.p1) {
+            searchField
+            PlannerCategoryChips(selected: nil, onSelect: { category in
+                searchCategory = category
+                openSearch(model.destinationID)
+            }, onMap: true)
+            .padding(.horizontal, -DS.Space.p3)
+        }
+    }
+
+    private var searchField: some View {
         HStack(spacing: 0) {
             backButton(label: Text("Back"), action: onClose)
             Button { openSearch(model.destinationID) } label: {
@@ -449,18 +470,27 @@ struct RidePlannerView<PrimaryAction: View>: View {
     }
 
     /// Which route is selected, and, while there's a choice, how to change it.
-    /// Which route is selected and the road it takes.
+    /// Which route is selected and the road it takes, led by what it avoids.
     private var routeLabel: String {
+        let avoiding: String? = switch (model.avoid.highways, model.avoid.tolls) {
+        case (true, true):  String(localized: "No highways or tolls")
+        case (true, false): String(localized: "No highways")
+        case (false, true): String(localized: "No tolls")
+        default:            nil
+        }
         let stops = max(model.chosenStops.count - 2, 0)
+        var parts: [String] = []
+        if let avoiding { parts.append(avoiding) }
         if stops > 0 {
-            return stops == 1 ? String(localized: "Via 1 stop") : String(localized: "Via \(stops) stops")
+            parts.append(stops == 1 ? String(localized: "Via 1 stop") : String(localized: "Via \(stops) stops"))
+            return parts.joined(separator: " · ")
         }
         let selected = model.routes.indices.contains(model.selectedRouteIndex) ? model.routes[model.selectedRouteIndex] : nil
-        let which = selected.map(routeTag) ?? String(localized: "Best route")
+        parts.append(selected.map(routeTag) ?? String(localized: "Best route"))
         if let summary = selected?.summary {
-            return String(localized: "\(which) · via \(summary)")
+            parts.append(String(localized: "via \(summary)"))
         }
-        return which
+        return parts.joined(separator: " · ")
     }
 
     /// "Fastest route", or how much slower than the fastest.
@@ -507,6 +537,30 @@ struct RidePlannerView<PrimaryAction: View>: View {
                 }
             }
         }
+    }
+
+    private var routeOptions: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DSSectionHeading("Route options")
+                .padding(.bottom, DS.Space.p1)
+            routeOptionToggle("Avoid highways", systemImage: "road.lanes", isOn: $model.avoid.highways)
+            routeOptionToggle("Avoid tolls", systemImage: "banknote", isOn: $model.avoid.tolls)
+        }
+    }
+
+    private func routeOptionToggle(_ title: LocalizedStringKey, systemImage: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Label {
+                Text(title).dsText(.body).foregroundStyle(DS.Text.primary)
+            } icon: {
+                // One width for every icon, so the labels line up whatever the glyph's shape.
+                Image(systemName: systemImage).dsIcon(DS.IconSize.sm).foregroundStyle(DS.Text.muted)
+                    .frame(width: DS.IconSize.lg)
+            }
+        }
+        .tint(DS.Accent.base)
+        .frame(minHeight: DS.Target.minimum)
+        .overlay(alignment: .top) { DSDivider() }
     }
 
     private func routeRow(_ option: RouteOption, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -590,6 +644,7 @@ struct RidePlannerView<PrimaryAction: View>: View {
         VStack(alignment: .leading, spacing: DS.Space.p3) {
             DSDivider()
             routeList
+            routeOptions
             RiderLimitSection(maxRiders: $model.maxRiders, riderCap: riderCap, isPremium: isPremium,
                               onUpgrade: onUpgrade)
         }
@@ -682,6 +737,7 @@ struct RidePlannerView<PrimaryAction: View>: View {
     }
 
     private func mapCameToRest(at target: CLLocationCoordinate2D) {
+        mapTarget = target
         guard choosingStopID != nil else { return }
         mapCenter = PlaceCandidate(coordinate: target)
         lookUp(target, after: .milliseconds(250)) { place in
@@ -733,6 +789,7 @@ struct RidePlannerView<PrimaryAction: View>: View {
 
     private func closeSearch() {
         searchStopID = nil
+        searchCategory = nil
     }
 
     private func pick(_ place: PlaceResult, for id: UUID) {

@@ -157,6 +157,7 @@ These are implemented twice (iOS `RideNavigationView` / `Services/NavVoiceGuide.
 | Spoken after a siren | start after the siren's own length + 200 ms (`SirenPlayer.Sound.duration` / `durationMs`) |
 | Alert slot priority | emergency > group split > regroup called > regroup complete; "+N more" chip cycles the rest; off-route and reconnecting are a turn-card status line, not alerts |
 | Peek (Show / edge-chip tap) | camera flies to the point; follow camera returns after ~10 s of riding |
+| Turns for a saved route | the stored polyline is matched to an alternative's steps, trying in order: default traffic-aware, default traffic-unaware, then traffic-aware avoiding highways, tolls, both (the planner's route options aren't stored with the ride). Start-to-destination rides only; no match → no turns, "Follow route" |
 | Convoy gap | (my distance to goal − their distance to goal); "Level" within 25 m; shown only when both riders have posted a position (`hasPosition`), otherwise "--" |
 | Arrival | device clock + time left; 12/24 h from the system setting (Android) / locale (iOS); "42m left" beneath |
 | Live Activity / notification updates | at most one per 5 s, immediately on a step change or an emergency start/end |

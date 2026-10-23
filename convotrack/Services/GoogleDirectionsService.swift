@@ -33,6 +33,31 @@ struct RouteOption: Identifiable {
     var summary: String? = nil
 }
 
+/// Road types the leader asked to keep off (Routes API `routeModifiers`). Riders often want the
+/// smaller road for its own sake, so these are planning options, not just cost savers.
+struct RouteAvoidances: Equatable {
+    var highways = false
+    var tolls = false
+
+    static let none = RouteAvoidances()
+
+    var isEmpty: Bool { !highways && !tolls }
+
+    /// The `routeModifiers` object, or nil when nothing is avoided.
+    var requestValue: [String: Bool]? {
+        guard !isEmpty else { return nil }
+        return ["avoidHighways": highways, "avoidTolls": tolls]
+    }
+
+    /// Navigation's fallback order when the saved route doesn't match a default alternative: the
+    /// leader may have planned it with any of these (the choice itself isn't stored with the ride).
+    static let matchingFallbacks: [RouteAvoidances] = [
+        RouteAvoidances(highways: true),
+        RouteAvoidances(tolls: true),
+        RouteAvoidances(highways: true, tolls: true)
+    ]
+}
+
 // MARK: - Service
 
 enum GoogleDirectionsService {
@@ -104,7 +129,8 @@ enum GoogleDirectionsService {
     /// Google returns no alternatives once intermediates are present, so this has none either.
     static func route(
         through stops: [CLLocationCoordinate2D],
-        trafficAware: Bool = true
+        trafficAware: Bool = true,
+        avoiding avoidances: RouteAvoidances = .none
     ) async throws -> DirectionsResult {
         guard let origin = stops.first, let destination = stops.last, stops.count >= 2 else {
             throw URLError(.badURL)
@@ -136,6 +162,7 @@ enum GoogleDirectionsService {
         ]
         let middle = stops.dropFirst().dropLast()
         if !middle.isEmpty { body["intermediates"] = middle.map(waypoint) }
+        if let modifiers = avoidances.requestValue { body["routeModifiers"] = modifiers }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, urlResponse) = try await URLSession.shared.data(for: request)
@@ -178,7 +205,8 @@ enum GoogleDirectionsService {
     static func alternativeRoutesWithSteps(
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D,
-        trafficAware: Bool = true
+        trafficAware: Bool = true,
+        avoiding avoidances: RouteAvoidances = .none
     ) async throws -> [DirectionsResult] {
         let url = URL(string: "https://routes.googleapis.com/directions/v2:computeRoutes")!
         var request = URLRequest(url: url)
@@ -192,7 +220,7 @@ enum GoogleDirectionsService {
             forHTTPHeaderField: "X-Goog-FieldMask"
         )
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "origin": [
                 "location": ["latLng": ["latitude": origin.latitude, "longitude": origin.longitude]]
             ],
@@ -206,6 +234,7 @@ enum GoogleDirectionsService {
             "languageCode": "en-US",
             "units": "METRIC"
         ]
+        if let modifiers = avoidances.requestValue { body["routeModifiers"] = modifiers }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, urlResponse) = try await URLSession.shared.data(for: request)
@@ -244,7 +273,8 @@ enum GoogleDirectionsService {
     static func alternativeRoutes(
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D,
-        trafficAware: Bool = true
+        trafficAware: Bool = true,
+        avoiding avoidances: RouteAvoidances = .none
     ) async throws -> [RouteOption] {
         let url = URL(string: "https://routes.googleapis.com/directions/v2:computeRoutes")!
         var request = URLRequest(url: url)
@@ -258,7 +288,7 @@ enum GoogleDirectionsService {
             forHTTPHeaderField: "X-Goog-FieldMask"
         )
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "origin": [
                 "location": ["latLng": ["latitude": origin.latitude, "longitude": origin.longitude]]
             ],
@@ -272,6 +302,7 @@ enum GoogleDirectionsService {
             "languageCode": "en-US",
             "units": "METRIC"
         ]
+        if let modifiers = avoidances.requestValue { body["routeModifiers"] = modifiers }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, urlResponse) = try await URLSession.shared.data(for: request)

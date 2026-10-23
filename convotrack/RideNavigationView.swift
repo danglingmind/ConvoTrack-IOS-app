@@ -1489,14 +1489,21 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// noon. TRAFFIC_UNAWARE is the time-invariant road-network set, so it is the stable second
     /// chance. The cost is one extra Routes API call, and only on rides that would otherwise lose
     /// their turn guidance entirely.
+    ///
+    /// Then the route options the planner offers (avoid highways, tolls, both), traffic-aware: the
+    /// leader may have planned with one, and which one isn't stored with the ride. Up to three more
+    /// calls, still only on a ride with no match so far. Android tries the same passes in the same
+    /// order (`RideMapHelpers.alternativeMatching`).
     private static func alternativeMatching(
         _ stored: [CLLocationCoordinate2D],
         from origin: CLLocationCoordinate2D,
         to destination: CLLocationCoordinate2D
     ) async -> DirectionsResult? {
-        for trafficAware in [true, false] {
+        let passes: [(trafficAware: Bool, avoiding: RouteAvoidances)] =
+            [(true, .none), (false, .none)] + RouteAvoidances.matchingFallbacks.map { (true, $0) }
+        for pass in passes {
             guard let options = try? await GoogleDirectionsService.alternativeRoutesWithSteps(
-                from: origin, to: destination, trafficAware: trafficAware
+                from: origin, to: destination, trafficAware: pass.trafficAware, avoiding: pass.avoiding
             ) else { continue }
             let scored = options
                 .filter { !$0.steps.isEmpty }
