@@ -170,3 +170,41 @@ the user id, and measure on `subscription_activated` distinct users, not `paywal
   needs localized copy in all 50 locales.
 - Not yet checked against a live PostHog project: no key has been set. Backend payload shape was
   verified against a local mock; both apps build.
+
+## Meta app events (ad attribution)
+
+Separate from PostHog: these exist so Meta ads can be attributed and optimised for something
+better than installs. iOS `Services/MetaEvents.swift`, Android `data/analytics/MetaEvents.kt`;
+keep the two in step. Uses the official SDKs (`FacebookCore` 18.1.1 via SPM, `facebook-core`
+18.3.0 via Gradle). No user data is sent to Meta.
+
+| Meta event | When | Params |
+| --- | --- | --- |
+| install / `fb_mobile_activate_app` | logged by the SDK itself | — |
+| `fb_mobile_complete_registration` | first successful sign-in on the install (once per install) | `fb_registration_method` |
+| `ride_created` (custom) | `POST /rides` succeeded | — |
+| `ride_joined` (custom) | `POST /rides/:id/join` succeeded (not the "already joined" path) | — |
+| `StartTrial` / `Subscribe` | store purchase verified; `StartTrial` when the offer opens with a free phase | value = plan price, `fb_currency`, `fb_content_id` = product id |
+
+**Turning it on**
+
+1. Create the app in Meta for Developers, add the iOS (`danglingmind.convotrack`) and Android
+   (`com.danglingmind.convotrack`) platforms, and link it to the ad account.
+2. Keys: iOS `MetaEvents.appID` / `MetaEvents.clientToken`; Android `META_APP_ID` /
+   `META_CLIENT_TOKEN` in `local.properties`. Both are public. Empty = off.
+3. In the Meta app dashboard turn **off** "Log in-app events automatically": purchases are
+   logged by hand, so leaving it on counts every subscription twice.
+4. iOS: configure the AEM / SKAdNetwork conversion schema in Events Manager (put `ride_created`
+   and `StartTrial` high).
+
+Same gates as PostHog: off in debug builds (unless `-analyticsDebug YES` on iOS /
+`Analytics.debugEnabled` on Android) and when `Analytics.isOptedOut`. The Android SDK is never
+started by its own init provider (removed in the manifest); `MetaEvents.start` is the only entry.
+
+**Tracking consent.** iOS asks for App Tracking Transparency the first time the main tabs appear.
+Declined = no IDFA; Meta still attributes through SKAdNetwork / AEM, delayed and aggregated.
+Android adds the `AD_ID` permission (from the SDK).
+
+**Store paperwork this creates:** App Store privacy labels gain "Identifiers → Device ID" and
+"Usage data → Advertising data", both used for tracking (third-party advertising). The Play Data
+Safety form gains "Device or other IDs" shared for advertising. Update the privacy policy to name Meta.

@@ -1,5 +1,5 @@
 {
-  "originHash" : "d744e835bde7f73ce0c7d31593eca02e9327c26d4dedaddac1698baabbc9266e",
+  "originHash" : "376250770dcb65c43c2dbd3870f839b3d7129662b063966d187b53a9e4c61f95",
   "pins" : [
     {
       "identity" : "clerk-ios",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "13f3c9214ccca777e97c12273fa720fc3ee69391",
         "version" : "1.1.5"
+      }
+    },
+    {
+      "identity" : "facebook-ios-sdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/facebook/facebook-ios-sdk",
+      "state" : {
+        "revision" : "80d0ee82f6370d1bace1431a80cb80575f98ee90",
+        "version" : "18.1.1"
       }
     },
     {

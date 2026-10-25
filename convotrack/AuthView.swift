@@ -226,6 +226,7 @@ struct AuthView: View {
                 // where they were, still needing the chooser next time.
                 WebSignInSession.needsAccountChoice = false
                 Analytics.capture(.signInSucceeded, ["method": "google"])
+                MetaEvents.signedIn(method: "google")
                 finishAuth()
             } catch {
                 Analytics.capture(.signInFailed, ["method": "google"])
@@ -243,6 +244,7 @@ struct AuthView: View {
             do {
                 try await clerk.auth.signInWithApple()
                 Analytics.capture(.signInSucceeded, ["method": "apple"])
+                MetaEvents.signedIn(method: "apple")
                 finishAuth()
             } catch {
                 Analytics.capture(.signInFailed, ["method": "apple"])

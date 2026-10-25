@@ -142,6 +142,7 @@ final class MembershipStore: ObservableObject {
             // JWS must be read from VerificationResult before unwrapping
             let jws = verification.jwsRepresentation
             let transaction = try checkVerified(verification)
+            MetaEvents.subscribed(product, transaction: transaction)
             let confirmed = await activateOnServer(jws: jws)
             if confirmed { await transaction.finish() }
             await refreshServerState()

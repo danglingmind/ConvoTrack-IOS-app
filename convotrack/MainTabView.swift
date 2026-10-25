@@ -56,6 +56,8 @@ struct MainTabView: View {
         .tint(DS.Accent.base)
         .onChange(of: activeTab, initial: true) { _, tab in Analytics.screen("tab_\(tab)") }
         .onChange(of: membershipStore.access, initial: true) { _, access in Analytics.setAccess(access) }
+        // Signed in and past onboarding: the earliest point the prompt has context to make sense.
+        .task { MetaEvents.requestTrackingIfNeeded() }
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
         .environmentObject(appState)

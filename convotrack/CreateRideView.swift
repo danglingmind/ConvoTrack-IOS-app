@@ -80,6 +80,7 @@ struct CreateRideView: View {
 
         do {
             let response = try await APIClient.shared.createRide(body)
+            MetaEvents.rideCreated()
             // Seed the full ride BEFORE flipping `currentRideId` — that assignment is what
             // pushes the lobby, and the lobby, the home Active Ride card and the navigation
             // screen all read `currentRide` on their first frame. Leaving it nil there is what

@@ -10,6 +10,7 @@
 		9C47705E2FECD25500056F38 /* GoogleMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 9C47705D2FECD25500056F38 /* GoogleMaps */; };
 		9CF0CB9C2FD0954300B3CF92 /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9CF0CB9B2FD0954300B3CF92 /* ClerkKit */; };
 		9CF0CB9F2FD095A100B3CF92 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = 9CF0CB9E2FD095A100B3CF92 /* SocketIO */; };
+		9CFB00032FF0A00000000003 /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9CFB00022FF0A00000000002 /* FacebookCore */; };
 		BB0000000000000000000001 /* ConvoTrackWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* ConvoTrackWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -91,6 +92,7 @@
 				9CF0CB9C2FD0954300B3CF92 /* ClerkKit in Frameworks */,
 				9CF0CB9F2FD095A100B3CF92 /* SocketIO in Frameworks */,
 				9C47705E2FECD25500056F38 /* GoogleMaps in Frameworks */,
+				9CFB00032FF0A00000000003 /* FacebookCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -149,6 +151,7 @@
 				9CF0CB9B2FD0954300B3CF92 /* ClerkKit */,
 				9CF0CB9E2FD095A100B3CF92 /* SocketIO */,
 				9C47705D2FECD25500056F38 /* GoogleMaps */,
+				9CFB00022FF0A00000000002 /* FacebookCore */,
 			);
 			productName = convotrack;
 			productReference = 9CF0CB642FC7603A00B3CF92 /* convotrack.app */;
@@ -208,6 +211,7 @@
 				9CF0CB9A2FD0954300B3CF92 /* XCRemoteSwiftPackageReference "clerk-ios" */,
 				9CF0CB9D2FD095A100B3CF92 /* XCRemoteSwiftPackageReference "socket" */,
 				9C47705C2FECD25500056F38 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */,
+				9CFB00012FF0A00000000001 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9CF0CB652FC7603A00B3CF92 /* Products */;
@@ -551,6 +555,14 @@
 				kind = branch;
 			};
 		};
+		9CFB00012FF0A00000000001 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/facebook/facebook-ios-sdk";
+			requirement = {
+				kind = exactVersion;
+				version = 18.1.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -568,6 +580,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9CF0CB9D2FD095A100B3CF92 /* XCRemoteSwiftPackageReference "socket" */;
 			productName = SocketIO;
+		};
+		9CFB00022FF0A00000000002 /* FacebookCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9CFB00012FF0A00000000001 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */;
+			productName = FacebookCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

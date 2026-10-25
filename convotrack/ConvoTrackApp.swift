@@ -66,6 +66,12 @@ enum DeepLinkRouter {
 final class ConvoTrackAppDelegate: NSObject, UIApplicationDelegate {
     static var landscapeAllowed = false
 
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        MetaEvents.start(application, launchOptions: launchOptions)
+        return true
+    }
+
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         Self.landscapeAllowed ? [.portrait, .landscapeLeft, .landscapeRight] : .portrait
     }
