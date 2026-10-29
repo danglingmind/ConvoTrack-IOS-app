@@ -1,0 +1,279 @@
+<!doctype html>
+<!--
+  ConvoTrack ad creative — one parametrised canvas for feed (1080x1350), square (1080x1080)
+  and story (1080x1920). Driven entirely by the query string so scripts/render.sh can stamp
+  out every size from one brief. Real app screenshots are framed, never redrawn.
+
+  Params: size=feed|square|story  shot=<file url>  eyebrow=  h1=  sub=  chip=  chipk=  chipi=
+          look=dark|sat  bg=<file url, satellite image for look=sat>
+          scale=std|xl   (xl = hero phone, elevated, cropped hard by the canvas edge)
+          pin=<fx,fy>    (point on the SCREENSHOT, 0..1, that the chip explains: gets a lime
+                          ring and a leader line from the chip)
+          tilt=<deg>  shift=<px>  chipdx=  chipdy=  layout=stack|split
+          ("|" in h1 = line break, *word* = lime)
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    /* Mirrors convotrack/DesignSystem/Tokens.swift (DS.Accent / DS.Text), not CLAUDE.md. */
+    --bg: #090B0D;
+    --lime: #CDEF1E;
+    --on-accent: #0C0E02;
+    --text: #F5F7FA;
+    --muted: #B4B9C1;
+    --danger: #FBB0A9;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); overflow: hidden; }
+  body { font-family: system-ui, -apple-system, "SF Pro Display", sans-serif; color: var(--text); }
+
+  .stage { position: relative; overflow: hidden;
+    background:
+      radial-gradient(520px 520px at var(--gx, 50%) var(--gy, 70%), rgba(205,239,30,0.20), transparent 70%),
+      radial-gradient(1400px 1000px at 50% 40%, #14181B 0%, var(--bg) 60%, #040506 100%); }
+  svg.road { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  /* ---- satellite look: real imagery, graded so white/lime type stays readable ---- */
+  .sat, .scrim { position: absolute; inset: 0; display: none; }
+  body[data-look="sat"] .sat, body[data-look="sat"] .scrim { display: block; }
+  body[data-look="sat"] svg.road { display: none; }
+  .sat { background-size: cover; background-position: center;
+    filter: saturate(1.05) brightness(0.98) contrast(1.06); }
+  /* Dark at the top for the headline, clear through the middle so the road reads, a soft
+     vignette so the eye lands on the phone. */
+  .scrim { background:
+      linear-gradient(180deg, rgba(5,7,8,0.92) 0%, rgba(5,7,8,0.74) var(--scrim-solid, 26%), rgba(5,7,8,0.0) var(--scrim-clear, 50%), rgba(5,7,8,0.18) 100%),
+      radial-gradient(130% 90% at 50% 60%, transparent 60%, rgba(0,0,0,0.40) 100%); }
+
+  /* Imagery credit (Apple Maps snapshot). Small and quiet, but present. */
+  /* Bottom-left: the hero phone sits right of centre, so this corner is always map, never the
+     screenshot (a credit on the screen would read as app UI). */
+  .credit { position: absolute; z-index: 7; left: 24px; bottom: var(--credit-bottom, 18px); display: none;
+    font-size: 15px; letter-spacing: 0.3px; color: rgba(255,255,255,0.62); text-shadow: 0 1px 6px rgba(0,0,0,0.9); }
+  body[data-look="sat"] .credit { display: block; }
+  /* Story: keep it above the bottom UI overlay. */
+  body[data-size="story"] .stage { --credit-bottom: 392px; }
+
+  /* ---- copy ---- */
+  .copy { position: absolute; left: var(--pad); right: var(--pad); top: var(--copy-top); z-index: 5; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 700;
+    letter-spacing: 5px; text-transform: uppercase; color: var(--lime); padding: 12px 22px 12px 16px;
+    border-radius: 999px; background: rgba(205,239,30,0.10); border: 1.5px solid rgba(205,239,30,0.35);
+    margin-bottom: 30px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .eyebrow i { width: 12px; height: 12px; border-radius: 50%; background: var(--lime);
+    box-shadow: 0 0 0 6px rgba(205,239,30,0.20), 0 0 18px var(--lime); }
+  .h1 { margin: 0; font-size: var(--h1); line-height: 0.95; font-weight: 900; letter-spacing: -0.035em;
+    font-variation-settings: "wdth" 125; font-stretch: 125%; text-shadow: 0 4px 30px rgba(0,0,0,0.5); }
+  .h1 em { font-style: normal; color: var(--lime); text-shadow: 0 0 50px rgba(205,239,30,0.45); }
+  .sub { margin: 26px 0 0; font-size: 34px; line-height: 1.32; color: var(--muted); max-width: 820px; }
+  body[data-look="sat"] .sub { color: #D5D9DF; text-shadow: 0 2px 16px rgba(0,0,0,0.8); }
+
+  /* ---- device ---- */
+  /* Screen is exactly 1206:2622 so the screenshot is never stretched. */
+  .phone { position: absolute; z-index: 3; left: var(--phone-left, 50%); top: var(--phone-top);
+    width: var(--phone-w); height: calc(var(--phone-w) * 2.1745 + 22px);
+    margin-left: calc(var(--phone-w) / -2); padding: 11px; border-radius: calc(var(--phone-w) * 0.142);
+    transform: rotate(var(--tilt, -5deg)); transform-origin: 50% 0;
+    background: linear-gradient(145deg, #4A4D50, #17191B 38%, #2A2D30 70%, #0E0F10);
+    box-shadow: 0 0 0 2px #5A5E62 inset, -30px 50px 110px rgba(0,0,0,0.85), 0 0 0 1.5px rgba(205,239,30,0.28); }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: calc(var(--phone-w) * 0.122);
+    overflow: hidden; background: #000; }
+  .screen img { display: block; width: 100%; height: 100%; }
+  .screen .marker { position: absolute; width: 2px; height: 2px; margin: -1px 0 0 -1px; }
+  /* Glass glare across the screen: sells a physical device. */
+  .screen::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(115deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 28%, transparent 40%); }
+
+  /* Elevated (xl): the phone floats above the map. A soft 3D tilt plus two shadows: a tight
+     contact shadow and a long, offset ground shadow on the map, as if lit from the top left. */
+  body[data-scale="xl"] .phone {
+    transform: perspective(2600px) rotateX(7deg) rotateY(-9deg) rotateZ(var(--tilt, -4deg));
+    box-shadow:
+      0 0 0 2px #6A6E72 inset, 0 0 0 1px rgba(255,255,255,0.10),
+      0 0 0 2px rgba(205,239,30,0.35), 0 0 90px rgba(205,239,30,0.22),
+      0 18px 30px rgba(0,0,0,0.55), 0 60px 90px rgba(0,0,0,0.55); }
+  /* Cast shadow on the map, thrown down-left (light from the top right) so it lands on the
+     visible map beside the phone: the gap between phone and shadow is what reads as height. */
+  .ground { position: absolute; z-index: 2; display: none; pointer-events: none;
+    left: calc(var(--phone-left, 50%) - var(--phone-w) / 2 - 80px); top: calc(var(--phone-top) + 130px);
+    width: var(--phone-w); height: calc(var(--phone-w) * 2.2); border-radius: 120px;
+    background: rgba(0,0,0,0.78); filter: blur(46px); transform: rotate(var(--tilt, -4deg)); }
+  body[data-scale="xl"] .ground { display: block; }
+
+  /* ---- feature card (chip) ---- */
+  .chip { position: absolute; z-index: 6; display: flex; align-items: center; gap: 18px;
+    left: var(--chip-left); top: var(--chip-top); padding: 18px 28px 18px 18px; border-radius: 26px;
+    background: rgba(22,28,33,0.78); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    border: 1.5px solid rgba(255,255,255,0.12); box-shadow: 0 24px 60px rgba(0,0,0,0.6); }
+  .chip .ic { width: 64px; height: 64px; border-radius: 18px; background: var(--lime); flex: none;
+    display: grid; place-items: center; box-shadow: 0 0 28px rgba(205,239,30,0.45); }
+  .chip .k { font-size: 17px; font-weight: 700; letter-spacing: 3.5px; text-transform: uppercase; color: var(--lime); }
+  .chip .v { font-size: 30px; font-weight: 800; line-height: 1.1; }
+  .chip.danger .ic { background: var(--danger); box-shadow: 0 0 28px rgba(251,176,169,0.45); }
+  /* Rider icon (chipi=rider): the app's map rider marker, drawn as a vector at card size so it
+     stays sharp: name tag above, lime-ringed initial disc, live distance below. Mirrors the
+     live-nav marker styling (white heavy caps tag, dark disc, lime ring, lime mono distance). */
+  .rider { display: none; flex: none; flex-direction: column; align-items: center; gap: 7px; }
+  .chip.has-rider .ic { display: none; }
+  .chip.has-rider .rider { display: flex; }
+  .rider .nm { font-size: 16px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase;
+    color: #F5F7FA; background: rgba(38,40,42,0.92); padding: 3px 9px; border-radius: 8px; }
+  .rider .mk { width: 62px; height: 62px; border-radius: 50%; background: #1E1F20; display: grid;
+    place-items: center; font-size: 28px; font-weight: 500; color: #F5F7FA;
+    box-shadow: 0 0 0 4px #CDEF1E, 0 0 0 7px rgba(0,0,0,0.55), 0 0 26px rgba(205,239,30,0.45); }
+  .rider .ds { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 17px; font-weight: 600;
+    color: #CDEF1E; background: rgba(38,40,42,0.92); padding: 3px 9px; border-radius: 8px; }
+  body[data-scale="xl"] .rider { gap: 9px; }
+  body[data-scale="xl"] .rider .nm { font-size: 19px; padding: 4px 11px; }
+  body[data-scale="xl"] .rider .mk { width: 82px; height: 82px; font-size: 36px;
+    box-shadow: 0 0 0 5px #CDEF1E, 0 0 0 9px rgba(0,0,0,0.55), 0 0 32px rgba(205,239,30,0.45); }
+  body[data-scale="xl"] .rider .ds { font-size: 21px; padding: 4px 11px; }
+  body[data-scale="xl"] .chip.has-rider { gap: 28px; padding: 22px 36px 22px 26px; }
+  .chip.danger .k { color: var(--danger); }
+  /* xl: the card is a hero element too: larger, lime-rimmed, glowing, on solid glass. */
+  body[data-scale="xl"] .chip { gap: 22px; padding: 24px 34px 24px 24px; border-radius: 32px;
+    background: rgba(10,14,17,0.90); border: 2px solid rgba(205,239,30,0.65);
+    box-shadow: 0 0 0 6px rgba(205,239,30,0.10), 0 0 70px rgba(205,239,30,0.30), 0 30px 70px rgba(0,0,0,0.7); }
+  body[data-scale="xl"] .chip .ic { width: 84px; height: 84px; border-radius: 22px; }
+  body[data-scale="xl"] .chip .ic svg { width: 48px; height: 48px; }
+  body[data-scale="xl"] .chip .k { font-size: 20px; letter-spacing: 4px; margin-bottom: 4px; }
+  body[data-scale="xl"] .chip .v { font-size: 38px; }
+  svg.callout { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; overflow: visible; }
+
+  /* ---- size presets ----
+     Story: Instagram/Facebook overlay the top ~14% (≈250 px) and bottom ~20% (≈380 px), so
+     copy starts below 270 px and nothing essential sits in the bottom 380 px.
+     Chips sit below the phone's top UI (nav card + rider strip) on the empty map, 640 px from the
+     left so a ~22-character chip ends ≥ 60 px inside the right edge. */
+  body[data-size="feed"]   .stage { width: 1080px; height: 1350px; --pad: 72px; --copy-top: 84px;  --h1: 112px; --phone-w: 520px; --phone-top: 640px; --chip-left: 640px; --chip-top: 1010px; }
+  body[data-size="square"] .stage { width: 1080px; height: 1080px; --pad: 64px; --copy-top: 64px;  --h1: 92px;  --phone-w: 430px; --phone-top: 560px; --chip-left: 640px; --chip-top: 850px; }
+  body[data-size="story"]  .stage { width: 1080px; height: 1920px; --pad: 72px; --copy-top: 280px; --h1: 112px; --phone-w: 560px; --phone-top: 900px; --chip-left: 640px; --chip-top: 1290px; }
+  /* xl: hero phone ~60-70% of the canvas width, right of centre and cropped by the bottom edge,
+     so the map (road) shows on the left and leads the eye into it; the card overlaps the phone's
+     left edge from the map side, below the screenshot's top UI. */
+  body[data-scale="xl"][data-size="feed"]   .stage { --phone-w: 650px; --phone-top: 560px; --phone-left: 64%; --chip-left: 30px; --chip-top: 1160px; --scrim-solid: 28%; --scrim-clear: 46%; }
+  body[data-scale="xl"][data-size="square"] .stage { --phone-w: 540px; --phone-top: 470px; --phone-left: 64%; --chip-left: 26px; --chip-top: 900px; --scrim-solid: 32%; --scrim-clear: 52%; }
+  body[data-scale="xl"][data-size="story"]  .stage { --phone-w: 760px; --phone-top: 720px; --phone-left: 63%; --chip-left: 24px; --chip-top: 1330px; --scrim-solid: 28%; --scrim-clear: 42%; }
+  /* split: copy left, phone right — suits square and wide crops */
+  body[data-layout="split"][data-size="square"] .copy { right: 520px; }
+  body[data-layout="split"][data-size="square"] .stage { --h1: 84px; --phone-left: 790px; --phone-top: 120px; --phone-w: 400px; --chip-left: 64px; --chip-top: 800px; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="sat" id="sat"></div>
+  <div class="scrim"></div>
+  <div class="credit" id="credit">Imagery: Apple Maps</div>
+  <svg class="road" id="road" viewBox="0 0 1080 1920" preserveAspectRatio="none"></svg>
+  <div class="copy">
+    <div class="eyebrow" id="eyebrow"><i></i><span></span></div>
+    <h1 class="h1" id="h1"></h1>
+    <p class="sub" id="sub"></p>
+  </div>
+  <div class="ground"></div>
+  <div class="phone"><div class="screen"><img id="shot" alt=""><div class="marker" id="marker"></div></div></div>
+  <svg class="callout" id="callout"></svg>
+  <div class="chip" id="chip"><div class="ic"><svg id="chipsvg" viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#0C0E02" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></svg></div><div class="rider"><span class="nm" id="rnm"></span><span class="mk" id="rmk"></span><span class="ds" id="rds"></span></div><div><div class="k" id="chipk"></div><div class="v" id="chipv"></div></div></div>
+</div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const size = q.get('size') || 'feed';
+  document.body.dataset.size = size;
+  document.body.dataset.layout = q.get('layout') || 'stack';
+  document.body.dataset.look = q.get('look') || 'dark';
+  document.body.dataset.scale = q.get('scale') || 'std';
+  if (q.get('bg')) document.getElementById('sat').style.backgroundImage = `url("${q.get('bg')}")`;
+  const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const h1 = esc(q.get('h1') || '').split('|').map(l => l.replace(/\*(.+?)\*/g, '<em>$1</em>')).join('<br>');
+  document.getElementById('h1').innerHTML = h1;
+  const eb = q.get('eyebrow'); const ebEl = document.getElementById('eyebrow');
+  if (eb) ebEl.querySelector('span').textContent = eb; else ebEl.remove();
+  const sub = q.get('sub'); const subEl = document.getElementById('sub');
+  if (sub) subEl.textContent = sub; else subEl.remove();
+  const chip = q.get('chip'); const chipEl = document.getElementById('chip');
+  if (chip) { document.getElementById('chipk').textContent = q.get('chipk') || ''; document.getElementById('chipv').textContent = chip; } else chipEl.remove();
+  // Simple line icons for the chip (dark on lime). Pick with chipi=people|gap|alert|link|flag.
+  const icons = {
+    people: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14.2c2.4.2 4 2 4 4.8"/>',
+    gap:    '<path d="M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4"/>',
+    alert:  '<path d="M12 3 2.5 20h19L12 3z"/><path d="M12 10v4.5M12 17.5v.1"/>',
+    link:   '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    flag:   '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>'
+  };
+  document.getElementById('chipsvg').innerHTML = icons[q.get('chipi')] || icons.people;
+  if (q.get('chipi') === 'alert') chipEl.classList.add('danger');
+  // chipi=rider + rider=NAME,INITIAL,DISTANCE (e.g. "Meera,M,280 m"): the card's icon becomes
+  // that rider's map marker.
+  if (q.get('chipi') === 'rider' && q.get('rider')) {
+    const [rn, ri, rd] = q.get('rider').split(',').map(x => x.trim());
+    document.getElementById('rnm').textContent = rn || '';
+    document.getElementById('rmk').textContent = ri || (rn || '?')[0];
+    // riderimg=<file url>: the rider's profile photo in the disc, as the app shows a rider with
+    // a photo (aspect-fill, ring on top). Same portrait as composited into the screenshot.
+    if (q.get('riderimg')) {
+      const mk = document.getElementById('rmk');
+      mk.textContent = '';
+      Object.assign(mk.style, { backgroundImage: `url("${q.get('riderimg')}")`,
+        backgroundSize: 'cover', backgroundPosition: '50% 38%' });
+    }
+    document.getElementById('rds').textContent = rd || '';
+    if (!rd) document.getElementById('rds').remove();
+    chipEl.classList.add('has-rider');
+  }
+  // Per-brief nudges (px, applied after the size preset) for screenshots whose key content would
+  // otherwise land in a cropped or overlaid zone.
+  const num = k => parseFloat(q.get(k) || '0') || 0;
+  const stage = document.getElementById('stage');
+  const cs = getComputedStyle(stage);
+  const phone = document.querySelector('.phone');
+  const ground = document.querySelector('.ground');
+  phone.style.top = (parseFloat(cs.getPropertyValue('--phone-top')) + num('shift')) + 'px';
+  ground.style.top = (parseFloat(cs.getPropertyValue('--phone-top')) + num('shift') + 130) + 'px';
+  if (chip) {
+    chipEl.style.left = (parseFloat(cs.getPropertyValue('--chip-left')) + num('chipdx')) + 'px';
+    chipEl.style.top = (parseFloat(cs.getPropertyValue('--chip-top')) + num('chipdy')) + 'px';
+    // Keep tall cards (e.g. the rider icon) inside the safe area: above the image-credit line on
+    // feed/square, above the Stories bottom overlay (≈380 px) on story.
+    const H = ({feed: 1350, square: 1080, story: 1920})[size];
+    const maxBottom = size === 'story' ? H - 436 : H - 56;   // story credit sits at ≈ H-392
+    const over = chipEl.offsetTop + chipEl.offsetHeight - maxBottom;
+    if (over > 0) chipEl.style.top = (chipEl.offsetTop - over) + 'px';
+  }
+  document.getElementById('shot').src = q.get('shot') || '';
+  if (q.get('tilt')) { phone.style.setProperty('--tilt', q.get('tilt') + 'deg'); ground.style.setProperty('--tilt', q.get('tilt') + 'deg'); }
+
+  // Callout: a dotted leader from the card to the highlighted element on the screenshot. The
+  // element itself is highlighted IN the screenshot (e.g. scripts/recolor_ring.swift turns the
+  // rider's marker ring orange), never by shapes drawn over it.
+  //   pin=<fx,fy>  centre of the element, fractions of the screenshot's width/height
+  //   pinr=<marker radius as a fraction of the screenshot width, default 0.031 = rider marker>
+  // The marker lives inside the transformed screen, so its on-canvas position includes the tilt.
+  const pin = (q.get('pin') || '').split(',').map(parseFloat);
+  if (chip && pin.length === 2 && pin.every(n => !isNaN(n))) {
+    const m = document.getElementById('marker');
+    m.style.left = (pin[0] * 100) + '%'; m.style.top = (pin[1] * 100) + '%';
+    const s = stage.getBoundingClientRect(), r = m.getBoundingClientRect(), c = chipEl.getBoundingClientRect();
+    const px = r.left - s.left, py = r.top - s.top;
+    const xl = document.body.dataset.scale === 'xl';
+    const R = document.querySelector('.screen').offsetWidth * parseFloat(q.get('pinr') || '0.031') + 8;
+    const cx = (px < c.left - s.left ? c.left : c.right) - s.left, cy = c.top - s.top + c.height / 2;
+    const ang = Math.atan2(cy - py, cx - px);
+    const ex = px + Math.cos(ang) * R, ey = py + Math.sin(ang) * R;
+    document.getElementById('callout').innerHTML = `
+      <line x1="${ex}" y1="${ey}" x2="${cx}" y2="${cy}" stroke="#CDEF1E" stroke-width="${xl ? 4 : 3}" stroke-dasharray="2 12" stroke-linecap="round"/>
+      <circle cx="${cx}" cy="${cy}" r="${xl ? 8 : 6}" fill="#CDEF1E"/>`;
+  }
+
+  // Glowing lime road ribbon behind the phone (dark look only; the brand motif from the App Store header).
+  const road = document.getElementById('road');
+  const h = ({feed: 1350, square: 1080, story: 1920})[size];
+  road.setAttribute('viewBox', `0 0 1080 ${h}`);
+  const y = h * 0.78;
+  road.innerHTML = `
+    <path d="M-40 ${y+120} C 260 ${y-60}, 560 ${y+200}, 1120 ${y-90}" fill="none" stroke="rgba(205,239,30,0.16)" stroke-width="64" stroke-linecap="round"/>
+    <path d="M-40 ${y+120} C 260 ${y-60}, 560 ${y+200}, 1120 ${y-90}" fill="none" stroke="#CDEF1E" stroke-width="7" stroke-dasharray="46 30" stroke-linecap="round" opacity="0.9"/>`;
+</script>
+</body>
+</html>

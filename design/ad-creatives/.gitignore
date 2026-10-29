@@ -1,0 +1,3 @@
+# Regenerable caches: render.sh rebuilds both (bg = 2x satellite snapshots, hires = 2x renders).
+*/bg/
+*/hires/
