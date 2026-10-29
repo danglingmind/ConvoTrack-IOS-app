@@ -208,3 +208,18 @@ Android adds the `AD_ID` permission (from the SDK).
 **Store paperwork this creates:** App Store privacy labels gain "Identifiers → Device ID" and
 "Usage data → Advertising data", both used for tracking (third-party advertising). The Play Data
 Safety form gains "Device or other IDs" shared for advertising. Update the privacy policy to name Meta.
+
+**Meta app state (2026-10-28).** The Meta app (`1829982551363447`, business `1109131696280059`)
+is **published**, with ad account `2151003921631899` authorised, privacy / terms / data-deletion
+URLs on convotrack.in, and an **iOS** platform (bundle `danglingmind.convotrack`, App Store ID
+`6788236830`, "Log in-app events automatically" off). The iOS SKAdNetwork ranking is 63
+`ride_created`, 62 Complete registration, 61 Activate app; add `StartTrial` (top) and `ride_joined`
+once Meta has received them from iOS — changing fine values pauses running iOS ads for 72 h.
+
+**Android platform is deliberately absent.** Meta refuses to publish while the Google Play listing
+404s, and ConvoTrack is still on closed testing, so the Android platform was removed. Android
+events still arrive (same app ID). When the Play listing is public: Settings → Basic → Add
+platform → Android → Google Play Store, package `com.danglingmind.convotrack`, class
+`com.danglingmind.convotrack.MainActivity`, and turn **off** "Log In-App Purchases
+Automatically" (and leave "Log In-App Subscriptions Automatically" off) — the app logs purchases
+itself, so either toggle on double-counts.
