@@ -24,6 +24,7 @@ while [[ $# -gt 0 ]]; do
     --look) look="$2"; shift 2;; --scale) scale="$2"; shift 2;; --pin) pin="$2"; shift 2;;
     --sat) sat="$2"; look="sat"; shift 2;; --bg) bg="$2"; look="sat"; shift 2;;
     --pin-r) pinr="$2"; shift 2;; --rider) rider="$2"; chipi="rider"; shift 2;; --rider-img) riderimg="$2"; shift 2;;
+    --chip-style) chipstyle="$2"; shift 2;;
     *) echo "unknown arg $1" >&2; exit 2;;
   esac
 done
@@ -48,6 +49,7 @@ for size in ${(s:,:)sizes}; do
   [[ -n "$bgfile" ]] && url="$url&bg=$(enc "file://${bgfile:A}")"
   [[ -n "$pinr" ]] && url="$url&pinr=$pinr"; [[ -n "$rider" ]] && url="$url&rider=$(enc "$rider")"
   [[ -n "$riderimg" ]] && url="$url&riderimg=$(enc "file://${riderimg:A}")"
+  [[ -n "$chipstyle" ]] && url="$url&chipstyle=$chipstyle"
   raw="$out/hires/$slug-$size.raw.png"
   "$CHROME" --headless=new --disable-gpu --hide-scrollbars --window-size=$W,$H \
     --force-device-scale-factor=2 --default-background-color=FF090B0D \

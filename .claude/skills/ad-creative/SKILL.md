@@ -89,6 +89,11 @@ A concept = **slug**, **angle** (the one idea), **headline**, optional **eyebrow
      one. Tall cards are kept above the credit / Stories overlay automatically. Reference:
      `design/ad-creatives/c1b-rider-card/`. **B is the approved style** (A, the orange ring, is
      kept only as history).
+   - **Rule — every visible rider avatar gets a portrait. If one is missing, stop and ask the
+     user for it before rendering.** List which riders appear (map markers, strip, edge chips,
+     alert text, card) and check `docs/onboarding-screenshots/portraits/` for each. Never ship
+     a letter avatar, never reuse another rider's face, never generate one yourself unasked.
+     Off-screen edge chips (green ring + distance) are avatars too.
    - **Rider portraits:** riders show AI-generated profile photos, not letters, everywhere they
      appear: map markers, the top rider strip and the card. The app really does this for riders
      with a photo (`GoogleMapView.renderRiderIcon`: aspect-fill, clipped, ring on top), so
@@ -99,6 +104,14 @@ A concept = **slug**, **angle** (the one idea), **headline**, optional **eyebrow
      provenance table in its README). Measure each circle (centre + inner radius) and check with
      `TEST` discs before using real faces. Concept 1 B is one command: `scripts/build-c1b.sh`.
      Illustrative riders, not customers: never pair faces with quotes or ratings.
+     Each rendered concept gets its own `scripts/build-<slug>.sh` (portrait specs + render
+     flags), so it can be re-rendered in one command: `build-c1b.sh`, `build-c2.sh`.
+   - **Keep the card's claim to what the screen shows.** If the feature (e.g. a group-split
+     alert) isn't visible on the screenshot, either capture it or pick a card that is.
+   - **Text-only label (`--chip-style text`):** when the screenshot's own UI already shows the
+     feature (an alert card, a banner), don't add a feature card, marker or dotted line — that
+     doubles the card. Name the feature in plain type on the map instead (`--chipk` kicker +
+     `--chip` name, e.g. "Live feature / Group split alerts"). Reference: concept 2.
    - `--scale std --look dark` gives the older plain dark style; `--layout split`, `--tilt`,
      `--shift`, `--chip-dx/--chip-dy`, `--chip-icon people|gap|alert|link|flag`, `--sizes`.
 
@@ -123,6 +136,10 @@ Google's attribution) or the user's own aerial/drone photo via `--bg <image>`.
   the proof in one glance, simplify. Headline sizes in the template are tuned for this; don't shrink them to fit more words.
 - **One accent:** lime `#CDEF1E` for the payoff word, eyebrow and chip only. The danger tint
   appears only for emergency concepts. Everything else stays near-black and white.
+- **The phone must look like a real iPhone.** The template builds an iPhone 17-class body to
+  real proportions: titanium band with bright chamfers, black glass border, display corner
+  radius from the real device, action + volume buttons left, side button right. Don't
+  simplify it to a rounded rectangle, and don't put coloured rims on the hardware.
 - **The product is the hero:** the phone is huge (~60% of the width), right of centre, cropped
   by the bottom edge so the screenshot's feature reads large. It floats: slight 3D tilt, lime
   rim glow and a cast shadow thrown down-left onto the map (the gap between phone and shadow is

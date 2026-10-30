@@ -10,11 +10,12 @@ Copy is a draft to test, not proven. Primary text first line = hook.
    - CTA: Install now · Screen: `01_nav_hero_all_riders_ahead` (three riders strung out at 430 / 280 / 140 m, all in the upper two thirds). A fresh capture with one rider clearly far behind would be stronger; not required.
    - **v2 (reference for all hero creatives):** Meera's ring recoloured and bold (`recolor_ring.swift … 484 927 29.5 37.5 FF8A4C 29 40 51` → `shots/01_nav_hero_meera-orange.png`), then `--scale xl --sat 13.3712,77.6792,1300 --pin 0.4013,0.3535 --pin-r 0.036`.
    - **v2 variant B (`c1b-rider-card`), APPROVED:** card icon = Meera's marker; rider portraits in all markers, strip and card. Build: `.claude/skills/ad-creative/scripts/build-c1b.sh` (needs arjun / meera / ananya portraits).
-2. **c2-live-ride-map** · feature proof
-   - `--h1 "Everyone.|*Live.* One map."` · chip: Group split / Alerts when someone drops back (`alert` only for emergencies; use `people`)
-   - Headline: See every rider, live
-   - Primary: Track your whole convoy in real time. Group split alerts tell you the moment someone drops back, and one tap calls a regroup.
-   - Screen: `01d_nav_winding_road_all_four`
+2. **c2-live-ride-map** · group split alert (slug kept from the first draft)
+   - **Rendered (v2, current):** `scripts/build-c2.sh`. Screen `14_group_split_alert` — a real production capture (ride XJ5SXJ, leader Arjun's screen, alert "Kabir is 5.1 km behind the leader"). No feature card: the alert on screen is the proof, so the label is text only (`--chip-style text`, "LIVE FEATURE / Group split alerts", bottom-left on the map). Image text `--h1 "Nobody gets|*left behind.*"`, eyebrow "Group ride tracking", sub "Know the moment someone drops back." (dropped in story to make room). Arjun and Kabir portraits in the strip and Kabir's edge chip (visible in story only). **APPROVED** (2026-10-30).
+   - Headline: Know when someone drops back
+   - Primary: Someone always falls behind on the climbs. ConvoTrack alerts the group the moment a rider drops back, and one tap calls a regroup.
+   - CTA: Install now
+   - v1 (superseded): `01c_nav_all_four_visible` with the leader in the card; too close to concept 1.
 3. **c3-emergency-alert** · safety
    - `--h1 "One tap.|*Whole group* alerted."` · `--chip-icon alert` · chip: Emergency / Sent to every rider
    - Headline: Emergency alert for your group
