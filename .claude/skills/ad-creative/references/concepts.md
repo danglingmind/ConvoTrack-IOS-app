@@ -17,10 +17,11 @@ Copy is a draft to test, not proven. Primary text first line = hook.
    - CTA: Install now
    - v1 (superseded): `01c_nav_all_four_visible` with the leader in the card; too close to concept 1.
 3. **c3-emergency-alert** · safety
-   - `--h1 "One tap.|*Whole group* alerted."` · `--chip-icon alert` · chip: Emergency / Sent to every rider
+   - **Rendered:** `scripts/build-c3.sh`. Screen `15_emergency_alert`: a real production capture on the current build (ride GMSUGM, Arjun's screen, banner "Kabir Shah needs help — head to their location", Kabir's emergency pin 190 m up the route). Text-only label "LIVE FEATURE / Emergency alerts"; eyebrow "Group ride safety"; sub "Every rider sees who needs help, and where." (dropped in story). Arjun + Kabir portraits in the strip (story only).
+   - `--h1 "One tap.|*All alerted.*"`. "Whole group alerted." and "Everyone knows." both wrapped to three lines in feed/story: keep the second line ≤ ~12 characters.
    - Headline: Emergency alert for your group
    - Primary: If something goes wrong on a ride, one tap sends an alert to every rider in the group. Don't claim crash detection or emergency-services calls.
-   - CTA: Learn more / Install now · Screen: `07_emergency_alert` (keep the banner uncovered: `--chip-dy`)
+   - CTA: Learn more / Install now · `07_emergency_alert` is the old UI, don't use it
 4. **c4-share-the-link** · leader ease
    - `--h1 "Share the link.|*Everyone's in.*"` · chip: Invite / One link, no codes (`link`)
    - Headline: Start a group ride in seconds

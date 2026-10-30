@@ -21,6 +21,7 @@ Always Read a candidate before choosing; names can drift from content.
 | `12_ride_summary`, `12b_…final_order` | ride summary stats | post-ride share |
 | `13_qr_modal` | QR join | invite alt |
 | `extra_invite_web_fallback` | web fallback page | not for ads |
+| `15_emergency_alert` | current build, Arjun's live nav: emergency banner "Kabir Shah needs help — head to their location", Kabir's pin 190 m up the route; strip Kabir + Arjun (you). Read-only. | concept 3, safety concepts |
 | `14_group_split_alert` | leader's live nav with the Group split alert, "Kabir is 5.1 km behind the leader"; Kabir off-screen edge chip; strip Arjun (you) + Kabir. Read-only. | concept 2, split/regroup concepts |
 
 Gaps (need a fresh capture, see `capture.md`): one rider clearly far behind the group; a
