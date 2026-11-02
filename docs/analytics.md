@@ -65,10 +65,13 @@ Names are past tense, `snake_case`. Add an event in **all** places: this table, 
 ### Core loop: rides
 | Event | From | Properties |
 | --- | --- | --- |
-| `ride_created` | server | `distance_km`, `est_duration_min`, `waypoint_count`, `max_riders`, `plan` |
+| `ride_created` | server | `cloned` (created from a shared route), `distance_km`, `est_duration_min`, `waypoint_count`, `max_riders`, `plan` |
 | `ride_joined` | server | `rider_count` (after joining), `rejoin`, `plan` |
 | `ride_started` | server | `rider_count`, `distance_km`, `lobby_minutes` |
 | `ride_ended` | server | `duration_min`, `rider_count`, `distance_km`, `max_split_km`, `server_state_lost` |
+| `ride_route_shared` | server | `is_leader` (a rider created the public route link for a completed ride) |
+| `shared_route_opened` | client | none (a shared route link opened its preview) |
+| `shared_route_clone_started` | client | `added_stops` (leader stops ticked before tapping Ride this route) |
 | `ride_completed` | server | `duration_min`, `rider_count`, `is_leader`. **One per rider still in the ride when it ends**, so joiners count too. Use this for "took part in a ride" retention and the north star |
 | `ride_left` / `rider_removed` / `ride_deleted` | server | `ride_status` |
 | `create_ride_failed` | iOS, Android | `plan_limit` |

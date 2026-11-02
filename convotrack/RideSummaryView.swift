@@ -22,6 +22,8 @@ struct RideSummaryView: View {
     @State private var destinationPhoto: DestinationPhoto? = nil
 
     @State private var isGeneratingShare = false
+    @State private var isCreatingRouteLink = false
+    @State private var routeLinkFailed = false
     @State private var shareSheetItems: [Any] = []
     @State private var showShareSheet = false
 
@@ -76,6 +78,15 @@ struct RideSummaryView: View {
                             ) { Task { await generateAndShare() } }
                             .disabled(isGeneratingShare || isLoading)
 
+                            if summary != nil {
+                                DSSecondaryButton(
+                                    title: "Share route",
+                                    systemImage: "link",
+                                    isLoading: isCreatingRouteLink
+                                ) { Task { await shareRouteLink() } }
+                                .disabled(isCreatingRouteLink)
+                            }
+
                             // Right after a ride is when Pro is easiest to want.
                             if !membershipStore.isPremium {
                                 DSPromoBanner(
@@ -111,6 +122,11 @@ struct RideSummaryView: View {
             if isPostRide { UpsellState.recordRideCompleted() }
         }
         .task { await loadRoute() }
+        .alert("Couldn't create the link", isPresented: $routeLinkFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Check your connection and try again.")
+        }
         .sheet(isPresented: $showShareSheet) {
             SummaryShareSheet(items: shareSheetItems)
         }
@@ -367,6 +383,24 @@ struct RideSummaryView: View {
     }
 
     // MARK: - Share
+
+    /// Public link to this ride's route (ridden path + the leader's stops) that anyone can open,
+    /// edit and clone into their own ride.
+    @MainActor
+    private func shareRouteLink() async {
+        guard let id = rideId, !isCreatingRouteLink else { return }
+        isCreatingRouteLink = true
+        defer { isCreatingRouteLink = false }
+        do {
+            let link = try await APIClient.shared.shareRoute(id)
+            guard let url = URL(string: link.url) else { routeLinkFailed = true; return }
+            let text = String(localized: "Ride \(effectiveTitle) with me on ConvoTrack")
+            shareSheetItems = [text, url]
+            showShareSheet = true
+        } catch {
+            routeLinkFailed = true
+        }
+    }
 
     @MainActor
     private func generateAndShare() async {

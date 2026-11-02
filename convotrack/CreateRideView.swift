@@ -11,7 +11,19 @@ struct CreateRideView: View {
     @EnvironmentObject private var paywall: PaywallPresenter
     @Environment(\.dismiss) private var dismiss
 
-    @StateObject private var planner = RidePlannerModel()
+    @StateObject private var planner: RidePlannerModel
+    /// Set when this ride is a clone of a shared route.
+    private let clone: RouteClone?
+    /// Called after the ride exists, for a presenter that has to dismiss itself.
+    private let onCreated: (() -> Void)?
+
+    init(clone: RouteClone? = nil, onCreated: (() -> Void)? = nil) {
+        self.clone = clone
+        self.onCreated = onCreated
+        _planner = StateObject(wrappedValue: clone.map {
+            RidePlannerModel(template: $0.route, includingStops: $0.stops)
+        } ?? RidePlannerModel())
+    }
 
     private var riderCap: Int { membershipStore.riderCap }
 
@@ -75,7 +87,8 @@ struct CreateRideView: View {
             estimatedDurationSeconds: Int(planner.durationSeconds),
             maxAllowedParticipants: planner.maxRiders,
             routePolyline: GoogleDirectionsService.encodePolyline(planner.routeCoordinates),
-            waypoints: waypoints
+            waypoints: waypoints,
+            sourceShareToken: clone?.token
         )
 
         do {
@@ -93,6 +106,7 @@ struct CreateRideView: View {
             appState.currentRide = try? await APIClient.shared.getRide(response.rideId)
             appState.inviteCode = response.inviteCode
             appState.currentRideId = response.rideId
+            onCreated?()
         } catch {
             Analytics.capture(.createRideFailed, ["plan_limit": error.isPlanLimit])
             errorMessage = error.riderMessage

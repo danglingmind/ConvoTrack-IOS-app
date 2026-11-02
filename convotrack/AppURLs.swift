@@ -24,6 +24,10 @@ enum AppURLs {
     /// Must match the AASA `components` pattern and the website's /join route.
     static let joinPathPrefix = "/join/"
 
+    /// Path prefix for shared-route links on `joinLinkHost`, e.g. /route/<token>. Must match the
+    /// AASA `components` pattern and the website's /route page.
+    static let routePathPrefix = "/route/"
+
     /// Canonical shareable invite link, e.g. https://convotrack.in/join/ABC123
     static func joinLink(code: String) -> String {
         "https://\(joinLinkHost)\(joinPathPrefix)\(code)"

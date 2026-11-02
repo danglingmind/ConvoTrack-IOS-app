@@ -115,6 +115,58 @@ final class RidePlannerModel: ObservableObject {
         savedSnapshot = snapshot
     }
 
+    /// Ride this route: a shared ride becomes a new plan led by the rider. The shared start is
+    /// withheld, so the plan starts from the rider's own location; the stops after it (waypoints,
+    /// the roads the leader detoured onto, and any leader stops the rider ticked) keep the order
+    /// they had along the route. Routing then runs through them as for any new ride.
+    init(template: SharedRoute, includingStops extra: [SharedRoute.Stop]) {
+        title = template.title
+        let reference = GoogleDirectionsService.decodedRoute(template.actualRoutePolyline)
+            ?? GoogleDirectionsService.decodedRoute(template.plannedRoutePolyline) ?? []
+        // Distance along the route to the vertex nearest `c`, to order stops that came from
+        // different lists (waypoints, via points, leader stops).
+        let cumulative: [Double] = reference.indices.map { i in
+            guard i > 0 else { return 0 }
+            return CLLocation(latitude: reference[i - 1].latitude, longitude: reference[i - 1].longitude)
+                .distance(from: CLLocation(latitude: reference[i].latitude, longitude: reference[i].longitude))
+        }.reduce(into: [Double]()) { acc, d in acc.append((acc.last ?? 0) + d) }
+        func along(_ c: CLLocationCoordinate2D) -> Double {
+            let here = CLLocation(latitude: c.latitude, longitude: c.longitude)
+            guard let i = reference.indices.min(by: {
+                here.distance(from: CLLocation(latitude: reference[$0].latitude, longitude: reference[$0].longitude))
+                    < here.distance(from: CLLocation(latitude: reference[$1].latitude, longitude: reference[$1].longitude))
+            }) else { return 0 }
+            return cumulative[i]
+        }
+
+        var middle: [(key: Double, place: PlaceResult)] = []
+        for wp in template.waypoints where wp.type == "WAYPOINT" {
+            let c = CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng)
+            middle.append((along(c), PlaceResult(id: "tpl_wp_\(wp.order)", name: wp.name, coordinate: c, formattedAddress: nil)))
+        }
+        for (i, v) in (template.viaPoints ?? []).enumerated() {
+            let c = CLLocationCoordinate2D(latitude: v.lat, longitude: v.lng)
+            middle.append((along(c), PlaceResult(id: "tpl_via_\(i)", name: String(localized: "Via"), coordinate: c, formattedAddress: nil)))
+        }
+        for stop in extra {
+            let c = CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lng)
+            middle.append((along(c), PlaceResult(id: "tpl_stop_\(stop.id)", name: DSRegroupKind.label(stop.type), coordinate: c, formattedAddress: nil)))
+        }
+        middle.sort { $0.key < $1.key }
+
+        var built: [PlannerStop] = [PlannerStop(isCurrentLocation: true)]
+        built += middle.prefix(Self.maxStops - 2).map { PlannerStop(place: $0.place) }
+        if let dest = template.waypoints.first(where: { $0.type == "DESTINATION" }) {
+            built.append(PlannerStop(place: PlaceResult(
+                id: "tpl_dest", name: dest.name,
+                coordinate: CLLocationCoordinate2D(latitude: dest.lat, longitude: dest.lng), formattedAddress: nil)))
+        } else {
+            built.append(PlannerStop())
+        }
+        stops = built
+        suggestedTitle = nil
+    }
+
     // MARK: Derived
 
     func role(of stop: PlannerStop) -> PlannerStopRole {

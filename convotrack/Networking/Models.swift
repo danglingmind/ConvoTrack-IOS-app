@@ -102,6 +102,8 @@ struct CreateRideRequest: Codable {
     let maxAllowedParticipants: Int
     let routePolyline: String
     let waypoints: [CreateWaypoint]
+    /// Share token of the ride this one was cloned from, when it was.
+    var sourceShareToken: String? = nil
 }
 
 struct CreateWaypoint: Codable {
@@ -241,6 +243,45 @@ struct RideSummary: Codable {
     /// Regroup stops the leader called, in order. Never includes emergencies.
     let leaderStops: [LeaderStop]?
     let participants: [SummaryParticipant]
+}
+
+/// Public data behind a shared route link (`GET /shared-routes/:token`). The start of the route
+/// is withheld server-side, so there is no START waypoint.
+struct SharedRoute: Codable {
+    struct Point: Codable { let lat: Double; let lng: Double }
+    struct Stop: Codable, Identifiable, Equatable {
+        let id: String
+        let type: String   // FUEL | FOOD | SCENIC | STOP
+        let lat: Double
+        let lng: Double
+    }
+    struct SharedBy: Codable { let firstName: String }
+
+    let title: String
+    let plannedRoutePolyline: String?
+    let actualRoutePolyline: String?
+    let distanceMeters: Double
+    let durationSeconds: Int?
+    let destinationName: String
+    let waypoints: [Waypoint]
+    let leaderStops: [Stop]
+    let viaPoints: [Point]?
+    let riderCount: Int
+    let sharedBy: SharedBy?
+}
+
+/// A shared route the rider chose to ride, with the leader stops they ticked.
+struct RouteClone: Identifiable {
+    let id = UUID()
+    let token: String
+    let route: SharedRoute
+    let stops: [SharedRoute.Stop]
+}
+
+struct ShareLinkResponse: Codable {
+    let token: String
+    /// Canonical link, e.g. https://convotrack.in/route/<token>
+    let url: String
 }
 
 struct LeaderStop: Codable, Identifiable, Equatable {

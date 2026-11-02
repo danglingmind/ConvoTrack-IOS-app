@@ -49,6 +49,8 @@ enum Analytics {
         case inviteShareOpened = "invite_share_opened"
         case rideSummaryViewed = "ride_summary_viewed"
         case rideSummaryShared = "ride_summary_shared"
+        case sharedRouteOpened = "shared_route_opened"
+        case sharedRouteCloneStarted = "shared_route_clone_started"
         // Permissions
         case permissionResult = "permission_result"
         case voiceMuteToggled = "voice_mute_toggled"

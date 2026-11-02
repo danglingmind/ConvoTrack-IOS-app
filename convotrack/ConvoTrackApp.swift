@@ -15,6 +15,15 @@ enum DeepLinkRouter {
     static var pendingJoinCode: String?
     /// Same buffering for the Live Activity tap (`convotrack://ride/<id>`).
     static var pendingOpenRideId: String?
+    /// A shared-route link (`/route/<token>`) parsed before `MainTabView` was listening.
+    static var pendingRouteToken: String?
+
+    /// Share tokens are 10 characters from the backend's no-lookalikes alphabet.
+    private static func sanitizedRouteToken(_ raw: String?) -> String? {
+        let allowed = Set("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
+        let token = (raw ?? "").uppercased().filter { allowed.contains($0) }
+        return token.count == 10 ? token : nil
+    }
 
     static func handle(_ url: URL) {
         // Live Activity tap: open navigation for the ride. Custom scheme only; it is never shared.
@@ -25,6 +34,17 @@ enum DeepLinkRouter {
             pendingOpenRideId = id
             Task { @MainActor in Analytics.capture(.deepLinkOpened, ["kind": "ride"]) }
             NotificationCenter.default.post(name: .convotrackOpenRide, object: nil, userInfo: ["rideId": id])
+            return
+        }
+        // Shared route: https://convotrack.in/route/<token> (or convotrack://route/<token>).
+        let isRouteLink = (url.scheme == "convotrack" && url.host == "route")
+            || (url.scheme == "https" && url.host == AppURLs.joinLinkHost
+                && url.path.hasPrefix(AppURLs.routePathPrefix))
+        if isRouteLink {
+            guard let token = sanitizedRouteToken(url.lastPathComponent) else { return }
+            pendingRouteToken = token
+            Task { @MainActor in Analytics.capture(.deepLinkOpened, ["kind": "route"]) }
+            NotificationCenter.default.post(name: .convotrackOpenSharedRoute, object: nil, userInfo: ["token": token])
             return
         }
         let rawSegment: String?
@@ -145,4 +165,5 @@ struct ConvoTrackApp: App {
 extension Notification.Name {
     static let convotrackJoinRide = Notification.Name("convotrackJoinRide")
     static let convotrackOpenRide = Notification.Name("convotrackOpenRide")
+    static let convotrackOpenSharedRoute = Notification.Name("convotrackOpenSharedRoute")
 }

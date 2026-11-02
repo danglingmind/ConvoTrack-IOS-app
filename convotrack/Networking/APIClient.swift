@@ -190,6 +190,16 @@ final class APIClient {
         return try await fetch("/rides/\(rideId)/summary")
     }
 
+    /// Public route data behind a shared link. Needs no sign-in on the server.
+    func getSharedRoute(_ token: String) async throws -> SharedRoute {
+        return try await fetch("/shared-routes/\(token)")
+    }
+
+    /// Creates (or returns the existing) public share link for a completed ride.
+    func shareRoute(_ rideId: String) async throws -> ShareLinkResponse {
+        return try await fetch("/rides/\(rideId)/share", method: "POST")
+    }
+
     /// Ride statuses the server should return. Filtering server-side matters because the
     /// endpoint caps at 50 rows — unfiltered, a rider with many finished rides could push their
     /// in-progress ones out of the response entirely.

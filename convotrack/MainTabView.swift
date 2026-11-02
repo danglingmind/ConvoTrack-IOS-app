@@ -10,6 +10,12 @@ private struct JoinSheetContext: Identifiable {
     let code: String?     // nil = opened manually (user enters the code); non-nil = deep link / QR
 }
 
+/// Drives the shared-route preview, same atomic-presentation reasoning as `JoinSheetContext`.
+private struct SharedRouteContext: Identifiable {
+    let id = UUID()
+    let token: String
+}
+
 enum AppTab: Hashable {
     case history, home, profile
 }
@@ -17,6 +23,10 @@ enum AppTab: Hashable {
 struct MainTabView: View {
     @State private var activeTab: AppTab = .home
     @State private var joinSheet: JoinSheetContext? = nil
+    @State private var sharedRouteSheet: SharedRouteContext? = nil
+    /// Chosen in the preview; presented once the preview has finished dismissing.
+    @State private var pendingClone: RouteClone? = nil
+    @State private var cloneCover: RouteClone? = nil
     @StateObject private var appState = AppState()
     // Owns the ride's realtime socket for its whole lifetime, above both the lobby and the
     // navigation screen, so a reconnect self-heals and the lobby→navigation push never drops it.
@@ -69,6 +79,26 @@ struct MainTabView: View {
                 .environmentObject(appState)
                 .onAppear { Analytics.capture(.joinSheetOpened, ["prefilled": ctx.code != nil]) }
         }
+        .sheet(item: $sharedRouteSheet, onDismiss: {
+            // Two presentations can't overlap: the planner opens only after the preview is gone.
+            if let clone = pendingClone { pendingClone = nil; cloneCover = clone }
+        }) { ctx in
+            SharedRoutePreviewView(token: ctx.token) { clone in
+                pendingClone = clone
+                sharedRouteSheet = nil
+            }
+            .environmentObject(appState)
+        }
+        .fullScreenCover(item: $cloneCover) { clone in
+            CreateRideView(clone: clone) {
+                cloneCover = nil
+                activeTab = .home
+            }
+            .environmentObject(appState)
+            .environmentObject(rideSession)
+            .environmentObject(membershipStore)
+            .environmentObject(paywall)
+        }
         // The one paywall sheet for every screen under the tabs (see `PaywallPresenter`).
         .sheet(item: $paywall.request) { request in
             MembershipView(source: request.source)
@@ -90,6 +120,11 @@ struct MainTabView: View {
             DeepLinkRouter.pendingJoinCode = nil   // consumed live; don't let onAppear replay it
             openJoin(code: code)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .convotrackOpenSharedRoute)) { note in
+            guard let token = note.userInfo?["token"] as? String else { return }
+            DeepLinkRouter.pendingRouteToken = nil
+            sharedRouteSheet = SharedRouteContext(token: token)
+        }
         // A rider who went Pro from a blocked invite link carries straight on into that ride.
         .onChange(of: membershipStore.isPremium) { _, isPremium in
             guard isPremium, let code = paywall.joinAfterUpgradeCode else { return }
@@ -99,6 +134,12 @@ struct MainTabView: View {
             }
         }
         .onAppear {
+            if let token = DeepLinkRouter.pendingRouteToken {
+                DeepLinkRouter.pendingRouteToken = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                    sharedRouteSheet = SharedRouteContext(token: token)
+                }
+            }
             // Cold-launch deep link: MainTabView wasn't listening when the link arrived, so drain
             // the buffered code now that we're on screen. MainTabView is presented via a
             // fullScreenCover (Splash → Auth → Main); presenting a sheet while that cover is still
@@ -139,7 +180,8 @@ struct MainTabView: View {
 
     private func maybeShowNudge() {
         // Never over something the rider is doing: another sheet, a pending deep link, a ride.
-        guard !showNudge, joinSheet == nil, paywall.request == nil,
+        guard !showNudge, joinSheet == nil, sharedRouteSheet == nil, cloneCover == nil, paywall.request == nil,
+              DeepLinkRouter.pendingRouteToken == nil,
               DeepLinkRouter.pendingJoinCode == nil, DeepLinkRouter.pendingOpenRideId == nil else { return }
         #if DEBUG
         // `-forceNudge YES` shows it on every open for design review (sheets/deep links still win).
