@@ -58,6 +58,7 @@ struct RideSummaryView: View {
                                 DSLoadingState()
                             } else if let s = summary {
                                 metricsGrid(s)
+                                routeMapCard(s)
                                 awardsSection(s)
                             } else if let f = fallback {
                                 fallbackMetricsGrid(f)
@@ -229,10 +230,64 @@ struct RideSummaryView: View {
         .dsSurfaceCard(.card, radius: DS.Radius.lg)
     }
 
+    // MARK: - Route map
+
+    /// The route the leader actually rode, when the server recorded one.
+    private var actualCoordinates: [CLLocationCoordinate2D] {
+        GoogleDirectionsService.decodedRoute(summary?.actualRoutePolyline) ?? []
+    }
+
+    /// What to draw bright (and put on the share card): the ridden route, else the planned one.
+    private var displayRoute: [CLLocationCoordinate2D] {
+        actualCoordinates.isEmpty ? routeCoordinates : actualCoordinates
+    }
+
+    @ViewBuilder
+    private func routeMapCard(_ s: RideSummary) -> some View {
+        if !displayRoute.isEmpty {
+            let stops = s.leaderStops ?? []
+            VStack(alignment: .leading, spacing: DS.Space.p3) {
+                DSSectionHeading("Route")
+                GoogleMapView(
+                    routeCoords: displayRoute,
+                    // The plan stays visible, dimmed, so a detour reads as a detour.
+                    originalRouteCoords: actualCoordinates.isEmpty ? [] : routeCoordinates,
+                    pins: summaryMapPins,
+                    cameraCommand: cameraCommand,
+                    isInteractive: false
+                )
+                .frame(height: 260)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                if !stops.isEmpty {
+                    Text("\(stops.count) regroup stops called by the leader")
+                        .dsText(.body)
+                        .foregroundStyle(DS.Text.secondary)
+                }
+            }
+            .padding(DS.Space.p4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .dsSurfaceCard(.card, radius: DS.Radius.lg)
+        }
+    }
+
+    private func refreshMapCamera() {
+        let stops = (summary?.leaderStops ?? []).map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
+        let coords = displayRoute + stops
+        guard !coords.isEmpty else { return }
+        cameraCommand = MapCameraCommand.fitRoute(coords, padding: 40)
+    }
+
     // MARK: - Map Pins
 
     private var summaryMapPins: [MapPin] {
         var pins: [MapPin] = []
+        for stop in summary?.leaderStops ?? [] {
+            pins.append(MapPin(id: "stop_\(stop.id)",
+                               coordinate: CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lng),
+                               style: .regroup(type: stop.type, caller: "")))
+        }
         if let wp = mapWaypoints.first(where: { $0.type == "START" }) {
             pins.append(MapPin(id: "start", coordinate: CLLocationCoordinate2D(latitude: wp.lat, longitude: wp.lng), style: .lobbyStart))
         }
@@ -258,6 +313,7 @@ struct RideSummaryView: View {
         for attempt in 1...maxAttempts {
             if let result = try? await APIClient.shared.getRideSummary(id) {
                 summary = result
+                refreshMapCamera()
                 break
             }
             if attempt < maxAttempts {
@@ -286,7 +342,7 @@ struct RideSummaryView: View {
         // Prefer the leader-selected route geometry stored on the ride.
         if let stored = GoogleDirectionsService.decodedRoute(polyline) {
             routeCoordinates = stored
-            cameraCommand = MapCameraCommand.fitRoute(stored, padding: 60)
+            refreshMapCamera()
             return
         }
 
@@ -304,7 +360,7 @@ struct RideSummaryView: View {
 
         routeCoordinates = allCoords
         if !allCoords.isEmpty {
-            cameraCommand = MapCameraCommand.fitRoute(allCoords, padding: 60)
+            refreshMapCamera()
         } else if let first = sorted.first {
             cameraCommand = MapCameraCommand.focus(lat: first.lat, lng: first.lng, zoom: 11)
         }
@@ -349,7 +405,7 @@ struct RideSummaryView: View {
             let waypointSig = mapWaypoints.sorted { $0.order < $1.order }
                 .map { "\($0.order)|\($0.name)|\($0.type)|\($0.lat)|\($0.lng)" }.joined(separator: ";")
             let content = [effectiveTitle, distStr, durStr, durUnitStr, speedStr, String(count), dateStr,
-                           waypointSig, GoogleDirectionsService.encodePolyline(routeCoordinates)].joined(separator: "\u{1F}")
+                           waypointSig, GoogleDirectionsService.encodePolyline(displayRoute)].joined(separator: "\u{1F}")
             return "summarycard|\(id)|v\(RideSummaryShareCard.styleVersion)|@\(scale)x|\(ImageCache.digest(content))"
         }
         if let cacheKey,
@@ -393,7 +449,7 @@ struct RideSummaryView: View {
 
     private func generateMapSnapshot(waypoints: [Waypoint]) async -> StaticMapSnapshot? {
         await GoogleStaticMapsService.snapshot(
-            routeCoordinates: routeCoordinates,
+            routeCoordinates: displayRoute,
             waypoints:        waypoints,
             size:             CGSize(width: 390, height: 640),
             scale:            2,

@@ -235,7 +235,20 @@ struct RideSummary: Codable {
     let totalRegroups: Int
     let totalEmergencies: Int
     let createdAt: String
+    /// Route the leader actually rode (encoded polyline). Absent for rides that ended before the
+    /// server recorded tracks, or when the server is older than this field.
+    let actualRoutePolyline: String?
+    /// Regroup stops the leader called, in order. Never includes emergencies.
+    let leaderStops: [LeaderStop]?
     let participants: [SummaryParticipant]
+}
+
+struct LeaderStop: Codable, Identifiable, Equatable {
+    let id: String
+    let type: String      // FUEL | FOOD | SCENIC | STOP
+    let lat: Double
+    let lng: Double
+    let createdAt: String
 }
 
 struct SummaryParticipant: Codable {
