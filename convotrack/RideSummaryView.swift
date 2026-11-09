@@ -277,7 +277,9 @@ struct RideSummaryView: View {
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
                 if !stops.isEmpty {
-                    Text("\(stops.count) regroup stops called by the leader")
+                    Text(stops.count == 1
+                         ? String(localized: "1 regroup stop called by the leader")
+                         : String(localized: "\(stops.count) regroup stops called by the leader"))
                         .dsText(.body)
                         .foregroundStyle(DS.Text.secondary)
                 }
@@ -289,10 +291,11 @@ struct RideSummaryView: View {
     }
 
     private func refreshMapCamera() {
-        let stops = (summary?.leaderStops ?? []).map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
-        let coords = displayRoute + stops
+        // Everything drawn: the ridden route, the dimmed plan and every pin. Pins stand above
+        // their coordinate, so the top inset leaves room for a pin head and its label.
+        let coords = displayRoute + routeCoordinates + summaryMapPins.map(\.coordinate)
         guard !coords.isEmpty else { return }
-        cameraCommand = MapCameraCommand.fitRoute(coords, padding: 40)
+        cameraCommand = MapCameraCommand.fitRouteInsets(coords, top: 64, left: 32, bottom: 40, right: 32, animated: false)
     }
 
     // MARK: - Map Pins
@@ -394,7 +397,8 @@ struct RideSummaryView: View {
         do {
             let link = try await APIClient.shared.shareRoute(id)
             guard let url = URL(string: link.url) else { routeLinkFailed = true; return }
-            let text = String(localized: "Ride \(effectiveTitle) with me on ConvoTrack")
+            // Titles are usually "Ride to X" already, so the title can't follow "Ride".
+            let text = String(localized: "\(effectiveTitle): ride this route with me on ConvoTrack")
             shareSheetItems = [text, url]
             showShareSheet = true
         } catch {

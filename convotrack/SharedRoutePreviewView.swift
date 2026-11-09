@@ -122,7 +122,11 @@ struct SharedRoutePreviewView: View {
     private func stats(_ route: SharedRoute) -> String {
         var parts = [String(format: "%.0f km", route.distanceMeters / 1000)]
         if let seconds = route.durationSeconds { parts.append(RideDuration.inline(seconds)) }
-        if !route.leaderStops.isEmpty { parts.append(String(localized: "\(route.leaderStops.count) regroup stops")) }
+        switch route.leaderStops.count {
+        case 0: break
+        case 1: parts.append(String(localized: "1 regroup stop"))
+        default: parts.append(String(localized: "\(route.leaderStops.count) regroup stops"))
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -133,11 +137,10 @@ struct SharedRoutePreviewView: View {
         Analytics.capture(.sharedRouteOpened)
         let ridden = GoogleDirectionsService.decodedRoute(route.actualRoutePolyline) ?? []
         let planned = GoogleDirectionsService.decodedRoute(route.plannedRoutePolyline) ?? []
-        let stops = route.leaderStops.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
-        let coords = (ridden.isEmpty ? planned : ridden) + stops
+        // Both lines and every pin; the top inset clears the close button and the pin heads.
+        let coords = ridden + planned + pins(route).map(\.coordinate)
         if !coords.isEmpty {
-            // Top inset leaves the close button clear; bottom the sheet-like panel.
-            cameraCommand = MapCameraCommand.fitRoute(coords, padding: 48)
+            cameraCommand = MapCameraCommand.fitRouteInsets(coords, top: 96, left: 40, bottom: 40, right: 40, animated: false)
         }
         phase = .loaded(route)
     }

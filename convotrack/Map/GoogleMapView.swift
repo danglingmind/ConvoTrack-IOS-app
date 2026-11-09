@@ -397,6 +397,7 @@ extension GoogleMapView {
         }
 
         var lastCameraId: UUID? = nil
+        var fitRetries = 0
 
         // Route decorations — end-cap dots and curved dotted connectors
         var endCapMarkers:    [GMSMarker]   = []
@@ -761,6 +762,18 @@ extension GoogleMapView {
             switch cmd.action {
             case .fitCoords(let coords, let padding, let animated):
                 guard !coords.isEmpty else { return }
+                // A map that hasn't been laid out yet (a card that just appeared) has zero bounds,
+                // and fitting to that picks a zoom for no viewport at all. Retry once it has a size.
+                guard mapView.bounds.width > 0, mapView.bounds.height > 0 else {
+                    guard fitRetries < 20 else { fitRetries = 0; return }
+                    fitRetries += 1
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak mapView] in
+                        guard let self, let mapView, self.lastCameraId == cmd.id else { return }
+                        self.applyCamera(cmd, to: mapView)
+                    }
+                    return
+                }
+                fitRetries = 0
                 var bounds = GMSCoordinateBounds()
                 coords.forEach { bounds = bounds.includingCoordinate($0) }
                 let update = GMSCameraUpdate.fit(bounds, with: padding)
