@@ -724,6 +724,9 @@
     "Emergency. %@ needs help" : {
 
     },
+    "Emergency. Help requested, your group can see your location" : {
+
+    },
     "Enable camera access in Settings to scan QR codes." : {
 
     },
@@ -896,6 +899,9 @@
 
     },
     "Head to the %@" : {
+
+    },
+    "Help requested — your group can see your location" : {
 
     },
     "Hide" : {
