@@ -1,6 +1,106 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "push.regroup_stop.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ called a regroup in %2$@."
+          }
+        }
+      }
+    },
+    "push.regroup_fuel.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ called a fuel stop in %2$@."
+          }
+        }
+      }
+    },
+    "push.regroup_food.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ called a food stop in %2$@."
+          }
+        }
+      }
+    },
+    "push.regroup_scenic.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ called a scenic stop in %2$@."
+          }
+        }
+      }
+    },
+    "push.emergency.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ needs help in %2$@. Open ConvoTrack to see their location."
+          }
+        }
+      }
+    },
+    "Ride updates" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ride updates"
+          }
+        }
+      }
+    },
+    "Regroup calls" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regroup calls"
+          }
+        }
+      }
+    },
+    "Safety alerts, always on" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safety alerts, always on"
+          }
+        }
+      }
+    },
+    "Notifications are turned off for ConvoTrack in system settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications are turned off for ConvoTrack in system settings."
+          }
+        }
+      }
+    },
+    "Open Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Settings"
+          }
+        }
+      }
+    },
     "push.ride_started.body" : {
       "localizations" : {
         "en" : {

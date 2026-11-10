@@ -45,3 +45,44 @@ the build: sending stays off until the env vars exist, like analytics.
 - Android: `data/push/Push.kt` + `ConvoFirebaseService` (channel `ride_updates`); permission asked on first lobby entry; needs `app/google-services.json` (gitignored) to go live.
 - Review fixes (iOS) applied: 3,4,7
 - Review fixes (backend, Android) applied: 1,2,3,5,6
+
+---
+
+# Phase 2: more types + preferences (contract)
+
+## New types
+| Type | Category | Recipients | Fired from |
+| --- | --- | --- | --- |
+| `REGROUP_CALLED` | `regroup` | other non-LEFT participants of the ride (not the caller) | the `ride:regroup` socket handler |
+| `EMERGENCY` | `safety` (always on, not switchable) | all other non-LEFT participants (not the rider who raised it) | the `ride:emergency` socket handler |
+Existing: `RIDE_STARTED`, `RIDE_ENDED` -> category `ride_updates`.
+Not pushed (deliberately): group split, regroup complete, off-route.
+
+**Payloads** (text localized on device)
+- iOS `loc-key` + `loc-args`: `push.regroup_fuel.body` / `push.regroup_food.body` / `push.regroup_scenic.body` with args `[callerName, rideName]`; `push.emergency.body` with args `[riderName, rideName]`. Custom keys `type`, `rideId` as before. `thread-id` stays `ride-<rideId>`; collapse id for these two is unique per event (do not replace an earlier push).
+- Android data-only: `type`, `rideId`, `rideName`, `riderName`, `reason` (`FUEL|FOOD|SCENIC`, REGROUP_CALLED only). Emergency uses a separate high-importance channel `safety` ("Safety alerts"); the others use `ride_updates`.
+- Tap: both new types open the ride navigation screen. Banner suppressed while that ride's screen is on top, as for the existing types (the in-app alert already covers it).
+
+## Preferences
+- Table `notification_preferences` (migration `024_create_notification_preferences.sql`): `user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE`, `ride_updates BOOLEAN NOT NULL DEFAULT true`, `regroup BOOLEAN NOT NULL DEFAULT true`, `updated_at`. No row = all on.
+- `GET /users/me/notification-preferences` -> `{ rideUpdates: boolean, regroup: boolean }`; `PUT /users/me/notification-preferences` body `{ rideUpdates?: boolean, regroup?: boolean }` (partial upsert) -> same shape. Add both to `openapi.json`.
+- `notify()` drops recipients who turned the type's category off. `safety` is never filtered.
+- UI (both apps, Profile screen): section "Notifications" with toggles "Ride updates" and "Regroup calls", plus a non-interactive row "Safety alerts, always on". If OS notification permission is denied, show a hint with a button to open system settings. Toggle changes PUT immediately (optimistic, revert on failure). Load with GET on appear.
+
+## Phase 2 checkpoints
+- [x] Backend: new types + hooks, preferences table/routes, notify() filtering, openapi, tsc
+- [x] iOS: new types handling, strings, Profile section, build passes
+- [x] Android: new types handling, safety channel, strings, Profile section, assembleDebug + tests pass
+- [ ] Reviewer pass
+- [ ] Fixes, migration 024 run, committed and pushed
+
+- Phase 2 backend: types REGROUP_CALLED/EMERGENCY in registry (spec has category + Android channel; `eventId` makes collapse id unique), filtering in notify(), hooks via pushToOthers() in sockets/handlers.ts, prefs routes in routes/notificationPrefs.ts. FCM data stays type-only (no channel key; apps pick channel by type). Migration 024 written, not run.
+
+Notes (iOS Phase 2): REGROUP_CALLED/EMERGENCY taps reuse the RIDE_STARTED open-ride path; foreground suppression is unchanged (keyed on rideId). Profile has a Notifications section (optimistic toggles, denied hint + Open Settings) replacing the old single settings row. Build passes; banners checked via simctl push, signed-out so tap routing and the Profile section were not exercised.
+
+Notes (Android Phase 2): `PushSpec` maps type/reason to text and channel (unit-tested); regroup/emergency use unique notification ids; Profile Notifications section replaces the old settings-link row, denied hint re-checks on resume. assembleDebug and unit tests pass; not run on a device.
+
+Review fixes (iOS): 4, regroup_stop string
+
+Review fixes (backend): 1,3,6; contract: no-reason regroup = push.regroup_stop.body / no reason key
+Review fixes (Android): 1,2,5,7

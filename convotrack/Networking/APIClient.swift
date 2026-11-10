@@ -230,6 +230,19 @@ final class APIClient {
         try await fetchVoid("/devices/\(token)", method: "DELETE")
     }
 
+    struct NotificationPreferences: Codable, Equatable { var rideUpdates: Bool; var regroup: Bool }
+
+    func getNotificationPreferences() async throws -> NotificationPreferences {
+        try await fetch("/users/me/notification-preferences")
+    }
+
+    /// Partial upsert: send only the fields being changed.
+    func updateNotificationPreferences(rideUpdates: Bool? = nil, regroup: Bool? = nil) async throws -> NotificationPreferences {
+        struct Body: Encodable { let rideUpdates: Bool?; let regroup: Bool? }
+        let body = try encoder.encode(Body(rideUpdates: rideUpdates, regroup: regroup))
+        return try await fetch("/users/me/notification-preferences", method: "PUT", body: body)
+    }
+
     func syncProfile(name: String, avatarUrl: String?) async throws {
         struct Body: Encodable { let name: String; let avatarUrl: String? }
         let body = try encoder.encode(Body(name: name, avatarUrl: avatarUrl))

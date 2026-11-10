@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import ClerkKit
 
 struct ProfileView: View {
@@ -16,6 +17,9 @@ struct ProfileView: View {
     @State private var isDeletingAccount = false
     @State private var deleteError: String?
     @State private var showEditProfile = false
+    @State private var notifPrefs = APIClient.NotificationPreferences(rideUpdates: true, regroup: true)
+    @State private var notifDenied = false
+    @Environment(\.scenePhase) private var scenePhase
 
     private var displayName: String {
         if let username = userProfile?.username, !username.isEmpty { return username }
@@ -60,10 +64,9 @@ struct ProfileView: View {
                         goProStyle: true
                     ) { paywall.present(.profile) }
 
+                    notificationsSection
+
                     DSSettingsGroup {
-                        DSSettingsRow(systemImage: "bell", title: "Notifications", trailing: .externalLink) {
-                            if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
-                        }
                         DSSettingsRow(systemImage: "creditcard", title: "Membership & Billing") { paywall.present(.profile) }
                         DSSettingsRow(systemImage: "hand.raised", title: "Privacy Policy", trailing: .externalLink) {
                             if let url = URL(string: AppURLs.privacyPolicy) { openURL(url) }
@@ -118,6 +121,13 @@ struct ProfileView: View {
             async let history = try? await APIClient.shared.getMyRides(statuses: APIClient.RideStatusFilter.completed)
             if let p = await me { userProfile = p }
             if let h = await history { completedRides = h.filter { $0.status == "COMPLETED" } }
+        }
+        .task {
+            if let prefs = try? await APIClient.shared.getNotificationPreferences() { notifPrefs = prefs }
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            notifDenied = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .denied
         }
         .sheet(isPresented: $showEditProfile) {
             EditProfileSheet(
@@ -186,6 +196,86 @@ struct ProfileView: View {
             DSStatTile(systemImage: "flag", label: "Rides", value: rideCount, fillsWidth: true, showsIcon: false)
             DSStatTile(systemImage: "point.topleft.down.to.point.bottomright.curvepath", label: "Total km", value: totalKm, fillsWidth: true, showsIcon: false)
             DSStatTile(systemImage: "person.fill", label: "Rides led", value: ridesLed, fillsWidth: true, showsIcon: false)
+        }
+    }
+
+    private var notificationsSection: some View {
+        VStack(alignment: .leading, spacing: DS.Space.p2) {
+            Text("Notifications")
+                .dsText(.bodyStrong)
+                .foregroundStyle(DS.Text.primary)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, DS.Space.p1)
+            DSSettingsGroup {
+                notificationToggle("Ride updates", systemImage: "bell", isOn: notifPrefs.rideUpdates) {
+                    setPref(\.rideUpdates, $0)
+                }
+                notificationToggle("Regroup calls", systemImage: "arrow.triangle.merge", isOn: notifPrefs.regroup) {
+                    setPref(\.regroup, $0)
+                }
+                HStack(spacing: DS.Space.p4) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .dsIcon(DS.IconSize.md)
+                        .foregroundStyle(DS.Text.secondary.base)
+                        .frame(width: DS.IconSize.lg)
+                        .accessibilityHidden(true)
+                    Text("Safety alerts, always on").dsText(.body).foregroundStyle(DS.Text.secondary.base)
+                    Spacer(minLength: DS.Space.p2)
+                }
+                .padding(.horizontal, DS.Space.p4)
+                .padding(.vertical, 14)
+                .frame(minHeight: 56)
+                .accessibilityElement(children: .combine)
+            }
+            if notifDenied {
+                Text("Notifications are turned off for ConvoTrack in system settings.")
+                    .dsText(.helper)
+                    .foregroundStyle(DS.Text.secondary)
+                    .padding(.horizontal, DS.Space.p1)
+                DSSettingsGroup {
+                    DSSettingsRow(systemImage: "gearshape", title: "Open Settings", trailing: .externalLink, showsDivider: false) {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func notificationToggle(_ title: LocalizedStringKey, systemImage: String, isOn: Bool,
+                                    set: @escaping (Bool) -> Void) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: DS.Space.p4) {
+                Image(systemName: systemImage)
+                    .dsIcon(DS.IconSize.md)
+                    .foregroundStyle(DS.Text.secondary.base)
+                    .frame(width: DS.IconSize.lg)
+                    .accessibilityHidden(true)
+                Toggle(isOn: Binding(get: { isOn }, set: set)) {
+                    Text(title).dsText(.body).foregroundStyle(DS.Text.primary)
+                }
+                .tint(DS.Accent.base)
+            }
+            .padding(.horizontal, DS.Space.p4)
+            .padding(.vertical, 8)
+            .frame(minHeight: 56)
+            DSDivider().padding(.leading, 52)
+        }
+    }
+
+    /// Optimistic: flip now, PUT, revert on failure.
+    private func setPref(_ key: WritableKeyPath<APIClient.NotificationPreferences, Bool>, _ value: Bool) {
+        let previous = notifPrefs[keyPath: key]
+        notifPrefs[keyPath: key] = value
+        Task {
+            do {
+                let saved = key == \.rideUpdates
+                    ? try await APIClient.shared.updateNotificationPreferences(rideUpdates: value)
+                    : try await APIClient.shared.updateNotificationPreferences(regroup: value)
+                // Apply only this key, and only if no newer toggle has superseded it.
+                if notifPrefs[keyPath: key] == value { notifPrefs[keyPath: key] = saved[keyPath: key] }
+            } catch {
+                if notifPrefs[keyPath: key] == value { notifPrefs[keyPath: key] = previous }
+            }
         }
     }
 

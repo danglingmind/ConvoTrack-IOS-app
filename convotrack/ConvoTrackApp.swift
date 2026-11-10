@@ -26,7 +26,7 @@ enum DeepLinkRouter {
         guard !rideId.isEmpty, rideId.count <= 64,
               rideId.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else { return }
         switch type {
-        case "RIDE_STARTED":
+        case "RIDE_STARTED", "REGROUP_CALLED", "EMERGENCY":
             pendingOpenRideId = rideId
             NotificationCenter.default.post(name: .convotrackOpenRide, object: nil, userInfo: ["rideId": rideId])
         case "RIDE_ENDED":
