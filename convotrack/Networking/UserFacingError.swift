@@ -70,6 +70,10 @@ enum UserFacingError {
             return "Another rider got there first. Pick a different name."
         case "USER_NOT_FOUND":
             return "We couldn't find that rider."
+        case "UNSUPPORTED_IMAGE_TYPE", "IMAGE_REQUIRED":
+            return "That photo couldn't be read. Try a different one."
+        case "NAME_REQUIRED":
+            return "Your name can't be empty. Other riders need something to call you."
 
         // MARK: Purchases
         case "INVALID_PRODUCT_ID", "INVALID_TRANSACTION", "INVALID_TRANSACTION_PAYLOAD":

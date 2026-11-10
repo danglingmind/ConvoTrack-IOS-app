@@ -46,7 +46,8 @@ final class APIClient {
 
     // MARK: - Request Builder
 
-    private func makeRequest(_ path: String, method: String = "GET", body: Data? = nil) async throws -> URLRequest {
+    private func makeRequest(_ path: String, method: String = "GET", body: Data? = nil,
+                             contentType: String = "application/json") async throws -> URLRequest {
         let token = try await getToken()
 
         // Split off any query string. appendingPathComponent percent-encodes the whole
@@ -74,7 +75,7 @@ final class APIClient {
         // One free trial per device (see `DeviceIdentity`); sent on every call, harmless elsewhere.
         req.setValue(DeviceIdentity.id, forHTTPHeaderField: "X-Device-Id")
         if body != nil {
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue(contentType, forHTTPHeaderField: "Content-Type")
         }
         req.httpBody = body
         return req
@@ -82,8 +83,9 @@ final class APIClient {
 
     // MARK: - Generic Fetch
 
-    private func fetch<T: Decodable>(_ path: String, method: String = "GET", body: Data? = nil) async throws -> T {
-        let req = try await makeRequest(path, method: method, body: body)
+    private func fetch<T: Decodable>(_ path: String, method: String = "GET", body: Data? = nil,
+                                     contentType: String = "application/json") async throws -> T {
+        let req = try await makeRequest(path, method: method, body: body, contentType: contentType)
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse else {
             throw APIClientError.networkError(URLError(.badServerResponse))
@@ -247,6 +249,23 @@ final class APIClient {
         struct Body: Encodable { let name: String; let avatarUrl: String? }
         let body = try encoder.encode(Body(name: name, avatarUrl: avatarUrl))
         try await fetchVoid("/users/me", method: "PATCH", body: body)
+    }
+
+    /// Changes the name other riders see. The server writes it to Clerk too, so reload the Clerk
+    /// user afterwards or the next launch sync would send the old name back.
+    func updateName(_ name: String) async throws -> String {
+        struct Body: Encodable { let name: String }
+        struct Response: Decodable { let name: String }
+        let body = try encoder.encode(Body(name: name))
+        let res: Response = try await fetch("/users/me/name", method: "PUT", body: body)
+        return res.name
+    }
+
+    /// Replaces the profile photo with a JPEG. Returns the hosted URL other riders now load.
+    func uploadProfilePhoto(jpeg: Data) async throws -> String {
+        struct Response: Decodable { let avatarUrl: String }
+        let res: Response = try await fetch("/users/me/photo", method: "PUT", body: jpeg, contentType: "image/jpeg")
+        return res.avatarUrl
     }
 
     func updateProfile(_ req: UpdateProfileRequest) async throws {

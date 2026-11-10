@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import UserNotifications
 import ClerkKit
 
@@ -21,17 +22,34 @@ struct ProfileView: View {
     @State private var notifDenied = false
     @Environment(\.scenePhase) private var scenePhase
 
+    /// The name other riders see. Clerk is the source of truth (an edit writes it there and the
+    /// Clerk user is reloaded), so it updates the moment Edit Profile saves.
     private var displayName: String {
-        if let username = userProfile?.username, !username.isEmpty { return username }
         let parts = [clerk.user?.firstName, clerk.user?.lastName]
             .compactMap { $0 }.filter { !$0.isEmpty }
         let name = parts.joined(separator: " ")
-        return name.isEmpty ? (clerk.user?.username ?? "Rider") : name
+        if !name.isEmpty { return name }
+        if let server = userProfile?.name, !server.isEmpty, server != "Unknown" { return server }
+        return clerk.user?.username ?? "Rider"
     }
 
     private var avatarUrl: URL? {
         guard let str = clerk.user?.imageUrl, !str.isEmpty else { return nil }
         return URL(string: str)
+    }
+
+    /// The address the rider signed in with. Read-only: it identifies the account, it isn't a setting.
+    private var signInEmail: String? {
+        clerk.user?.primaryEmailAddress?.emailAddress
+            ?? clerk.user?.externalAccounts.first?.emailAddress
+    }
+
+    /// Names the method, not just "Signed in" (HIG Managing accounts: identify the authentication method).
+    private var signInMethod: LocalizedStringKey {
+        let providers = clerk.user?.externalAccounts.map { $0.provider.lowercased() } ?? []
+        if providers.contains(where: { $0.contains("google") }) { return "Signed in with Google" }
+        if providers.contains(where: { $0.contains("apple") }) { return "Signed in with Apple" }
+        return "Signed in with email"
     }
 
     private var connectionState: DSConnectionState {
@@ -76,8 +94,14 @@ struct ProfileView: View {
                         }
                     }
 
-                    VStack(spacing: DS.Space.p3) {
+                    VStack(alignment: .leading, spacing: DS.Space.p2) {
+                        Text("Account")
+                            .dsText(.bodyStrong)
+                            .foregroundStyle(DS.Text.primary)
+                            .accessibilityAddTraits(.isHeader)
+                            .padding(.horizontal, DS.Space.p1)
                         DSSettingsGroup {
+                            signedInRow
                             DSSettingsRow(
                                 systemImage: "rectangle.portrait.and.arrow.right",
                                 title: isSigningOut ? "Signing out…" : "Sign Out",
@@ -131,6 +155,9 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showEditProfile) {
             EditProfileSheet(
+                userId:                     clerk.user?.id ?? displayName,
+                initialName:                displayName,
+                currentAvatarURL:           avatarUrl,
                 initialUsername:            userProfile?.username ?? "",
                 initialPhone:               userProfile?.phone ?? "",
                 initialPhoneVisible:        userProfile?.phoneVisible ?? false,
@@ -170,13 +197,22 @@ struct ProfileView: View {
 
     private var identity: some View {
         VStack(spacing: DS.Space.p3) {
-            DSAvatar(
-                name: displayName,
-                id: clerk.user?.id ?? displayName,
-                imageURL: avatarUrl,
-                size: DS.AvatarSize.xxl,
-                highlightRing: DS.Accent.base
-            )
+            // The photo is the obvious place to change the photo; it opens the same sheet.
+            Button { showEditProfile = true } label: {
+                DSAvatar(
+                    name: displayName,
+                    id: clerk.user?.id ?? displayName,
+                    imageURL: avatarUrl,
+                    size: DS.AvatarSize.xxl,
+                    highlightRing: DS.Accent.base
+                )
+                .overlay(alignment: .bottomTrailing) { AvatarEditBadge() }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Change profile photo")
+            // The sheet seeds its fields from `/users/me`; opened before that answers, Save would
+            // send blank visibility toggles and switch them off.
+            .disabled(userProfile == nil)
             HStack(spacing: DS.Space.p2) {
                 Text(displayName)
                     .dsText(.titleLarge)
@@ -185,9 +221,45 @@ struct ProfileView: View {
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
                 DSSquareIconButton(systemImage: "pencil", label: "Edit profile") { showEditProfile = true }
+                    .disabled(userProfile == nil)
+            }
+            if let username = userProfile?.username, !username.isEmpty {
+                Text(verbatim: "@\(username)")
+                    .dsText(.body)
+                    .foregroundStyle(DS.Text.secondary)
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// First row of the Account group: how and as whom the rider is signed in.
+    private var signedInRow: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: DS.Space.p4) {
+                Image(systemName: "person.crop.circle")
+                    .dsIcon(DS.IconSize.md)
+                    .foregroundStyle(DS.Text.secondary.base)
+                    .frame(width: DS.IconSize.lg)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(signInMethod)
+                        .dsText(.bodySmall)
+                        .foregroundStyle(DS.Text.secondary)
+                    Text(verbatim: signInEmail ?? "—")
+                        .dsText(.body)
+                        .foregroundStyle(DS.Text.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, DS.Space.p4)
+            .padding(.vertical, 12)
+            .frame(minHeight: 64)
+            .accessibilityElement(children: .combine)
+            DSDivider().padding(.leading, 52)
+        }
     }
 
     /// Three equal columns; one per row at accessibility sizes.
@@ -321,7 +393,27 @@ extension ProfileView {
 
 // MARK: - Edit Profile Sheet
 
+/// Camera badge on an avatar that opens photo editing. Decorative; the button around it is labelled.
+struct AvatarEditBadge: View {
+    var body: some View {
+        Image(systemName: "camera.fill")
+            .dsIcon(DS.IconSize.sm, weight: .semibold)
+            .foregroundStyle(DS.Text.onAccent)
+            .frame(width: 32, height: 32)
+            .background(Circle().fill(DS.Accent.base))
+            .overlay(Circle().stroke(DS.Background.base, lineWidth: 3))
+            .offset(x: 2, y: 2)
+            .accessibilityHidden(true)
+    }
+}
+
 struct EditProfileSheet: View {
+    /// What riders may call themselves; matches the server's `NAME_MAX_LENGTH`.
+    static let nameMaxLength = 40
+
+    let userId: String
+    let initialName: String
+    let currentAvatarURL: URL?
     let initialUsername: String
     let initialPhone: String
     let initialPhoneVisible: Bool
@@ -329,16 +421,26 @@ struct EditProfileSheet: View {
     let initialEmailContactVisible: Bool
     let onSaved: (UpdateProfileRequest) -> Void
 
+    @Environment(Clerk.self) private var clerk
     @Environment(\.dismiss) private var dismiss
+    @State private var name: String
     @State private var username: String
     @State private var phone: String
     @State private var phoneVisible: Bool
     @State private var emailContact: String
     @State private var emailContactVisible: Bool
+    @State private var photoItem: PhotosPickerItem?
+    /// The picked photo, already square-cropped and JPEG-encoded; uploaded on Save.
+    @State private var pickedPhoto: (preview: UIImage, jpeg: Data)?
+    @State private var isLoadingPhoto = false
     @State private var isSaving = false
     @State private var errorMessage: String? = nil
+    @FocusState private var nameFocused: Bool
 
     init(
+        userId: String,
+        initialName: String,
+        currentAvatarURL: URL?,
         initialUsername: String,
         initialPhone: String,
         initialPhoneVisible: Bool,
@@ -346,18 +448,27 @@ struct EditProfileSheet: View {
         initialEmailContactVisible: Bool,
         onSaved: @escaping (UpdateProfileRequest) -> Void
     ) {
+        self.userId                     = userId
+        self.initialName                = initialName
+        self.currentAvatarURL           = currentAvatarURL
         self.initialUsername            = initialUsername
         self.initialPhone               = initialPhone
         self.initialPhoneVisible        = initialPhoneVisible
         self.initialEmailContact        = initialEmailContact
         self.initialEmailContactVisible = initialEmailContactVisible
         self.onSaved                    = onSaved
+        _name                = State(initialValue: initialName)
         _username            = State(initialValue: initialUsername)
         _phone               = State(initialValue: initialPhone)
         _phoneVisible        = State(initialValue: initialPhoneVisible)
         _emailContact        = State(initialValue: initialEmailContact)
         _emailContactVisible = State(initialValue: initialEmailContactVisible)
     }
+
+    private var trimmedName: String {
+        name.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+    private var nameIsValid: Bool { !trimmedName.isEmpty && trimmedName.count <= Self.nameMaxLength }
 
     var body: some View {
         NavigationStack {
@@ -366,18 +477,42 @@ struct EditProfileSheet: View {
 
                 ScrollView {
                     VStack(spacing: 24) {
+                        photoSection
+
+                        // Name — what every other rider sees on the map, in lobbies and summaries.
+                        fieldSection(header: "NAME", note: nameNote) {
+                            TextField("Your name", text: $name)
+                                .dsText(.body)
+                                .foregroundColor(DS.Text.primary.base)
+                                .tint(DS.Accent.base)
+                                .textContentType(.name)
+                                .textInputAutocapitalization(.words)
+                                .autocorrectionDisabled()
+                                .submitLabel(.done)
+                                .focused($nameFocused)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .onChange(of: name) { _, new in
+                                    // Hard stop at the limit rather than an error after the fact.
+                                    if new.count > Self.nameMaxLength { name = String(new.prefix(Self.nameMaxLength)) }
+                                }
+                        }
+
                         // Username
                         fieldSection(
                             header: "USERNAME",
-                            note: "Other riders see your username instead of your name"
+                            note: "Optional. Shown under your name on your profile."
                         ) {
                             styledTextField("Choose a username", text: $username)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
                         }
 
                         // Phone
                         fieldSection(header: "MOBILE NUMBER") {
                             styledTextField("e.g. +91 98765 43210", text: $phone)
                                 .keyboardType(.phonePad)
+                                .textContentType(.telephoneNumber)
                             visibilityRow(label: "Visible to other riders", isOn: $phoneVisible)
                         }
 
@@ -385,16 +520,13 @@ struct EditProfileSheet: View {
                         fieldSection(header: "CONTACT EMAIL") {
                             styledTextField("e.g. you@example.com", text: $emailContact)
                                 .keyboardType(.emailAddress)
+                                .textContentType(.emailAddress)
                                 .textInputAutocapitalization(.never)
                             visibilityRow(label: "Visible to other riders", isOn: $emailContactVisible)
                         }
 
                         if let err = errorMessage {
-                            Text(err)
-                                .dsText(.body)
-                                .foregroundColor(DS.Status.danger)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 4)
+                            DSInlineError(message: LocalizedStringKey(err))
                         }
 
                         Color.clear.frame(height: 40)
@@ -402,10 +534,12 @@ struct EditProfileSheet: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle("Edit Profile")
             .navigationBarTitleDisplayMode(.inline)
             .preferredColorScheme(.dark)
+            .interactiveDismissDisabled(isSaving)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -417,12 +551,106 @@ struct EditProfileSheet: View {
                         ProgressView().tint(DS.Accent.base)
                     } else {
                         Button("Save") { Task { await save() } }
-                            .foregroundColor(DS.Accent.base)
+                            .foregroundColor(nameIsValid && !isLoadingPhoto ? DS.Accent.base : DS.Text.disabled.base)
                             .fontWeight(.semibold)
+                            .disabled(!nameIsValid || isLoadingPhoto)
                     }
                 }
             }
+            .onChange(of: photoItem) { _, item in
+                guard let item else { return }
+                Task { await loadPhoto(item) }
+            }
         }
+    }
+
+    /// Live hint under the name: the rule while it's empty, a countdown near the limit.
+    private var nameNote: String {
+        if trimmedName.isEmpty { return "Other riders need a name to see on the map." }
+        let left = Self.nameMaxLength - trimmedName.count
+        if left <= 10 { return left == 1 ? "1 character left" : "\(left) characters left" }
+        return "Other riders see this name on the map, in lobbies and in ride summaries."
+    }
+
+    // MARK: - Photo
+
+    private var photoSection: some View {
+        VStack(spacing: DS.Space.p3) {
+            PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+                ZStack {
+                    if let preview = pickedPhoto?.preview {
+                        Image(uiImage: preview)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: DS.AvatarSize.xxl, height: DS.AvatarSize.xxl)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(DS.Accent.base, lineWidth: DS.BorderWidth.focus))
+                    } else {
+                        DSAvatar(
+                            name: trimmedName.isEmpty ? initialName : trimmedName,
+                            id: userId,
+                            imageURL: currentAvatarURL,
+                            size: DS.AvatarSize.xxl,
+                            highlightRing: DS.Accent.base
+                        )
+                    }
+                    if isLoadingPhoto {
+                        Circle().fill(.black.opacity(0.45))
+                            .frame(width: DS.AvatarSize.xxl, height: DS.AvatarSize.xxl)
+                        ProgressView().tint(DS.Text.primary.base)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) { AvatarEditBadge() }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Change profile photo")
+            .disabled(isSaving)
+
+            PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+                Text(pickedPhoto == nil ? "Change Photo" : "Choose Another Photo")
+                    .dsText(.bodyStrong)
+                    .foregroundStyle(DS.Accent.base)
+                    .frame(minHeight: DS.Target.minimum)
+            }
+            .disabled(isSaving)
+            .accessibilityHidden(true)   // the avatar above is the same control, already labelled
+
+            Text("Your photo is visible to riders in your convoys.")
+                .dsText(.helper)
+                .foregroundColor(DS.Text.secondary.base)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func loadPhoto(_ item: PhotosPickerItem) async {
+        isLoadingPhoto = true
+        errorMessage = nil
+        defer { isLoadingPhoto = false }
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let image = UIImage(data: data),
+              let prepared = Self.avatarJPEG(from: image) else {
+            errorMessage = "That photo couldn't be read. Try a different one."
+            return
+        }
+        pickedPhoto = prepared
+    }
+
+    /// Centre-crops to a square and scales to 512 px: avatars render as circles and never larger
+    /// than ~100 pt, so anything bigger is upload time spent on pixels nobody sees.
+    static func avatarJPEG(from image: UIImage, side: CGFloat = 512) -> (preview: UIImage, jpeg: Data)? {
+        let size = image.size
+        guard size.width > 0, size.height > 0 else { return nil }
+        let scale = side / min(size.width, size.height)
+        let drawSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let rendered = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+            image.draw(in: CGRect(x: (side - drawSize.width) / 2, y: (side - drawSize.height) / 2,
+                                  width: drawSize.width, height: drawSize.height))
+        }
+        guard let jpeg = rendered.jpegData(compressionQuality: 0.85) else { return nil }
+        return (rendered, jpeg)
     }
 
     // MARK: - Sub-views
@@ -434,7 +662,7 @@ struct EditProfileSheet: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(header)
+            Text(LocalizedStringKey(header))
                 .dsText(.sectionLabel)
                 .foregroundColor(DS.Accent.base)
             VStack(spacing: 0) { content() }
@@ -442,7 +670,7 @@ struct EditProfileSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(DS.Border.strongColor.opacity(0.4), lineWidth: 1))
             if let note {
-                Text(note)
+                Text(LocalizedStringKey(note))
                     .dsText(.helper)
                     .foregroundColor(DS.Text.secondary.base)
                     .padding(.horizontal, 4)
@@ -465,15 +693,12 @@ struct EditProfileSheet: View {
                 .fill(DS.Border.strongColor.opacity(0.4))
                 .frame(height: 0.5)
                 .padding(.horizontal, 16)
-            HStack {
-                Text(label)
+            Toggle(isOn: isOn) {
+                Text(LocalizedStringKey(label))
                     .dsText(.body)
                     .foregroundColor(DS.Text.secondary.base)
-                Spacer()
-                Toggle("", isOn: isOn)
-                    .labelsHidden()
-                    .tint(DS.Accent.base)
             }
+            .tint(DS.Accent.base)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
@@ -481,9 +706,13 @@ struct EditProfileSheet: View {
 
     // MARK: - Save
 
+    /// Photo, then name, then the rest. Each step is idempotent, so if one fails the rider can
+    /// just tap Save again; nothing already saved is lost or duplicated.
     private func save() async {
+        guard nameIsValid else { nameFocused = true; return }
         errorMessage = nil
         isSaving = true
+        defer { isSaving = false }
         let req = UpdateProfileRequest(
             username:            username.trimmingCharacters(in: .whitespaces).isEmpty ? nil : username.trimmingCharacters(in: .whitespaces),
             phone:               phone.trimmingCharacters(in: .whitespaces).isEmpty ? nil : phone.trimmingCharacters(in: .whitespaces),
@@ -492,7 +721,20 @@ struct EditProfileSheet: View {
             emailContactVisible: emailContactVisible
         )
         do {
+            var identityChanged = false
+            if let photo = pickedPhoto {
+                _ = try await APIClient.shared.uploadProfilePhoto(jpeg: photo.jpeg)
+                pickedPhoto = nil
+                photoItem = nil
+                identityChanged = true
+            }
+            if trimmedName != initialName {
+                _ = try await APIClient.shared.updateName(trimmedName)
+                identityChanged = true
+            }
             try await APIClient.shared.updateProfile(req)
+            // The server wrote Clerk; pull it so the header (and the launch sync) see the edit now.
+            if identityChanged { _ = try? await clerk.user?.reload() }
             onSaved(req)
             dismiss()
         } catch {
@@ -500,7 +742,6 @@ struct EditProfileSheet: View {
             // like every other code, so this one branch covers all of them.
             errorMessage = error.riderMessage
         }
-        isSaving = false
     }
 }
 
