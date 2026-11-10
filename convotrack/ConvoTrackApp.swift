@@ -186,5 +186,7 @@ extension Notification.Name {
     static let convotrackJoinRide = Notification.Name("convotrackJoinRide")
     static let convotrackOpenRide = Notification.Name("convotrackOpenRide")
     static let convotrackOpenRideSummary = Notification.Name("convotrackOpenRideSummary")
+    /// The app came back to the foreground and the rider's current ride had ended while it was away.
+    static let convotrackRideEndedWhileAway = Notification.Name("convotrackRideEndedWhileAway")
     static let convotrackOpenSharedRoute = Notification.Name("convotrackOpenSharedRoute")
 }

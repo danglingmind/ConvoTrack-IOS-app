@@ -56,7 +56,14 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .convotrackOpenRideSummary)) { note in
             guard let id = note.userInfo?["rideId"] as? String else { return }
             DeepLinkRouter.pendingSummaryRideId = nil
-            openRideSummary(id)
+            openRideSummary(id, force: note.userInfo?["force"] as? Bool == true)
+        }
+        // Ended while the app was away and no ride screen is open: just clear the stale
+        // "Active ride" card (the lobby and navigation screens handle their own case).
+        .onReceive(NotificationCenter.default.publisher(for: .convotrackRideEndedWhileAway)) { note in
+            guard let id = note.userInfo?["rideId"] as? String, !PushNotifications.isVisible(id),
+                  appState.currentRideId == id else { return }
+            appState.currentRideId = nil
         }
         .onAppear {
             homeCardSnoozed = UpsellState.isHomeCardSnoozed()
@@ -110,8 +117,8 @@ struct HomeView: View {
 
     /// Push tap for an ended ride. Skipped while the rider is already on that ride's screen
     /// (navigation presents the summary itself when the ride ends).
-    private func openRideSummary(_ rideId: String) {
-        guard !PushNotifications.isVisible(rideId) else { return }
+    private func openRideSummary(_ rideId: String, force: Bool = false) {
+        guard force || !PushNotifications.isVisible(rideId) else { return }
         activeTab = .home
         navPath = NavigationPath([HomeRoute.rideSummary(rideId)])
     }

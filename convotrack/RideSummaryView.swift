@@ -515,6 +515,13 @@ struct RideSummaryView: View {
             appState.currentRide = nil
             appState.popToRoot = true
         } else {
+            // Opened from a push tap or the foreground check rather than at ride end: if this is
+            // still the rider's "current" ride, it is over, so don't leave it as the Active ride card.
+            if appState.currentRideId == rideId {
+                appState.currentRideId = nil
+                appState.inviteCode = nil
+                appState.currentRide = nil
+            }
             dismiss()
         }
     }

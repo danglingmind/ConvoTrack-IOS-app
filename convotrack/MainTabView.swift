@@ -170,12 +170,27 @@ struct MainTabView: View {
     /// Refreshes plan/trial state on every foreground; on a real app open (not a quick hop out and
     /// back) it then considers the nudge, once the tab view and any deep link have settled.
     private func handleForeground() {
+        checkCurrentRideStillRunning()
         let isAppOpen = UpsellState.recordForeground()
         Task {
             await membershipStore.refreshServerState()
             guard isAppOpen else { return }
             try? await Task.sleep(for: .milliseconds(1500))
             maybeShowNudge()
+        }
+    }
+
+    /// A ride that ends while the app is suspended is never announced to it (the socket event is
+    /// missed), so on return the lobby or navigation screen would keep showing it as live. Ask the
+    /// server once per foreground and let the screens that show the ride react.
+    private func checkCurrentRideStillRunning() {
+        guard let id = appState.currentRideId else { return }
+        Task { @MainActor in
+            guard let ride = try? await APIClient.shared.getRide(id),
+                  ride.status == "COMPLETED" || ride.status == "ENDED",
+                  appState.currentRideId == id else { return }
+            NotificationCenter.default.post(name: .convotrackRideEndedWhileAway, object: nil,
+                                            userInfo: ["rideId": id])
         }
     }
 

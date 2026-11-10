@@ -435,6 +435,15 @@ struct RideLobbyView: View {
         .onAppear { pushTrackedRideId = appState.currentRideId; PushNotifications.screenAppeared(pushTrackedRideId) }
         .onDisappear { PushNotifications.screenDisappeared(pushTrackedRideId) }
         .onChange(of: appState.openNavigationRideId) { _, _ in openNavigationIfRequested() }
+        // The ride ended while the app was suspended. With navigation on top, that screen handles
+        // it; otherwise this lobby is the one showing a dead ride as "Riding", so go to the summary.
+        .onReceive(NotificationCenter.default.publisher(for: .convotrackRideEndedWhileAway)) { note in
+            guard !showNavigation, let id = note.userInfo?["rideId"] as? String,
+                  id == appState.currentRideId else { return }
+            rideSession.stop()
+            NotificationCenter.default.post(name: .convotrackOpenRideSummary, object: nil,
+                                            userInfo: ["rideId": id, "force": true])
+        }
         .onChange(of: appState.currentRide?.status) { _, _ in openNavigationIfRequested() }
         // Keyed on the destination so it runs once the ride lands (the lobby renders before
         // the fetch returns) and again if the leader edits the destination.

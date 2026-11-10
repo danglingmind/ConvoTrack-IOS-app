@@ -2269,6 +2269,12 @@ struct RideNavigationView: View {
                 Text(vm.endError ?? "An error occurred.")
             }
             .onChange(of: vm.endError) { _, err in if err != nil { showEndError = true } }
+            // Ended while the app was suspended: no broadcast reached us, so the foreground check
+            // tells us and we show the summary the same way the broadcast would have.
+            .onReceive(NotificationCenter.default.publisher(for: .convotrackRideEndedWhileAway)) { note in
+                guard (note.userInfo?["rideId"] as? String) == appState.currentRideId else { return }
+                vm.showSummary = true
+            }
             // Ride is over (ended by leader or COMPLETED broadcast) → tear down the shared session.
             .onChange(of: vm.showSummary) { _, show in
                 if show {
