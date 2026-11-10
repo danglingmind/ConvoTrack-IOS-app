@@ -110,7 +110,7 @@ struct MainTabView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
-            case .active: handleForeground()
+            case .active: handleForeground(); PushNotifications.registerIfAuthorized()
             case .background: UpsellState.recordBackground()
             default: break
             }
@@ -153,6 +153,7 @@ struct MainTabView: View {
         }
         // `scenePhase` doesn't report the launch itself, so the first foreground is handled here.
         .task { handleForeground() }
+        .task { PushNotifications.registerIfAuthorized() }
         .task {
             guard let user = clerk.user else { return }
             let name = [user.firstName, user.lastName]

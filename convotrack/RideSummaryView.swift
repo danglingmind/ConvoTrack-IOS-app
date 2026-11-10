@@ -116,8 +116,10 @@ struct RideSummaryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .dsTransparentNavigationBar()
         .task { await loadSummary() }
+        .onDisappear { PushNotifications.screenDisappeared(rideId) }
         // A finished ride is the free-plan nudge's best moment (see `UpsellPolicy`).
         .onAppear {
+            PushNotifications.screenAppeared(rideId)
             Analytics.capture(.rideSummaryViewed, ["post_ride": isPostRide])
             if isPostRide { UpsellState.recordRideCompleted() }
         }

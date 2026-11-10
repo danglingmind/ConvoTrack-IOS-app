@@ -1,6 +1,26 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "push.ride_started.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ has started. Open ConvoTrack to join the ride."
+          }
+        }
+      }
+    },
+    "push.ride_ended.body" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ has ended. See the ride summary."
+          }
+        }
+      }
+    },
     "" : {
 
     },

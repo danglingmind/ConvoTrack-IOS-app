@@ -5,6 +5,7 @@ import ClerkKit
 enum HomeRoute: Hashable {
     case createRide
     case rideLobby
+    case rideSummary(String)
 }
 
 enum NearbyLoadState {
@@ -39,6 +40,7 @@ struct HomeView: View {
                     switch route {
                     case .createRide: CreateRideView()
                     case .rideLobby:  RideLobbyView()
+                    case .rideSummary(let id): RideSummaryView(rideId: id, rideTitle: nil)
                     }
                 }
         }
@@ -51,8 +53,17 @@ struct HomeView: View {
             DeepLinkRouter.pendingOpenRideId = nil
             openRideNavigation(id)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .convotrackOpenRideSummary)) { note in
+            guard let id = note.userInfo?["rideId"] as? String else { return }
+            DeepLinkRouter.pendingSummaryRideId = nil
+            openRideSummary(id)
+        }
         .onAppear {
             homeCardSnoozed = UpsellState.isHomeCardSnoozed()
+            if let id = DeepLinkRouter.pendingSummaryRideId {
+                DeepLinkRouter.pendingSummaryRideId = nil
+                openRideSummary(id)
+            }
             // Cold launch from the Live Activity: the link arrived before this view listened.
             if let id = DeepLinkRouter.pendingOpenRideId {
                 DeepLinkRouter.pendingOpenRideId = nil
@@ -75,6 +86,14 @@ struct HomeView: View {
         appState.openNavigationRideId = rideId
         // Already inside the ride (lobby or navigation on the stack): leave the stack alone.
         if navPath.isEmpty { navPath.append(HomeRoute.rideLobby) }
+    }
+
+    /// Push tap for an ended ride. Skipped while the rider is already on that ride's screen
+    /// (navigation presents the summary itself when the ride ends).
+    private func openRideSummary(_ rideId: String) {
+        guard !PushNotifications.isVisible(rideId) else { return }
+        activeTab = .home
+        navPath = NavigationPath([HomeRoute.rideSummary(rideId)])
     }
 
     private var homeRoot: some View {
@@ -677,6 +696,7 @@ struct RidePreviewSheet: View {
         isJoining = true
         do {
             try await APIClient.shared.joinRide(ride.id)
+            PushNotifications.requestPermissionAfterFirstRide()
             appState.currentRideId = ride.id
             appState.inviteCode = ride.inviteCode
             dismiss()

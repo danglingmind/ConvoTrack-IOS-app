@@ -192,6 +192,9 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
     /// same rule); everyone else sees the persistent pin + siren until one of them dismisses it.
     func canDismiss(_ e: EmergencyEvent) -> Bool { e.userId == myUserId || amILeader }
 
+    /// True when the signed-in rider raised this emergency; they get their own copy, not "You needs help".
+    func isMine(_ e: EmergencyEvent) -> Bool { e.userId == myUserId }
+
     /// Only the rider who called a regroup or the ride leader may clear it early (server enforces
     /// the same rule); it otherwise stays until every active rider has arrived.
     func canDismiss(_ r: RegroupEvent) -> Bool { r.createdBy == myUserId || amILeader }
@@ -911,7 +914,10 @@ final class NavigationViewModel: ObservableObject, LocationServiceDelegate {
         activeEmergencies.append(event)
         pushLiveActivity()
         startEmergencySiren()
-        VoiceAnnouncer.shared.announce("Emergency. \(riderName(event.userId)) needs help.", after: SirenPlayer.Sound.emergency.duration + 0.2, priority: .emergency)
+        let spoken = isMine(event)
+            ? "Help requested. Your group can see your location."
+            : "Emergency. \(riderName(event.userId)) needs help."
+        VoiceAnnouncer.shared.announce(spoken, after: SirenPlayer.Sound.emergency.duration + 0.2, priority: .emergency)
     }
 
     /// The siren repeats every 10s while ANY emergency is open — an unresolved emergency is meant
@@ -2176,6 +2182,7 @@ struct RideNavigationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var appState: AppState
+    @State private var pushTrackedRideId: String?
     @EnvironmentObject private var rideSession: RideRealtimeSession
     @StateObject private var vm = NavigationViewModel()
 
@@ -2321,10 +2328,12 @@ struct RideNavigationView: View {
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
             ConvoTrackAppDelegate.landscapeAllowed = true
+            pushTrackedRideId = appState.currentRideId; PushNotifications.screenAppeared(pushTrackedRideId)
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
             ConvoTrackAppDelegate.landscapeAllowed = false
+            PushNotifications.screenDisappeared(pushTrackedRideId)
             vm.teardown()
             if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 let prefs = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .portrait)
@@ -2717,11 +2726,16 @@ struct RideNavigationView: View {
         case .emergency(let id):
             if let emergency = vm.activeEmergencies.first(where: { $0.emergencyId == id }) {
                 let reporter = vm.riderName(emergency.userId)
+                let mine = vm.isMine(emergency)
                 DSBanner(
                     tone: .emergency,
                     eyebrow: "Emergency",
-                    message: String(localized: "\(reporter) needs help — head to their location"),
-                    announcement: String(localized: "Emergency. \(reporter) needs help"),
+                    message: mine
+                        ? String(localized: "Help requested — your group can see your location")
+                        : String(localized: "\(reporter) needs help — head to their location"),
+                    announcement: mine
+                        ? String(localized: "Emergency. Help requested, your group can see your location")
+                        : String(localized: "Emergency. \(reporter) needs help"),
                     trailing: {
                         DSBannerIconButton(systemImage: "scope", label: "Show emergency on map") {
                             peek(lat: emergency.lat, lng: emergency.lng)

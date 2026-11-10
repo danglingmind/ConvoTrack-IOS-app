@@ -195,6 +195,7 @@ final class LobbyViewModel: ObservableObject {
 
 struct RideLobbyView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var pushTrackedRideId: String?
     @EnvironmentObject private var membershipStore: MembershipStore
     @EnvironmentObject private var paywall: PaywallPresenter
     @EnvironmentObject private var rideSession: RideRealtimeSession
@@ -431,6 +432,8 @@ struct RideLobbyView: View {
         .task { await loadRideAndConnect() }
         // Live Activity tap: push navigation as soon as the ride is loaded and ACTIVE.
         .onAppear(perform: openNavigationIfRequested)
+        .onAppear { pushTrackedRideId = appState.currentRideId; PushNotifications.screenAppeared(pushTrackedRideId) }
+        .onDisappear { PushNotifications.screenDisappeared(pushTrackedRideId) }
         .onChange(of: appState.openNavigationRideId) { _, _ in openNavigationIfRequested() }
         .onChange(of: appState.currentRide?.status) { _, _ in openNavigationIfRequested() }
         // Keyed on the destination so it runs once the ride lands (the lobby renders before

@@ -220,6 +220,16 @@ final class APIClient {
         return response.rides
     }
 
+    func registerDevice(token: String, locale: String, appVersion: String?) async throws {
+        struct Body: Encodable { let token: String; let platform: String; let locale: String; let appVersion: String? }
+        let body = try encoder.encode(Body(token: token, platform: "ios", locale: locale, appVersion: appVersion))
+        try await fetchVoid("/devices", method: "PUT", body: body)
+    }
+
+    func unregisterDevice(token: String) async throws {
+        try await fetchVoid("/devices/\(token)", method: "DELETE")
+    }
+
     func syncProfile(name: String, avatarUrl: String?) async throws {
         struct Body: Encodable { let name: String; let avatarUrl: String? }
         let body = try encoder.encode(Body(name: name, avatarUrl: avatarUrl))

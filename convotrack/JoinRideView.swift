@@ -277,6 +277,7 @@ struct JoinRideView: View {
         do {
             try await APIClient.shared.joinRide(preview.rideId)
             MetaEvents.rideJoined()
+            PushNotifications.requestPermissionAfterFirstRide()
             appState.currentRideId = preview.rideId
             appState.inviteCode = normalizedCode
             appState.currentRide = nil

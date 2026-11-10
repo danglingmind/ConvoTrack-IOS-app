@@ -2,6 +2,7 @@ import SwiftUI
 import ClerkKit
 import GoogleMaps
 import UIKit
+import UserNotifications
 
 // MARK: - Deep link routing
 
@@ -17,6 +18,24 @@ enum DeepLinkRouter {
     static var pendingOpenRideId: String?
     /// A shared-route link (`/route/<token>`) parsed before `MainTabView` was listening.
     static var pendingRouteToken: String?
+    /// Push tap for an ended ride (`RIDE_ENDED`) parsed before `HomeView` was listening.
+    static var pendingSummaryRideId: String?
+
+    /// Push notification tap: RIDE_STARTED opens the ride, RIDE_ENDED opens its summary.
+    @MainActor static func handleNotification(type: String, rideId: String) {
+        guard !rideId.isEmpty, rideId.count <= 64,
+              rideId.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else { return }
+        switch type {
+        case "RIDE_STARTED":
+            pendingOpenRideId = rideId
+            NotificationCenter.default.post(name: .convotrackOpenRide, object: nil, userInfo: ["rideId": rideId])
+        case "RIDE_ENDED":
+            pendingSummaryRideId = rideId
+            NotificationCenter.default.post(name: .convotrackOpenRideSummary, object: nil, userInfo: ["rideId": rideId])
+        default: return
+        }
+        Analytics.capture(.deepLinkOpened, ["kind": "push_\(type.lowercased())"])
+    }
 
     /// Share tokens are 10 characters from the backend's no-lookalikes alphabet.
     private static func sanitizedRouteToken(_ raw: String?) -> String? {
@@ -89,6 +108,7 @@ final class ConvoTrackAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         MetaEvents.start(application, launchOptions: launchOptions)
+        UNUserNotificationCenter.current().delegate = self
         return true
     }
 
@@ -165,5 +185,6 @@ struct ConvoTrackApp: App {
 extension Notification.Name {
     static let convotrackJoinRide = Notification.Name("convotrackJoinRide")
     static let convotrackOpenRide = Notification.Name("convotrackOpenRide")
+    static let convotrackOpenRideSummary = Notification.Name("convotrackOpenRideSummary")
     static let convotrackOpenSharedRoute = Notification.Name("convotrackOpenSharedRoute")
 }
