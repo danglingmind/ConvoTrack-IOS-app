@@ -81,6 +81,26 @@ struct HomeView: View {
     /// Live Activity tap. Only the ride the rider is currently in is honoured; an unknown or ended
     /// ride is ignored. The lobby pushes navigation itself once the ride is loaded and ACTIVE.
     private func openRideNavigation(_ rideId: String) {
+        Task { @MainActor in
+            // A push can arrive for a ride that has since ended, or one this device isn't tracking
+            // yet: ask the server rather than assume. Over -> summary; live -> into the ride.
+            guard let ride = await APIClient.shared.getRideRetrying(rideId) else {
+                if appState.currentRideId == rideId { openLiveRide(rideId) }
+                return
+            }
+            if ride.status == "COMPLETED" || ride.status == "ENDED" {
+                openRideSummary(rideId)
+                return
+            }
+            if appState.currentRideId != rideId {
+                guard ride.status == "ACTIVE" else { return }
+                appState.currentRideId = rideId   // onChange pushes the lobby
+            }
+            openLiveRide(rideId)
+        }
+    }
+
+    private func openLiveRide(_ rideId: String) {
         guard appState.currentRideId == rideId else { return }
         activeTab = .home
         appState.openNavigationRideId = rideId
