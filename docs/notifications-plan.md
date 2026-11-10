@@ -73,8 +73,8 @@ Not pushed (deliberately): group split, regroup complete, off-route.
 - [x] Backend: new types + hooks, preferences table/routes, notify() filtering, openapi, tsc
 - [x] iOS: new types handling, strings, Profile section, build passes
 - [x] Android: new types handling, safety channel, strings, Profile section, assembleDebug + tests pass
-- [ ] Reviewer pass
-- [ ] Fixes, migration 024 run, committed and pushed
+- [x] Reviewer pass
+- [x] Fixes, migration 024 run, committed and pushed
 
 - Phase 2 backend: types REGROUP_CALLED/EMERGENCY in registry (spec has category + Android channel; `eventId` makes collapse id unique), filtering in notify(), hooks via pushToOthers() in sockets/handlers.ts, prefs routes in routes/notificationPrefs.ts. FCM data stays type-only (no channel key; apps pick channel by type). Migration 024 written, not run.
 
@@ -86,3 +86,46 @@ Review fixes (iOS): 4, regroup_stop string
 
 Review fixes (backend): 1,3,6; contract: no-reason regroup = push.regroup_stop.body / no reason key
 Review fixes (Android): 1,2,5,7
+
+
+---
+
+# Testing results and release notes (2026-11-10)
+
+Verified on two Android emulators (FCM) and the iOS simulator (APNs sandbox): started, regroup,
+emergency, ended all delivered; taps open the ride / summary; preference toggle persists server-side.
+
+## Setup that must stay true
+- **APNs key:** one key valid for Sandbox **and** Production. A single-environment key is rejected
+  with `BadEnvironmentKeyInToken`. Render env: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_P8`;
+  leave `APNS_ENV` unset. The backend tries production first, then sandbox per token
+  (`src/services/notifications/apnsRouting.ts`, tests: `npm test`); `BadDeviceToken` never deletes a
+  token, only 410 / `Unregistered` does. The App ID needs the Push Notifications capability; no CSR is
+  needed with token auth.
+- **FCM:** `FCM_SERVICE_ACCOUNT` env, project `convotrack-ee5ce`.
+- **Android release builds need `app/google-services.json`** (gitignored, from the Firebase console for
+  `com.danglingmind.convotrack`). Without it the build passes and push is silently off for every user,
+  so `bundleRelease` / `assembleRelease` now fail when it is missing. Debug builds are unaffected.
+  Build releases from a checkout that has the file; a fresh clone or CI must have it copied in first.
+- **iOS release:** the repo entitlement says `aps-environment = development`; archiving with a
+  distribution profile switches it to production. Production-token delivery is the one path that could
+  not be tested here (needs a TestFlight build).
+- Store privacy forms: sending a push token to the server may need Play Data safety ("device or other
+  IDs") and Apple App Privacy updates.
+
+## Lessons from testing (do not rediscover)
+- `apns-collapse-id` is capped at 64 bytes (`BadCollapseId`). Long ones are hashed.
+- Do not discard the cached provider JWT on a 403: Apple answers `TooManyProviderTokenUpdates` when a
+  new one is minted more than once per 20 minutes. It is refreshed only for expired/invalid tokens.
+- iOS: implement `userNotificationCenter(_:didReceive:withCompletionHandler:)` and call the handler on
+  the main thread. The `async` variant crashed (SIGABRT in UIKit snapshot code) on taps from the
+  background or a cold start.
+- Taps: started / regroup / emergency go to navigation for a live ride and to the summary for an ended
+  one (iOS checks the ride's status first; Android's lobby auto-resumes). A ride that ends while the
+  app is suspended is never announced to it, so both apps re-check the ride on foreground / resume.
+- The `ride ended` push is sent after the summary is generated, so it lands when `POST /rides/:id/end`
+  returns (observed ~20 s once; the slow step is not yet identified).
+- `ride started` and `ride ended` share a collapse id, so the latter replaces the former in the tray.
+- Pushes are never sent to the actor (leader / the rider who raised it). Test with the leader on one
+  account and the rider on another.
+- The socket handshake used to be logged with each user's session token; that logging is removed.
