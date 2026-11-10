@@ -104,9 +104,17 @@ extension ConvoTrackAppDelegate: UNUserNotificationCenterDelegate {
         }
     }
 
+    /// The completion-handler form, called on the main thread. The `async` variant completes on a
+    /// background executor, and UIKit asserts (SIGABRT in `_updateSnapshotAndStateRestoration`) when
+    /// a tap that brings the app forward from the background or a cold start finishes off-main.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                            didReceive response: UNNotificationResponse) async {
-        let info = response.notification.request.content.userInfo
-        await MainActor.run { PushNotifications.handleTap(info) }
+                                            didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
+        nonisolated(unsafe) let info = response.notification.request.content.userInfo
+        nonisolated(unsafe) let done = completionHandler
+        DispatchQueue.main.async {
+            PushNotifications.handleTap(info)
+            done()
+        }
     }
 }
