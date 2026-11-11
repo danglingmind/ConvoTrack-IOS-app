@@ -1,0 +1,304 @@
+<template>
+  <style>
+    #root { position: absolute; inset: 0; overflow: hidden; background: #11191d;
+      font-family: system-ui, -apple-system, sans-serif; color: #f5f7fa; }
+
+    /* ---- Stage: map + route + riders + turn card. Stage B is a frozen frame-0 copy for the loop. ---- */
+    .stage { position: absolute; inset: 0; overflow: hidden; }
+    .world { position: absolute; left: 0; top: 0; width: 8960px; height: 5600px; transform-origin: 0 0; }
+    .world img { position: absolute; left: 0; top: 0; width: 8960px; height: 5600px; }
+    .world svg { position: absolute; left: 0; top: 0; overflow: visible; }
+    .pins { position: absolute; inset: 0; }
+
+    /* Rider marker, GoogleMapView.renderRiderIcon at 3.6 px/pt: 32 pt circle, name above, distance below. */
+    .rider { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+    .rider .disc { position: absolute; left: -58px; top: -58px; width: 116px; height: 116px; border-radius: 50%;
+      background: #1e2a38; box-shadow: inset 0 0 0 4.5px #cdef1e, 0 6px 16px rgba(0,0,0,.45);
+      display: grid; place-items: center; font-weight: 700; font-size: 44px; color: #fff; }
+    .rider .tag { position: absolute; left: 0; white-space: nowrap; transform-origin: 50% 50%;
+      padding: 7px 15px; border-radius: 22px; background: rgba(26,26,26,.75);
+      font-size: 44px; line-height: 1.12; }
+    .rider .name { top: -133px; font-weight: 600; color: #fff; }
+    .rider .dist { top: 68px; font-family: "JetBrains Mono", monospace; font-weight: 600; color: #cdef1e; }
+    .me { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+    .me svg { position: absolute; left: -110px; top: -110px; overflow: visible;
+      filter: drop-shadow(0 5px 14px rgba(0,0,0,.55)); }
+
+    /* RegroupPin, SCENIC, 3.6 px/pt. */
+    .rpin { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; }
+    .rpin .ring { position: absolute; left: -72px; top: -190px; width: 144px; height: 144px; border-radius: 50%;
+      background: #060c12; box-shadow: inset 0 0 0 9px #5ab8ff, 0 8px 20px rgba(0,0,0,.5);
+      display: grid; place-items: center; }
+    .rpin .tip { position: absolute; left: -15px; top: -48px; width: 0; height: 0;
+      border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 18px solid #5ab8ff; }
+    .rpin .label { position: absolute; top: -10px; left: 0; transform: translateX(-50%); white-space: nowrap;
+      padding: 7px 28px; border-radius: 40px; background: rgba(22,33,45,.92);
+      font-size: 44px; font-weight: 600; color: #f5f7fa; margin-top: 30px; }
+
+    /* Turn card (HUD), 3.0 px/pt. */
+    .turn { position: absolute; left: 230px; top: 110px; display: flex; align-items: center; gap: 36px;
+      padding: 36px 64px 36px 36px; border-radius: 66px;
+      background: rgba(20,30,41,.82); box-shadow: inset 0 0 0 4.5px rgba(205,239,30,.45), 0 24px 60px rgba(0,0,0,.55); }
+    .turn .icon { width: 168px; height: 168px; border-radius: 42px; background: #cdef1e; display: grid; place-items: center; }
+    .turn .km { font-family: "JetBrains Mono", monospace; font-weight: 800; font-size: 96px;
+      line-height: 1; color: #cdef1e; letter-spacing: -1px; }
+    .turn .what { margin-top: 12px; font-size: 58px; font-weight: 500; color: #f5f7fa; }
+
+    /* DSBanner, regroup tone, SCENIC tint, 3.0 px/pt. */
+    #ride-banner .card { position: absolute; left: 230px; top: 404px; display: flex; align-items: center; gap: 36px;
+      padding: 36px 64px 36px 42px; border-radius: 48px;
+      background: rgba(20,30,41,.82); box-shadow: inset 0 0 0 4.5px rgba(90,184,255,.5), 0 24px 60px rgba(0,0,0,.55); }
+    #ride-banner .disc { width: 108px; height: 108px; border-radius: 30px; background: rgba(90,184,255,.16);
+      display: grid; place-items: center; }
+    #ride-banner .eyebrow { font-size: 44px; font-weight: 700; letter-spacing: 5px; text-transform: uppercase; color: #5ab8ff; }
+    #ride-banner .msg { margin-top: 6px; font-size: 54px; font-weight: 600; color: #f5f7fa; }
+    #ride-banner .who { margin-top: 4px; font-size: 44px; color: #b4b9c1; }
+
+    /* Feature lines. */
+    .scrim { position: absolute; left: -400px; bottom: -500px; width: 2900px; height: 1300px; pointer-events: none;
+      background: radial-gradient(closest-side, rgba(9,14,16,.72), rgba(9,14,16,0)); }
+    .feature .line { position: absolute; left: 384px; bottom: 190px; white-space: nowrap;
+      font-size: 120px; line-height: 1; font-weight: 900; letter-spacing: -2px;
+      font-stretch: 125%; font-variation-settings: "wdth" 125; text-shadow: 0 4px 30px rgba(0,0,0,.5); }
+    .feature .w { display: inline-block; }
+    .feature .lime { color: #cdef1e; }
+
+    /* Map credit required by Google Maps Platform; no © symbol (App Store asset rules). */
+    .credit { position: absolute; right: 18px; bottom: 14px; padding: 3px 9px; border-radius: 6px;
+      background: rgba(0,0,0,.45); font-size: 20px; line-height: 1.2; font-weight: 500;
+      color: rgba(255,255,255,.78); white-space: nowrap; }
+  </style>
+
+  <div id="root" data-composition-id="ride" data-width="3840" data-height="1646">
+    <div id="ride-stage-a" class="stage">
+      <div class="world">
+        <img src="assets/map.jpg" alt="" />
+        <svg width="8960" height="5600" viewBox="0 0 8960 5600">
+          <path class="planned" fill="none" stroke="#cdef1e" stroke-opacity=".28" stroke-linecap="round" stroke-linejoin="round" />
+          <path class="casing" fill="none" stroke="#cdef1e" stroke-opacity=".3" stroke-linecap="round" stroke-linejoin="round" />
+          <path class="core" fill="none" stroke="#cdef1e" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <div class="pins">
+        <div class="rpin">
+          <div class="ring">
+            <svg width="70" height="70" viewBox="0 0 24 24" fill="#5ab8ff"><path d="M9 3.5 7.6 5.5H4.5A2.5 2.5 0 0 0 2 8v10a2.5 2.5 0 0 0 2.5 2.5h15A2.5 2.5 0 0 0 22 18V8a2.5 2.5 0 0 0-2.5-2.5h-3.1L15 3.5zM12 8.2a4.6 4.6 0 1 1 0 9.2 4.6 4.6 0 0 1 0-9.2zm0 2.2a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z"/></svg>
+          </div>
+          <div class="tip"></div>
+          <div class="label">Scenic stop · Arjun</div>
+        </div>
+        <div class="rider" data-rider="kabir"><div class="tag name">Kabir</div><div class="disc">K</div><div class="tag dist">150 m</div></div>
+        <div class="rider" data-rider="meera"><div class="tag name">Meera</div><div class="disc">M</div><div class="tag dist">130 m</div></div>
+        <div class="rider" data-rider="arjun"><div class="tag name">Arjun</div><div class="disc">A</div><div class="tag dist">290 m</div></div>
+        <div class="me">
+          <svg width="220" height="220" viewBox="-110 -110 220 220">
+            <path class="chev" fill="#cdef1e" stroke="#fff" stroke-width="11" stroke-linejoin="round"
+              d="M0 -75 L67 75 L0 34 L-67 75 Z" />
+          </svg>
+        </div>
+      </div>
+      <div class="turn">
+        <div class="icon">
+          <svg width="96" height="96" viewBox="0 0 24 24"><path fill="#0c0e02" d="M5 2.5h1.6v19H5z"/><path fill="#0c0e02" d="M6.6 3.5h13l-2.6 4.6 2.6 4.6h-13z"/><path fill="#cdef1e" d="M8.8 3.5h2.2v2.3H8.8zm4.4 0h2.2v2.3h-2.2zm-2.2 2.3h2.2v2.3H11zm4.4 0h2.2v2.3h-2.2zM8.8 8.1h2.2v2.3H8.8zm4.4 0h2.2v2.3h-2.2zm-2.2 2.3h2.2v2.3H11zm4.4 0h1.5v2.3h-1.5z"/></svg>
+        </div>
+        <div>
+          <div class="km">1.8 km</div>
+          <div class="what">Arrive at destination</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ride-banner" class="clip" data-start="10.5" data-duration="4.9" data-track-index="2">
+      <div class="card">
+        <div class="disc">
+          <svg width="62" height="62" viewBox="0 0 24 24" fill="none" stroke="#5ab8ff" stroke-width="1.9" stroke-linejoin="round"><path d="M9 3.5 7.6 5.5H4.5A2.5 2.5 0 0 0 2 8v10a2.5 2.5 0 0 0 2.5 2.5h15A2.5 2.5 0 0 0 22 18V8a2.5 2.5 0 0 0-2.5-2.5h-3.1L15 3.5z"/><circle cx="12" cy="12.8" r="4"/></svg>
+        </div>
+        <div>
+          <div class="eyebrow">Regroup called</div>
+          <div class="msg">Head to the Scenic stop</div>
+          <div class="who">Called by Arjun</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scrim" data-layout-ignore data-layout-allow-occlusion></div>
+
+    <div id="ride-f1" class="clip feature" data-start="0.8" data-duration="4.35" data-track-index="3">
+      <div class="line"><span class="w">Every</span> <span class="w">rider,</span> <span class="w">live</span> <span class="w">on</span> <span class="w lime">one</span> <span class="w lime">map.</span></div>
+    </div>
+    <div id="ride-f2" class="clip feature" data-start="5.4" data-duration="4.5" data-track-index="3">
+      <div class="line"><span class="w">See</span> <span class="w">the</span> <span class="w lime">gap</span> <span class="w">to</span> <span class="w">every</span> <span class="w">rider.</span></div>
+    </div>
+    <div id="ride-f3" class="clip feature" data-start="10.2" data-duration="5" data-track-index="3">
+      <div class="line"><span class="w lime">Regroup</span> <span class="w">in</span> <span class="w">one</span> <span class="w">tap.</span></div>
+    </div>
+    <div id="ride-f4" class="clip feature" data-start="15.4" data-duration="3.85" data-track-index="3">
+      <div class="line"><span class="w">Never</span> <span class="w">lose</span> <span class="w lime">the</span> <span class="w lime">pack.</span></div>
+    </div>
+    <div class="credit" data-layout-ignore>Map data: Google · Imagery: Airbus, Maxar Technologies</div>
+  </div>
+
+  <script src="assets/route-data.js"></script>
+  <script>
+    (() => {
+      const W = 3840, H = 1646, DUR = 20;
+      const R = window.CT_ROUTE, P = R.points, C = R.cum, L = C[C.length - 1];
+      const MPP = R.metresPerPx;                 // metres per mosaic pixel
+      const K0 = W / (1200 / MPP);               // frame ≈ 1200 m wide
+
+      // ---- Ride model: everything is a function of t ----
+      const meS = (t) => 900 + 37.5 * t;         // your position along the route, metres
+      const TAU = Math.PI * 2;
+      const riders = [
+        { key: "arjun", off: 290, amp: 18, ph: 0.0 },
+        { key: "meera", off: 130, amp: 14, ph: 1.7 },
+        { key: "kabir", off: -150, amp: 20, ph: 3.1 },
+      ];
+      const gap = (r, t) => r.off + r.amp * Math.sin(TAU * t / DUR + r.ph);  // periodic, so the loop matches
+      const PIN_S = 1858;                        // Google's "Rock photo points at Nandi hills"
+
+      const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+      const smooth = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+      const ramp = (t, a, b) => smooth((t - a) / (b - a));
+      const env = (t, a, b, c, d) => Math.min(ramp(t, a, b), 1 - ramp(t, c, d));
+      const expoOut = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * clamp(x, 0, 1)));
+
+      function at(s) {
+        s = clamp(s, 0, L);
+        let lo = 0, hi = C.length - 1;
+        while (hi - lo > 1) { const m = (lo + hi) >> 1; if (C[m] <= s) lo = m; else hi = m; }
+        const f = (s - C[lo]) / Math.max(1e-6, C[hi] - C[lo]);
+        const a = P[lo], b = P[hi];
+        return { x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f, dx: b[0] - a[0], dy: b[1] - a[1] };
+      }
+      const fmt = (m) => { m = Math.abs(m); return m >= 1000 ? (m / 1000).toFixed(1) + " km" : Math.round(m / 10) * 10 + " m"; };
+
+      // Camera: the pack's centroid, averaged over a 1 s window so the road's vertices don't jitter it.
+      function camera(t) {
+        let x = 0, y = 0, n = 0;
+        for (let i = -5; i <= 5; i++) {
+          const tt = t + i * 0.1, s = meS(tt);
+          for (const o of [0, ...riders.map((r) => gap(r, tt))]) { const p = at(s + o); x += p.x; y += p.y; n++; }
+        }
+        const zoom = 1 + 0.07 * env(t, 0.8, 3.6, 15.4, 18.6);
+        return { cx: x / n, cy: y / n, k: K0 * zoom };
+      }
+
+      // ---- Build both stages ----
+      let d = "M" + P.map((p) => p[0] + " " + p[1]).join(" L");
+      const stageA = document.getElementById("ride-stage-a");
+      const stageB = stageA.cloneNode(true);
+      stageB.id = "ride-stage-b";
+      stageA.after(stageB);
+
+      function wire(stage) {
+        const q = (s) => stage.querySelector(s);
+        for (const c of ["planned", "casing", "core"]) {
+          const el = q("." + c);
+          el.setAttribute("d", d);
+          el.setAttribute("pathLength", L);
+        }
+        return {
+          stage, world: q(".world"), planned: q(".planned"), casing: q(".casing"), core: q(".core"),
+          me: q(".me"), chev: q(".chev"), pin: q(".rpin"), km: q(".turn .km"),
+          riders: riders.map((r) => {
+            const el = [...stage.getElementsByClassName("rider")].find((n) => n.dataset.rider === r.key);
+            return { r, el, name: el.querySelector(".name"), dist: el.querySelector(".dist") };
+          }),
+        };
+      }
+      const A = wire(stageA), B = wire(stageB);
+
+      function renderStage(S, t) {
+        const cam = camera(t);
+        const ax = W * 0.7, ay = H * 0.5;             // where the pack sits on screen
+        const tx = ax - cam.cx * cam.k, ty = ay - cam.cy * cam.k;
+        S.world.style.transform = `translate(${tx}px, ${ty}px) scale(${cam.k})`;
+        const scr = (p) => [tx + p.x * cam.k, ty + p.y * cam.k];
+
+        // Route widths are screen pixels (3.2 px/pt), divided by the camera scale.
+        const s = meS(t);
+        S.planned.setAttribute("stroke-width", 9.6 / cam.k);
+        S.casing.setAttribute("stroke-width", 41.6 / cam.k);
+        S.core.setAttribute("stroke-width", 25.6 / cam.k);
+        const ahead = `0 ${s} ${L}`;
+        S.casing.setAttribute("stroke-dasharray", ahead);
+        S.core.setAttribute("stroke-dasharray", ahead);
+
+        // You: the lime chevron, pointing along the road.
+        const m = at(s), [mx, my] = scr(m);
+        const ang = Math.atan2(m.dx, -m.dy) * 180 / Math.PI;
+        S.me.style.transform = `translate(${mx}px, ${my}px)`;
+        S.chev.setAttribute("transform", `rotate(${ang})`);
+
+        // Beat 1 lights the name tags, beat 2 grows the distance tags.
+        S.riders.forEach((o, i) => {
+          const g = gap(o.r, t), p = at(s + g), [x, y] = scr(p);
+          o.el.style.transform = `translate(${x}px, ${y}px)`;
+          o.dist.textContent = fmt(g);
+          const h1 = env(t, 0.9 + i * 0.15, 1.4 + i * 0.15, 4.6, 5.1);
+          o.name.style.boxShadow = `inset 0 0 0 ${4 * h1}px rgba(205,239,30,${h1})`;
+          o.name.style.background = `rgba(${26 + 30 * h1}, ${26 + 40 * h1}, ${26 + 4 * h1}, ${0.75 + 0.15 * h1})`;
+          const h2 = env(t, 5.6 + i * 0.12, 6.2 + i * 0.12, 9.3, 9.8);
+          o.dist.style.transform = `translate(-50%, 0) scale(${1 + 0.22 * h2})`;
+          o.dist.style.boxShadow = `inset 0 0 0 ${4 * h2}px rgba(205,239,30,${h2})`;
+          o.name.style.transform = "translate(-50%, 0)";
+        });
+
+        // Regroup pin: lands at 10.6 s, leaves with the banner before Arjun reaches it.
+        const pinIn = expoOut((t - 10.6) / 0.7), pinOut = ramp(t, 15.0, 15.5);
+        const pp = at(PIN_S), [px, py] = scr(pp);
+        S.pin.style.opacity = t < 10.6 ? 0 : clamp(pinIn, 0, 1) * (1 - pinOut);
+        S.pin.style.transform = `translate(${px}px, ${py - 70 * (1 - pinIn)}px)`;
+
+        S.km.textContent = fmt(L - s);
+      }
+
+      // Loop seam: stage B holds the frame-0 state. Over the last 0.6 s A blurs out while B blurs in,
+      // so frame 599 hands off to frame 0 without a jump.
+      renderStage(B, 0);
+      const state = { t: 0 };
+      const render = () => {
+        renderStage(A, state.t);
+        const fade = ramp(state.t, 19.37, 19.967);
+        stageA.style.opacity = 1 - fade;
+        stageA.style.filter = fade > 0 ? `blur(${14 * fade}px)` : "none";
+        stageB.style.opacity = fade;
+        stageB.style.filter = fade > 0 && fade < 1 ? `blur(${14 * (1 - fade)}px)` : "none";
+        stageB.style.visibility = fade > 0 ? "visible" : "hidden";
+      };
+      render();
+
+      const tl = gsap.timeline({ paused: true });
+      tl.to(state, { t: DUR, duration: DUR, ease: "none", onUpdate: render }, 0);
+
+      // ---- Text ----
+      const words = (id) => document.getElementById(id).getElementsByClassName("w");
+      const blurIn = (id, at) => tl.fromTo(words(id), { opacity: 0, filter: "blur(8px)" },
+        { opacity: 1, filter: "blur(0px)", duration: 0.13, stagger: 0.067, ease: "power2.out" }, at);
+      const blurOut = (id, at) => tl.to(words(id), { opacity: 0, filter: "blur(8px)", duration: 0.2, stagger: 0.03, ease: "power2.in" }, at);
+
+      blurIn("ride-f1", 0.8);
+      blurOut("ride-f1", 4.85);
+
+      // Beat 2: words arrive grey and turn to ink, no movement.
+      tl.fromTo(words("ride-f2"), { opacity: 0, color: "#5c636d" }, { opacity: 1, duration: 0.1, stagger: 0.09, ease: "none" }, 5.4);
+      tl.to(document.querySelectorAll("#ride-f2 .w:not(.lime)"), { color: "#f5f7fa", duration: 0.25, stagger: 0.09 }, 5.5);
+      tl.to(document.querySelectorAll("#ride-f2 .lime"), { color: "#cdef1e", duration: 0.25 }, 5.68);
+      blurOut("ride-f2", 9.6);
+
+      // Beat 3: the whole line blurs in at once.
+      tl.fromTo("#ride-f3 .line", { opacity: 0, filter: "blur(10px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.2, ease: "power2.out" }, 10.2);
+      tl.to("#ride-f3 .line", { opacity: 0, filter: "blur(8px)", duration: 0.2, ease: "power2.in" }, 14.95);
+
+      blurIn("ride-f4", 15.4);
+      blurOut("ride-f4", 18.95);
+
+      // Regroup banner: arrives with the pin, leaves before the tagline.
+      tl.fromTo("#ride-banner .card", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.6, ease: "expo.out" }, 10.5);
+      tl.to("#ride-banner .card", { opacity: 0, y: -20, duration: 0.35, ease: "power3.in" }, 15.0);
+
+      window.__timelines["ride"] = tl;
+    })();
+  </script>
+</template>

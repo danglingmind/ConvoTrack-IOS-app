@@ -1,0 +1,72 @@
+<!doctype html>
+<!--
+  ConvoTrack — "Create a ride, start navigating" UI walkthrough. 1080x1920, 20 s, 60 fps.
+  Every frame is a pure function of time: window.renderAt(t) sets the whole scene from t alone
+  (no timers, transitions or randomness). Screens are real captures from the production app
+  (shots/, Cubbon Park → Nandi Hills); the only edit is the blurred joining code in
+  06_lobby_blur.png. Taps and screen changes sit on a 96 BPM beat grid shared with soundtrack.wav; scene.js holds the timeline.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg: #090B0D; --lime: #CDEF1E; --text: #F5F7FA; --muted: #B4B9C1; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); }
+  body { font-family: system-ui, -apple-system, "SF Pro Display", sans-serif; color: var(--text); }
+  #stage { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
+
+  /* Camera: the rig is positioned so that a chosen point of the screen sits at frame centre,
+     scaled by the zoom. */
+  #rig { position: absolute; left: 0; top: 0; width: 640px; height: 1330px; transform-origin: 0 0; }
+  /* iPhone 17-class body, same proportions as the ad template: 640 px wide, screen 1206:2622. */
+  .phone { position: absolute; inset: 0; padding: 10.9px; border-radius: 108px;
+    background: linear-gradient(90deg, #1d1d1f 0%, #8a8a8f 1.6%, #4a4a4e 3.2%, #2a2a2d 8%, #2a2a2d 92%, #4a4a4e 96.8%, #9a9aa0 98.4%, #1d1d1f 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 0 1px rgba(0,0,0,0.7), 0 50px 120px rgba(0,0,0,0.8); }
+  .bezel { width: 100%; height: 100%; padding: 15.4px; background: #000; border-radius: 97px; }
+  .screen { position: relative; width: 587.5px; height: 1277.3px; border-radius: 81px; overflow: hidden; background: #000; }
+  .screen img { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+
+  /* Tap marker: a pale ring that settles onto the point, then one ripple. Drawn in screen
+     coordinates so it zooms with the camera. */
+  .tap { position: absolute; z-index: 10; width: 0; height: 0; display: none; }   /* above the screens, which stack 1–2 in transitions */
+  .tap i { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); }
+  /* White with a thin dark edge so the marker reads on lime buttons and on dark maps alike. */
+  .tap .dot { background: rgba(255,255,255,0.42); border: 4px solid #fff;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.45), 0 6px 18px rgba(0,0,0,0.45); }
+  .tap .ripple { border: 4px solid rgba(255,255,255,0.95); box-shadow: 0 0 0 2px rgba(0,0,0,0.3); }
+
+  /* End card */
+  #end { position: absolute; inset: 0; display: none; }
+  #end .logo { position: absolute; left: 540px; top: 760px; width: 220px; height: 220px; margin: -110px 0 0 -110px; }
+  #end .word { position: absolute; left: 0; right: 0; top: 930px; text-align: center; font-size: 76px; font-weight: 900;
+    letter-spacing: -0.03em; font-stretch: 125%; font-variation-settings: "wdth" 125; }
+  #end .tag { position: absolute; left: 140px; right: 140px; top: 1060px; text-align: center; font-size: 46px; line-height: 1.25;
+    font-weight: 600; color: var(--muted); }
+  #end .tag em { font-style: normal; color: var(--lime); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="rig">
+    <div class="phone"><div class="bezel"><div class="screen" id="screen">
+      <img data-k="home" src="shots/01_home.png">
+      <img data-k="planner" src="shots/02_planner.png">
+      <img data-k="typing" src="shots/03_type_nan.png">
+      <img data-k="suggest" src="shots/04_suggestions.png">
+      <img data-k="route" src="shots/05_route.png">
+      <img data-k="lobby" src="shots/06_lobby_blur.png">
+      <img data-k="prenav" src="shots/07_prenav.png">
+      <img data-k="nav" src="shots/08_nav.png">
+      <div class="tap" id="tap"><i class="ripple" id="ripple"></i><i class="dot" id="dot"></i></div>
+    </div></div></div>
+  </div>
+  <div id="end">
+    <img class="logo" id="logo" src="logo.png">
+    <div class="word" id="word">ConvoTrack</div>
+    <div class="tag" id="tag">Ride together.<br><em>Never lose the pack.</em></div>
+  </div>
+</div>
+<script src="scene.js"></script>
+</body>
+</html>

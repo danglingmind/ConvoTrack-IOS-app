@@ -1,0 +1,195 @@
+<!doctype html>
+<!--
+  App Store product page header — 21:9, rendered at 3840x1646 (1920x823 CSS px @2x).
+  Built around the real live-navigation capture (docs/onboarding-screenshots/01c_nav_all_four_visible.png);
+  the screenshot itself is untouched, only framed, tilted and captioned.
+  Render:  design/app-store-header/render.sh
+  Variants via URL hash: #text (headline + callouts) or #clean (no text, no localisation needed).
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #090B0D;
+    --lime: #CDEF1E;
+    --text: #F5F7FA;
+    --muted: #B4B9C1;
+  }
+  html, body { margin: 0; width: 1920px; height: 823px; overflow: hidden; background: var(--bg); }
+  body { font-family: system-ui, -apple-system, "SF Pro Display", sans-serif; color: var(--text); }
+  .stage { position: relative; width: 1920px; height: 823px; overflow: hidden;
+    background:
+      radial-gradient(600px 460px at 50% 52%, rgba(205,239,30,0.16), transparent 70%),
+      radial-gradient(1500px 800px at 50% 50%, #14181B 0%, var(--bg) 55%, #040506 100%);
+  }
+  svg.backdrop, svg.lines, svg.grain { position: absolute; inset: 0; }
+  svg.lines, svg.grain { pointer-events: none; }
+
+  /* Device: iPhone-style frame around the untouched screenshot (1206x2622), tilted for energy. */
+  /* Screen is exactly 1206:2622 (310x674) so the screenshot is never stretched. */
+  .phone { position: absolute; left: 50%; top: 66px; width: 310px; height: 674px; padding: 9px;
+    margin-left: -164px; border-radius: 60px; transform: rotate(-7deg);
+    background: linear-gradient(145deg, #4A4D50, #17191B 38%, #2A2D30 70%, #0E0F10);
+    box-shadow: 0 0 0 1.5px #5A5E62 inset, -30px 50px 90px rgba(0,0,0,0.8),
+                0 0 0 1px rgba(205,239,30,0.25); }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 51px; overflow: hidden; background: #000; }
+  .screen img { display: block; width: 100%; height: 100%; }
+  .marker { position: absolute; width: 0; height: 0; }
+
+  .copy { position: absolute; left: 226px; top: 0; bottom: 0; width: 520px;
+    display: flex; flex-direction: column; justify-content: center; padding-bottom: 40px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
+    font-size: 15px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase;
+    color: var(--lime); margin-bottom: 22px; padding: 9px 16px 9px 12px; border-radius: 999px;
+    background: rgba(205,239,30,0.10); border: 1px solid rgba(205,239,30,0.35); }
+  .eyebrow .live { width: 9px; height: 9px; border-radius: 50%; background: var(--lime);
+    box-shadow: 0 0 0 5px rgba(205,239,30,0.20), 0 0 14px var(--lime); }
+  .title { font-size: 86px; line-height: 0.96; font-weight: 900; letter-spacing: -2px;
+    font-stretch: 125%; font-variation-settings: "wdth" 125; }
+  .title em { font-style: normal; color: var(--lime); text-shadow: 0 0 40px rgba(205,239,30,0.45); }
+  .sub { margin-top: 24px; font-size: 22px; line-height: 1.4; color: var(--muted); max-width: 360px; }
+
+  .card { position: absolute; left: 1290px; display: flex; align-items: center; gap: 16px;
+    padding: 16px 24px 16px 16px; border-radius: 22px;
+    background: rgba(22,28,33,0.72); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06); }
+  .card .icon { width: 56px; height: 56px; border-radius: 16px; background: var(--lime);
+    display: grid; place-items: center; flex: none; box-shadow: 0 0 24px rgba(205,239,30,0.45); }
+  .card .k { font-size: 13px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--lime); }
+  .card .v { margin-top: 5px; font-size: 25px; line-height: 1.12; font-weight: 800;
+    font-stretch: 115%; font-variation-settings: "wdth" 115; white-space: nowrap; }
+
+  body.clean .copy, body.clean .card, body.clean svg.lines { display: none; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <svg class="backdrop" id="backdrop" viewBox="0 0 1920 823" width="1920" height="823">
+    <defs>
+      <!-- The road: the app icon's sweeping S, running behind the phone across the whole header. -->
+      <path id="road" d="M -120 770 C 260 800, 560 730, 800 560 S 1080 330, 1320 420 S 1700 520, 2060 250" fill="none"/>
+      <linearGradient id="roadFade" x1="0" x2="1920" y1="0" y2="0" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#CDEF1E" stop-opacity="0"/>
+        <stop offset="0.16" stop-color="#CDEF1E" stop-opacity="0.85"/>
+        <stop offset="0.84" stop-color="#CDEF1E" stop-opacity="0.85"/>
+        <stop offset="1" stop-color="#CDEF1E" stop-opacity="0"/>
+      </linearGradient>
+      <filter id="glow" x="-10%" y="-50%" width="120%" height="200%"><feGaussianBlur stdDeviation="16"/></filter>
+      <radialGradient id="phoneGlow">
+        <stop offset="0.35" stop-color="#CDEF1E" stop-opacity="0.22"/>
+        <stop offset="1" stop-color="#CDEF1E" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="vignette" cx="50%" cy="50%" r="75%">
+        <stop offset="0.55" stop-color="#040506" stop-opacity="0"/>
+        <stop offset="1" stop-color="#040506" stop-opacity="0.9"/>
+      </radialGradient>
+    </defs>
+    <g id="contours" fill="none" stroke="#8FA3B8" stroke-width="1"></g>
+    <use href="#road" stroke="#CDEF1E" stroke-opacity="0.45" stroke-width="40" filter="url(#glow)"/>
+    <use href="#road" stroke="#1A1F24" stroke-width="30" stroke-linecap="round"/>
+    <use href="#road" stroke="url(#roadFade)" stroke-width="14" stroke-linecap="round"/>
+    <use href="#road" stroke="#090B0D" stroke-opacity="0.55" stroke-width="2" stroke-dasharray="14 18"/>
+    <!-- Lime glow behind the phone (kept out of box-shadow, which Chrome clips into a visible seam). -->
+    <ellipse cx="960" cy="411" rx="300" ry="420" fill="url(#phoneGlow)" transform="rotate(-7 960 411)"/>
+    <rect width="1920" height="823" fill="url(#vignette)"/>
+  </svg>
+
+  <div class="copy">
+    <div class="eyebrow"><span class="live"></span>Group ride tracking</div>
+    <div class="title">Never lose<br><em>the pack.</em></div>
+    <div class="sub">Real-time group tracking for motorcycle rides.</div>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="screen" id="screen">
+      <img id="shot" src="../../docs/onboarding-screenshots/01c_nav_all_four_visible.png" alt="">
+    </div>
+  </div>
+
+  <svg class="lines" id="lines" width="1920" height="823"></svg>
+
+  <div class="card" id="cardGroup">
+    <div class="icon">
+      <svg width="34" height="34" viewBox="0 0 34 34" fill="#0C0E02">
+        <circle cx="17" cy="11" r="5.5"/><path d="M7 28c0-5.5 4.5-9 10-9s10 3.5 10 9z"/>
+        <circle cx="7" cy="14" r="3.6" opacity=".7"/><circle cx="27" cy="14" r="3.6" opacity=".7"/>
+        <path d="M0 27c0-4 2.8-6.5 6.5-6.5 1 0 1.9.2 2.7.5C7.2 22.6 6 24.6 6 27z" opacity=".7"/>
+        <path d="M34 27c0-4-2.8-6.5-6.5-6.5-1 0-1.9.2-2.7.5 2 1.6 3.2 3.6 3.2 6z" opacity=".7"/>
+      </svg>
+    </div>
+    <div><div class="k">Whole group</div><div class="v">Everyone live<br>on one map.</div></div>
+  </div>
+  <div class="card" id="cardGap">
+    <div class="icon">
+      <svg width="34" height="34" viewBox="0 0 34 34" fill="none" stroke="#0C0E02" stroke-width="3.2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 17h26M9 11l-6 6 6 6M25 11l6 6-6 6"/>
+      </svg>
+    </div>
+    <div><div class="k">Live gap</div><div class="v">Distance to<br>every rider.</div></div>
+  </div>
+
+  <svg class="grain" width="1920" height="823">
+    <filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0"/></filter>
+    <rect width="1920" height="823" filter="url(#noise)"/>
+  </svg>
+</div>
+
+<script>
+  if (location.hash === '#clean') document.body.classList.add('clean');
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, parent) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    parent && parent.appendChild(n);
+    return n;
+  };
+
+  // Topographic contours.
+  const contours = document.getElementById('contours');
+  for (let i = 0; i < 24; i++) {
+    const y0 = -30 + i * 38;
+    let d = `M -20 ${y0}`;
+    for (let x = -20; x <= 1940; x += 40) {
+      const y = y0 + 24 * Math.sin(x / 230 + i * 0.6) + 12 * Math.sin(x / 90 - i * 0.8);
+      d += ` L ${x} ${y.toFixed(1)}`;
+    }
+    el('path', { d, opacity: (0.07 + 0.03 * Math.sin(i)).toFixed(3) }, contours);
+  }
+
+  // Callout targets, in screenshot pixels (1206x2622); r = pin radius, so the line stops outside it.
+  const targets = {
+    cardGroup: { x: 455, y: 900, r: 38 },   // Arjun's pin
+    cardGap:   { x: 584, y: 2171, r: 54 },  // Kabir's pin
+  };
+
+  const place = () => {
+    const screen = document.getElementById('screen');
+    const lines = document.getElementById('lines');
+    lines.innerHTML = '';
+    for (const id in targets) {
+      const t = targets[id];
+      // Marker on the pin's right edge, inside the rotated screen, so the tilt is accounted for.
+      const m = document.createElement('div');
+      m.className = 'marker';
+      m.style.left = ((t.x + t.r) / 1206 * 100) + '%';
+      m.style.top = (t.y / 2622 * 100) + '%';
+      screen.appendChild(m);
+      const p = m.getBoundingClientRect();
+      const tx = p.left + 6, ty = p.top;
+      const card = document.getElementById(id);
+      card.style.top = (ty - card.offsetHeight / 2) + 'px';
+      const x0 = card.offsetLeft - 14;
+      el('path', { d: `M ${x0} ${ty} L ${tx} ${ty}`, stroke: '#CDEF1E', 'stroke-width': 1.5,
+        'stroke-dasharray': '3 5', fill: 'none', 'stroke-opacity': 0.85 }, lines);
+      for (const cx of [x0, tx]) el('circle', { cx, cy: ty, r: 3.5, fill: '#CDEF1E' }, lines);
+    }
+  };
+  const img = document.getElementById('shot');
+  img.complete ? place() : img.addEventListener('load', place);
+</script>
+</body>
+</html>

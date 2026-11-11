@@ -1,0 +1,109 @@
+{
+   "geocoded_waypoints" : 
+   [
+      {
+         "geocoder_status" : "OK",
+         "place_id" : "EjJOYW5kaSBIaWxscyBNYWluIFJkLCBOYW5kaSBIaWxscywgS2FybmF0YWthLCBJbmRpYSIuKiwKFAoSCYVn4wk75LE7EWojqenoX1iFEhQKEgkX6vzrReSxOxEIZhlZKfc5Fg",
+         "types" : 
+         [
+            "route"
+         ]
+      },
+      {
+         "geocoder_status" : "OK",
+         "place_id" : "ChIJF-r860XksTsRCGYZWSn3ORY",
+         "types" : 
+         [
+            "locality",
+            "political"
+         ]
+      }
+   ],
+   "routes" : 
+   [
+      {
+         "bounds" : 
+         {
+            "northeast" : 
+            {
+               "lat" : 13.3695913,
+               "lng" : 77.6837268
+            },
+            "southwest" : 
+            {
+               "lat" : 13.3612256,
+               "lng" : 77.67230959999999
+            }
+         },
+         "copyrights" : "Powered by Google, ©2026 Google",
+         "legs" : 
+         [
+            {
+               "distance" : 
+               {
+                  "text" : "2.6 km",
+                  "value" : 2650
+               },
+               "duration" : 
+               {
+                  "text" : "4 mins",
+                  "value" : 266
+               },
+               "end_address" : "Nandi Hills, Karnataka, India",
+               "end_location" : 
+               {
+                  "lat" : 13.3695913,
+                  "lng" : 77.67446129999999
+               },
+               "start_address" : "Nandi Hills Main Rd, Nandi Hills, Karnataka, India",
+               "start_location" : 
+               {
+                  "lat" : 13.36165,
+                  "lng" : 77.67230959999999
+               },
+               "steps" : 
+               [
+                  {
+                     "distance" : 
+                     {
+                        "text" : "2.6 km",
+                        "value" : 2650
+                     },
+                     "duration" : 
+                     {
+                        "text" : "4 mins",
+                        "value" : 266
+                     },
+                     "end_location" : 
+                     {
+                        "lat" : 13.3695913,
+                        "lng" : 77.67446129999999
+                     },
+                     "html_instructions" : "Head \u003cb\u003eeast\u003c/b\u003e on \u003cb\u003eNandi Hills Main Rd\u003c/b\u003e toward \u003cb\u003eTrail to Nandi One\u003c/b\u003e\u003cdiv style=\"font-size:0.9em\"\u003ePass by Rock photo points at Nandi hills (on the left in 1.8 km)\u003c/div\u003e",
+                     "polyline" : 
+                     {
+                        "points" : "iuppA}jayM?I?IBKH]BGNc@Ha@Fc@@KDWFMDE?ABI?C@M?E@c@@Y?GAKACAEAECGAKAM?K?KDYBY?M?G?A?GAIACAICGACACCGCEAICGM]GMGQGUGMEWKc@?AESCYAS?O?U?C?EEQCOESIg@Ok@Og@Mo@G]ESACE]EQCKEKQS[c@MSSc@?AIQCG?E?AAE@E?G@I?K?EACCQGWKWYq@KYO]ESEMASEa@Aa@?UGm@Cm@G_AEk@A]O}@OsAACIu@E_@CKAGCECGCGIKIIIIAA]OMAGAI?GBGBMHGHEJM`@ENCVCR?VB\\BPBP@N?DAFADCDMPSVOXMPIHEBGDG?G@M?C?G?C?O?C@G?I@G@C@EBABCBENCNANBT?T?NCTC^EfA?TANBT@NBN?L@L?B?JAFAFCFCFADEFEDQL]RUP[ZMLIHGDGBGBIBQBQHIBABE@IJEJQ^EZCHADCDA@A@A?C@C?E@C?K?KAG?K@Q?O@OFMJGPGRELKREFCHCDITAP?J?@AHADG\\GRGPGLCJKTGPEDEDEBGBMDQHULEDADGHAFABCJCNAL?@CR?H?LBHBPDPBN@R@FAD?FADCDGJIJQRMPKPEHEDCDOXGJIHEDGFEDE?C@E?CAA?AA"
+                     },
+                     "start_location" : 
+                     {
+                        "lat" : 13.36165,
+                        "lng" : 77.67230959999999
+                     },
+                     "travel_mode" : "DRIVING"
+                  }
+               ],
+               "traffic_speed_entry" : [],
+               "via_waypoint" : []
+            }
+         ],
+         "overview_polyline" : 
+         {
+            "points" : "iuppA}jayM?SLi@Rk@PeAFc@FMHUDqAE]Ig@?WHs@?_@I_@KUEQUk@]mAKe@Im@A}@O{@YsA]wAUsAI]W_@i@w@Se@Ma@@]Eg@So@e@kAUq@Ga@OgCSwDk@kEOy@GOSUKK]OMAQAOFURSl@If@Cj@LpAALEJ_AtAOLODY@[?]DOLI^@d@?d@Gt@E|A@d@Fz@C^O\\kAx@{@x@k@Nc@ROVQ^EZCHEJEBG@wAB]ROd@[r@MZA\\CPOp@O^]x@KHUHg@VGJKTIj@C\\BVNfAAZg@p@kAhBMLKDM?CA"
+         },
+         "summary" : "Nandi Hills Main Rd",
+         "warnings" : [],
+         "waypoint_order" : []
+      }
+   ],
+   "status" : "OK"
+}
