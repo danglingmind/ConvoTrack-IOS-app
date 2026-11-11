@@ -1,5 +1,6 @@
-• Tampilan baru: Beranda, lobi perjalanan, navigasi, dan ringkasan perjalanan didesain ulang, dengan satu jenis huruf yang bersih di seluruh aplikasi.
-• Petunjuk belokan demi belokan dengan suara, plus Live Activity dan Dynamic Island agar belokan berikutnya tetap tampil di Layar Terkunci.
-• Beberapa ajakan berkumpul kembali dan keadaan darurat kini bisa tampil sekaligus, dan pemanggil atau pemimpin dapat menutup ajakan berkumpul.
-• Batas rider ditampilkan saat kamu merencanakan perjalanan, dan lobi menunjukkan seberapa penuh rombongan.
-• Bilah atas yang lebih bersih dan kredit foto Google yang lebih tidak mencolok pada foto tujuan.
+• Rencanakan perjalanan di peta: cari tempat isi bensin dan makan di sepanjang rute, tekan lama untuk menaruh pin, dan hindari jalan tol atau jalan raya.
+• Bagikan rute perjalanan lewat tautan. Teman bisa melihatnya dulu lalu menempuhnya sendiri, sementara titik awal Anda tetap privat.
+• Ringkasan perjalanan kini menampilkan rute yang benar-benar Anda tempuh dan titik-titik tempat pemimpin berhenti untuk berkumpul kembali.
+• Notifikasi saat perjalanan dimulai atau berakhir, saat ajakan berkumpul dikirim, dan saat ada pengendara yang mengirim peringatan darurat. Pilih mana yang ingin Anda terima di Profil.
+• Ubah nama dan foto Anda di Profil.
+• Perjalanan yang berakhir saat aplikasi tertutup kini langsung terbuka di ringkasannya.

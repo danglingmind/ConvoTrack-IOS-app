@@ -1,5 +1,6 @@
-• Úplne nový vzhľad: Domov, lobby jazdy, navigácia aj zhrnutie jazdy sú prepracované a v celej appke je jediné čisté písmo.
-• Hlasové navádzanie zákrut a k tomu Aktivita naživo a Dynamic Island, aby ďalšia zákruta zostala na uzamknutej obrazovke.
-• Naraz sa teraz môže zobraziť viac výziev na zraz a núdzových alarmov a zraz môže zrušiť ten, kto ho vyhlásil, alebo vedúci.
-• Limit jazdcov vidíte pri plánovaní jazdy a lobby ukazuje, ako plná je skupina.
-• Čistejší horný panel a nenápadnejšie uvedenie autora z Google pri fotkách cieľov.
+• Plánujte jazdy na mape: hľadajte palivo a jedlo pozdĺž trasy, dlhým podržaním pridajte špendlík a vyhnite sa spoplatneným úsekom či diaľniciam.
+• Zdieľajte trasu jazdy cez odkaz. Priatelia si ju môžu pozrieť a prejsť sami; váš štartovací bod zostane súkromný.
+• Zhrnutie jazdy teraz ukazuje trasu, ktorú ste naozaj prešli, a miesta, kde vedúci zastavil na zraz.
+• Upozornenia na začiatok a koniec jazdy, zvolanie zrazu a núdzový alarm od motorkára. Vyberte si, ktoré chcete dostávať, v Profile.
+• Zmeňte si meno a fotku v Profile.
+• Jazda, ktorá skončila, kým bola aplikácia zatvorená, sa teraz otvorí rovno na svojom zhrnutí.

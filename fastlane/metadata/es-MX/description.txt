@@ -2,11 +2,10 @@ Rueden juntos, no como una fila de faros regada por la carretera.
 
 ConvoTrack mantiene a cada motociclista de tu grupo en un solo mapa en vivo: nadie se pierde en un crucero, nadie tiene que adivinar qué salida tomó el que va al frente y nadie tiene que orillarse para preguntar dónde quedó la banda.
 
+La ubicación en tiempo real en un chat grupal te muestra puntitos en un mapa. ConvoTrack te muestra quién se quedó atrás y te deja llamar a reagruparse.
+
 MAPA DEL GRUPO EN VIVO
 Mira a cada motociclista en tiempo real, con la distancia que te separa de cada uno. Los que se salen de la pantalla aparecen como marcadores en la orilla, así siempre sabes quién viene atrás y qué tan atrás viene.
-
-NAVEGACIÓN GIRO A GIRO
-Guía completa hasta el destino, con hora estimada de llegada y distancia restante siempre en pantalla. Agrega paradas en el camino cuando planeas la rodada.
 
 REAGRUPARSE CON UN TOQUE
 ¿Necesitan gasolina, algo de comer o una parada para fotos? Manda un aviso de reagrupamiento a todo el grupo y elige a qué distancia adelante se van a juntar. Cada motociclista recibe el punto al instante.
@@ -17,11 +16,14 @@ Si alguien se cae o necesita ayuda, un solo toque manda su ubicación exacta a t
 ÚNETE EN SEGUNDOS
 Cada rodada genera un código de invitación de seis caracteres. Comparte el enlace, dicta el código o escanea el QR: los motociclistas ya están en el mapa antes de ponerse los guantes.
 
-ROLES DE LA RODADA
-Líder de rodada, Marcapasos, Guardián de retaguardia y Piloto de formación se asignan según cómo rodó de verdad el grupo, no según quién se apuntó primero.
+NAVEGACIÓN GIRO A GIRO
+Guía completa hasta el destino, con hora estimada de llegada y distancia restante siempre en pantalla. Agrega paradas en el camino cuando planeas la rodada.
 
 RESUMEN DE LA RODADA
 Al terminar la rodada, todos reciben los números reales: tiempo real en el camino, distancia recorrida, la mayor separación que llegó a abrir el grupo y el orden final de llegada. Comparte la tarjeta de resumen con la banda.
+
+ROLES DE LA RODADA
+Líder de rodada, Marcapasos, Guardián de retaguardia y Piloto de formación se asignan según cómo rodó de verdad el grupo, no según quién se apuntó primero.
 
 HISTORIAL DE RODADAS
 Todas las rodadas que has liderado o a las que te has unido, guardadas en un solo lugar.

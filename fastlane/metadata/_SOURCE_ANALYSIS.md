@@ -48,3 +48,43 @@
   route planner / rider / pack / touring / biker.
   If a concept has no local search equivalent, DROP it and spend the chars on the next one.
 - Never mention price, discounts, or the word "free" anywhere.
+
+---
+
+# Round 2 (Nov 2026) — Regroup & SOS angle (see docs/aso-review.md)
+
+Sources are now the four English locales: en-US (US wording) and en-GB (UK/India wording).
+
+## What changes per locale
+1. **name** — keep the locale's existing name UNLESS its descriptor is awkward or untranslated.
+   Pattern stays `<local descriptor> — <brand>`. en-GB/en-AU/en-CA = `Bike Group Ride — ConvoTrack`.
+2. **subtitle** — NEW angle: "Regroup & SOS for <bike/motorcycle> groups" (en-GB) /
+   "Motorcycle crew regroup & SOS" (en-US). Translate the MEANING: gather-the-group-back-together
+   + SOS/emergency alert + for motorcycle groups. Use the word local riders use for motorcycle
+   (e.g. "moto", "Motorrad", "बाइक"). "SOS" stays Latin "SOS" where it is the local convention
+   (most locales); otherwise the local word for emergency alert. ≤30 chars.
+   The subtitle must NOT repeat a word already in the name (fixes name/subtitle overlap).
+3. **keywords** — concept list (adapt, in priority order, drop concepts with no local search term):
+   convoy / motorcycle gps / biker / location sharing / route planner / riding club /
+   touring / road trip / rideout / navigation / motorcycle (if not in name/subtitle).
+   No word that already appears in name or subtitle. No spaces after commas. Use the budget:
+   aim for 90–100 chars (CJK: fill with more concepts; they are short).
+   Never brand words, never "free", never Apple product names, never geo filler.
+4. **promotional_text** — translate en-US promo (≤170). India/Pakistan/Bangladesh locales
+   (hi, bn-BD, gu-IN, kn-IN, ml-IN, mr-IN, or-IN, pa-IN, ta-IN, te-IN, ur-PK) use the en-GB
+   version with "fuel or chai stop".
+5. **description** — take the locale's EXISTING description (already translated, vetted
+   vocabulary) and:
+   a. after the 2nd paragraph insert a translation of:
+      "Live location in a group chat shows you dots on a map. ConvoTrack shows you who has
+      dropped behind, and lets you call the regroup."
+   b. reorder the sections to: LIVE GROUP MAP → ONE TAP TO REGROUP → EMERGENCY ALERT →
+      JOIN IN SECONDS → TURN-BY-TURN NAVIGATION → RIDE SUMMARY → RIDE ROLES → RIDE HISTORY →
+      CONVOTRACK PRO, then the subscription legal paragraph and the two URL lines unchanged.
+   Do not otherwise rewrite the text.
+
+## Cross-localization pairs (one storefront indexes both — keep keyword fields DISJOINT)
+- India: en-GB + hi → hi must not repeat any en-GB keyword (en-GB is Latin; hi may use
+  Latin only for terms absent from en-GB).
+- US: en-US + es-MX → es-MX must not contain biker, gps, convoy, rideout or any en-US term.
+- Canada: en-CA + fr-CA → disjoint.

@@ -1,5 +1,6 @@
-• Un look completamente nuovo: Home, lobby del giro, navigazione e riepilogo del giro sono stati ridisegnati, con un unico font pulito ovunque.
-• Indicazioni vocali curva dopo curva, più una Live Activity (Attività in tempo reale) e la Dynamic Island per tenere la prossima svolta sulla schermata di blocco.
-• Ora più chiamate di raggruppamento ed emergenze possono comparire insieme, e chi ha chiamato o il capogruppo può chiudere un raggruppamento.
-• Il limite di motociclisti si vede mentre pianifichi un giro, e la lobby mostra quanto è pieno il gruppo.
-• Una barra superiore più pulita e un credito Google più discreto sulle foto delle destinazioni.
+• Pianifica i giri sulla mappa: cerca benzinai e posti dove mangiare lungo il percorso, tieni premuto per aggiungere un segnaposto ed evita pedaggi o autostrade.
+• Condividi il percorso di un giro con un link. Gli amici possono vederlo in anteprima e farlo per conto loro; il tuo punto di partenza resta privato.
+• Il riepilogo del giro ora mostra il percorso che hai fatto davvero e dove il capogruppo si è fermato per il raggruppamento.
+• Notifiche quando un giro inizia o finisce, quando viene chiamato un raggruppamento e quando un motociclista invia un allarme di emergenza. Scegli quali ricevere nel Profilo.
+• Cambia nome e foto nel Profilo.
+• Un giro terminato mentre l'app era chiusa ora si apre direttamente sul suo riepilogo.

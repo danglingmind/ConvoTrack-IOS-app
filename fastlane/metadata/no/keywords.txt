@@ -1,1 +1,1 @@
-motorsykkel,gps,mc tur,del posisjon,live sporing,motorsyklist,konvoi,venner,touring,rute
+konvoi,motorsykkel,gps,motorsyklist,del posisjon,ruteplanlegger,motorsykkelklubb,touring,roadtrip

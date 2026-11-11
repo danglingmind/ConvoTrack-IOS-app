@@ -1,5 +1,6 @@
-• Un tout nouveau look : l'accueil, le lobby de la sortie, la navigation et le bilan de sortie sont repensés, avec une seule police épurée partout.
-• Guidage vocal virage par virage, plus une Live Activity (Activité en direct) et la Dynamic Island pour garder le prochain virage sur votre écran verrouillé.
-• Plusieurs appels au regroupement et urgences peuvent désormais s'afficher en même temps, et l'auteur de l'appel ou le chef de groupe peut fermer un regroupement.
-• La limite de motards s'affiche pendant que vous planifiez une sortie, et le lobby indique à quel point le groupe est plein.
-• Une barre supérieure plus épurée et un crédit Google plus discret sur les photos de destination.
+• Préparez vos sorties sur la carte : cherchez stations-service et restos le long de l'itinéraire, appuyez longuement pour placer une épingle, et évitez péages ou autoroutes.
+• Partagez l'itinéraire d'une sortie par lien. Vos amis peuvent le découvrir et le rouler à leur tour ; votre point de départ reste privé.
+• Le bilan de sortie affiche désormais l'itinéraire réellement parcouru et les endroits où le chef de groupe s'est arrêté pour le regroupement.
+• Notifications au départ et à la fin d'une sortie, lors d'un appel au regroupement et quand un motard envoie une alerte d'urgence. Choisissez lesquelles recevoir dans Profil.
+• Modifiez votre nom et votre photo dans Profil.
+• Une sortie terminée pendant que l'app était fermée s'ouvre désormais directement sur son bilan.

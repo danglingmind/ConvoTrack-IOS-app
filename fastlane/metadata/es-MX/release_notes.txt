@@ -1,5 +1,6 @@
-• Un look totalmente nuevo: se rediseñaron el inicio, la sala de espera de la rodada, la navegación y el resumen de la rodada, con una sola tipografía limpia en todos lados.
-• Indicaciones de voz giro a giro, con una Actividad en vivo y la Dynamic Island para que el siguiente giro se vea en la pantalla de bloqueo.
-• Ahora se pueden mostrar al mismo tiempo varios avisos de reagrupamiento y emergencias, y quien lo lanzó o el líder puede descartar un reagrupamiento.
-• El límite de motociclistas se muestra mientras planeas una rodada, y la sala de espera indica qué tan lleno está el grupo.
-• Una barra superior más limpia y un crédito de fotos de Google más discreto en las fotos de destino.
+• Planea rodadas en el mapa: busca gasolineras y lugares para comer sobre tu ruta, mantén presionado para poner un pin y evita casetas o autopistas.
+• Comparte la ruta de una rodada con un enlace. Tus amigos pueden verla antes y rodarla ellos mismos; tu punto de salida se mantiene privado.
+• El resumen de la rodada ahora muestra la ruta que realmente recorrieron y dónde se detuvo el líder para reagruparse.
+• Notificaciones cuando una rodada empieza o termina, cuando se llama a reagruparse y cuando un motociclista manda una alerta de emergencia. Elige cuáles recibes en Perfil.
+• Cambia tu nombre y tu foto en Perfil.
+• Una rodada que terminó con la app cerrada ahora se abre directo en su resumen.

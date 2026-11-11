@@ -1,5 +1,6 @@
-• Täysin uusi ilme: Koti, ajon aula, navigointi ja ajon yhteenveto on suunniteltu uudelleen, ja kaikkialla on yksi selkeä kirjasin.
-• Puhutut käännösohjeet sekä Live-toiminto ja Dynamic Island, jotta seuraava käännös pysyy lukitusnäytöllä näkyvissä.
-• Useita kokoontumiskutsuja ja hätätilanteita voi nyt näkyä yhtä aikaa, ja kutsun lähettänyt tai ajon johtaja voi sulkea kokoontumiskutsun.
-• Kuljettajaraja näkyy ajoa suunnitellessasi, ja ajon aula näyttää, kuinka täynnä ryhmä on.
-• Siistimpi yläpalkki ja hillitympi Google-kuvalähde kohdekuvissa.
+• Suunnittele ajot kartalla: hae tankkauspaikkoja ja ruokaa reitin varrelta, lisää nasta pitkällä painalluksella ja vältä tietulleja tai moottoriteitä.
+• Jaa ajon reitti linkillä. Kaverit voivat esikatsella sen ja ajaa sen itse; lähtöpisteesi pysyy yksityisenä.
+• Ajon yhteenveto näyttää nyt todella ajetun reitin ja kohdat, joissa ajon johtaja pysähtyi kokoamaan ryhmän.
+• Ilmoitukset, kun ajo alkaa tai päättyy, kun ryhmä kutsutaan kokoon ja kun ajaja lähettää hätähälytyksen. Valitse Profiilissa, mitkä haluat saada.
+• Vaihda nimesi ja kuvasi Profiilissa.
+• Ajo, joka päättyi sovelluksen ollessa suljettuna, avautuu nyt suoraan yhteenvetoonsa.

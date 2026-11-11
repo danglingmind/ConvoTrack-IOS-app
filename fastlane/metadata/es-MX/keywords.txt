@@ -1,1 +1,1 @@
-gps moto,rodada en grupo,ubicación en vivo,motociclista,biker,ruta moto,caravana,viaje
+caravana,ubicación,tiempo real,compartir,ruta,motoclub,navegador,motociclismo,motero,mototurismo

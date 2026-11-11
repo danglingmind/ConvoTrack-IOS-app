@@ -1,5 +1,6 @@
-• Visual novo: Início, lobby do rolê, navegação e resumo do rolê foram redesenhados, com uma única fonte limpa em todo o app.
-• Direções curva a curva por voz, além de uma Atividade ao Vivo e a Dynamic Island para a próxima curva ficar na sua Tela Bloqueada.
-• Vários chamados de reagrupamento e emergências agora podem aparecer ao mesmo tempo, e quem chamou ou o líder pode dispensar um reagrupamento.
-• Seu limite de motociclistas aparece enquanto você planeja o rolê, e o lobby mostra o quanto o grupo está cheio.
-• Barra superior mais limpa e um crédito do Google mais discreto nas fotos de destino.
+• Planeje rolês no mapa: busque postos de gasolina e lugares para comer ao longo da rota, toque e segure para marcar um ponto e evite pedágios ou rodovias.
+• Compartilhe a rota de um rolê por link. A galera pode ver antes e fazer o trajeto por conta própria; seu ponto de partida continua privado.
+• O resumo do rolê agora mostra a rota que você realmente fez e onde o líder parou para o reagrupamento.
+• Notificações quando um rolê começa ou termina, quando alguém chama um reagrupamento e quando um motociclista envia um alerta de emergência. Escolha quais receber no Perfil.
+• Mude seu nome e sua foto no Perfil.
+• Um rolê que terminou com o app fechado agora abre direto no resumo.

@@ -2,11 +2,10 @@ Rijd als groep, niet als een uitgerekte sliert koplampen.
 
 ConvoTrack houdt iedere motorrijder in je groep op één live kaart – niemand raakt achterop bij een kruispunt, niemand hoeft te gokken welke afslag de ritleider nam en niemand hoeft langs de kant te stoppen om te vragen waar de rest is.
 
+Live locatie in een groepsapp laat je stipjes op een kaart zien. ConvoTrack laat zien wie er achterop is geraakt, en laat je iedereen oproepen om te hergroeperen.
+
 LIVE GROEPSKAART
 Zie elke rijder in realtime, inclusief de afstand tussen jou en ieder ander. Rijders die van je scherm verdwijnen, verschijnen als markering aan de rand, zodat je altijd weet wie achter je zit en hoe ver.
-
-NAVIGATIE MET RIJINSTRUCTIES
-Volledige routebegeleiding naar de bestemming, met aankomsttijd en resterende afstand altijd in beeld. Voeg tussenstops toe wanneer je de rit plant.
 
 HERGROEPEREN MET ÉÉN TIK
 Tanken, eten of een fotostop? Stuur een oproep om te hergroeperen naar de hele groep en kies hoever verderop iedereen samenkomt. Elke rijder krijgt de locatie meteen binnen.
@@ -17,11 +16,14 @@ Gaat iemand onderuit of is er hulp nodig, dan stuurt één tik de exacte locatie
 IN SECONDEN MEEDOEN
 Elke rit krijgt een uitnodigingscode van zes tekens. Deel de link, lees de code voor of scan de QR – rijders staan op de kaart voordat ze hun handschoenen aanhebben.
 
-ROLLEN IN DE RIT
-Ritleider, Tempobewaker, Sluitrijder en Formatierijder worden toegekend op basis van hoe de groep echt gereden heeft, niet op wie zich als eerste inschreef.
+NAVIGATIE MET RIJINSTRUCTIES
+Volledige routebegeleiding naar de bestemming, met aankomsttijd en resterende afstand altijd in beeld. Voeg tussenstops toe wanneer je de rit plant.
 
 RITSAMENVATTING
 Als de rit klaar is, krijgt iedereen de echte cijfers: werkelijke tijd op de weg, afgelegde afstand, het grootste gat dat de groep liet vallen en de uiteindelijke volgorde. Deel de samenvatting met je maten.
+
+ROLLEN IN DE RIT
+Ritleider, Tempobewaker, Sluitrijder en Formatierijder worden toegekend op basis van hoe de groep echt gereden heeft, niet op wie zich als eerste inschreef.
 
 RITGESCHIEDENIS
 Elke rit die je hebt geleid of meegereden, op één plek.

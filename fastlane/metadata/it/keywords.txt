@@ -1,1 +1,1 @@
-gps moto,giro in gruppo,posizione live,itinerario,motociclista,centauro,turismo,motoraduno
+gps,centauro,biker,condivisione posizione,itinerario,motoclub,motoraduno,mototurismo,navigatore,giro

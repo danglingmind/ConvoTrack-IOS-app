@@ -1,5 +1,6 @@
-• Świeży, nowy wygląd: ekran główny, lobby trasy, nawigacja i podsumowanie trasy zostały przeprojektowane, z jedną czytelną czcionką w całej aplikacji.
-• Głosowe wskazówki zakręt po zakręcie oraz Aktywność na żywo i Dynamic Island, dzięki którym kolejny zakręt zostaje na ekranie blokady.
-• Kilka wezwań do zbiórki i alarmów awaryjnych może się teraz wyświetlać naraz, a wzywający lub prowadzący może zamknąć zbiórkę.
-• Limit motocyklistów widać podczas planowania trasy, a lobby pokazuje, jak pełna jest grupa.
-• Czytelniejszy górny pasek i mniej rzucające się w oczy źródło zdjęć Google przy zdjęciach celów podróży.
+• Planuj trasy na mapie: szukaj stacji paliw i miejsc na jedzenie wzdłuż trasy, przytrzymaj, by wbić pinezkę, i omijaj płatne drogi lub autostrady.
+• Udostępniaj trasę przejazdu linkiem. Znajomi mogą ją podejrzeć i przejechać sami, a Twój punkt startowy pozostaje prywatny.
+• Podsumowanie trasy pokazuje teraz trasę, którą faktycznie przejechaliście, i miejsca, w których prowadzący zatrzymał się na zbiórkę.
+• Powiadomienia, gdy trasa się zaczyna lub kończy, gdy ktoś zwołuje zbiórkę i gdy motocyklista wysyła alarm awaryjny. Wybierz, które chcesz dostawać, w Profilu.
+• Zmieniaj imię i zdjęcie w Profilu.
+• Trasa, która zakończyła się, gdy aplikacja była zamknięta, otwiera się teraz od razu na swoim podsumowaniu.

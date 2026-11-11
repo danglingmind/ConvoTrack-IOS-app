@@ -1,1 +1,1 @@
-motosiklet gps,grup sürüşü,canlı konum,rota planlayıcı,motorcu,konvoy,tur,harita,konum paylaşımı
+konvoy,motor gps,biker,canlı konum paylaşımı,rota planlayıcı,kulüp,tur,yol gezisi,navigasyon,sürüş

@@ -1,0 +1,26 @@
+{
+  "business": "ConvoTrack: iOS app for group motorcycle rides (live group map, regroup, emergency alert, invite codes, ride roles, ride summary). 3-day free trial, then Pro subscription.",
+  "target": "Motorcycle riders aged 20-60 who ride in groups of 4-40, in India (weekend clubs, RE/KTM groups, Ladakh/Goa trips), the UK (rideouts, bike-meet groups, older touring riders) and the US (touring, Harley/adventure groups); both organisers and regular members.",
+  "where": "App Store search: India (en-GB / hi listing), UK (en-GB), US (en-US)",
+  "age": [20, 60],
+  "segments": [
+    {"name": "India", "share": 0.50, "income": [600000, 3500000]},
+    {"name": "UK", "share": 0.25, "income": [25000, 70000]},
+    {"name": "US", "share": 0.25, "income": [45000, 140000]}
+  ],
+  "behaviours": [
+    {"name": "Ride leader / organiser", "share": 0.45, "how": "Plans the route, runs the WhatsApp or Facebook group, chooses the tools the group uses."},
+    {"name": "Regular member", "share": 0.55, "how": "Installs whatever the leader sends; rarely searches for ride apps alone."}
+  ],
+  "objections": [
+    "Everyone in the group has to install it or it is useless",
+    "WhatsApp live location / intercom / the drop-off system already does this",
+    "No signal on the routes we ride",
+    "Subscription after a short trial; do members pay too?",
+    "Not clear what it is: tracker, sat-nav or logger?",
+    "Group cap of 25 riders",
+    "Battery drain on a long ride"
+  ],
+  "habits": ["shares WhatsApp live location before rides", "owns a Sena or Cardo intercom", "rides Sundays only", "does one long trip a year"],
+  "_note": "Guessed from the brief and the listing; no real customer interviews used."
+}

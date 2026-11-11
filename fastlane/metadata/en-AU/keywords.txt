@@ -1,1 +1,1 @@
-motorbike gps,group ride,ride out,rideout,live location,biker,touring,bike tracker,convoy
+motorbike,rideout,convoy,motorcycle gps,biker,live location,route planner,riding club,touring

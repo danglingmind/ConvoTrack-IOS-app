@@ -2,11 +2,10 @@ Jedźcie jak zgrana grupa, a nie jak rozsypany sznur świateł.
 
 ConvoTrack pokazuje każdego motocyklistę z Twojej grupy na jednej mapie na żywo — nikt nie gubi się na skrzyżowaniu, nikt nie zgaduje, którym zjazdem pojechał prowadzący i nikt nie musi się zatrzymywać, żeby zapytać, gdzie jest reszta.
 
+Lokalizacja na żywo w czacie grupowym pokazuje kropki na mapie. ConvoTrack pokazuje, kto został w tyle, i pozwala zwołać zbiórkę.
+
 MAPA GRUPY NA ŻYWO
 Widzisz każdego motocyklistę w czasie rzeczywistym wraz z dystansem, jaki Was dzieli. Ci, którzy znikną z ekranu, pojawiają się jako znaczniki przy krawędzi — zawsze wiesz, kto jest z tyłu i jak daleko.
-
-NAWIGACJA ZAKRĘT PO ZAKRĘCIE
-Pełne prowadzenie do celu, z czasem przyjazdu i pozostałym dystansem stale na ekranie. Planując trasę, możesz dodać przystanki po drodze.
 
 ZBIÓRKA JEDNYM DOTKNIĘCIEM
 Paliwo, jedzenie albo postój na zdjęcie? Wyślij wezwanie do zbiórki całej grupie i wybierz, jak daleko przed sobą macie się spotkać. Każdy motocyklista dostaje lokalizację natychmiast.
@@ -17,11 +16,14 @@ Jeśli ktoś się przewróci albo potrzebuje pomocy, jedno dotknięcie wysyła j
 DOŁĄCZASZ W KILKA SEKUND
 Każda trasa ma sześcioznakowy kod zaproszenia. Udostępnij link, podyktuj kod albo zeskanuj QR — motocykliści są na mapie, zanim zdążą założyć rękawice.
 
-ROLE W GRUPIE
-Prowadzący Grupę, Strażnik Tempa, Zamykający Stawkę i Motocyklista Formacji przyznawani są za to, jak naprawdę jechała grupa, a nie za kolejność zapisów.
+NAWIGACJA ZAKRĘT PO ZAKRĘCIE
+Pełne prowadzenie do celu, z czasem przyjazdu i pozostałym dystansem stale na ekranie. Planując trasę, możesz dodać przystanki po drodze.
 
 PODSUMOWANIE TRASY
 Po zakończeniu każdy dostaje prawdziwe liczby: rzeczywisty czas w trasie, pokonany dystans, największy rozjazd grupy i końcową kolejność. Udostępnij kartę podsumowania ekipie.
+
+ROLE W GRUPIE
+Prowadzący Grupę, Strażnik Tempa, Zamykający Stawkę i Motocyklista Formacji przyznawani są za to, jak naprawdę jechała grupa, a nie za kolejność zapisów.
 
 HISTORIA TRAS
 Wszystkie trasy, które poprowadziłeś lub w których jechałeś, w jednym miejscu.

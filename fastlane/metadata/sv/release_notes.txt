@@ -1,5 +1,6 @@
-• Helt ny look: Hem, turlobbyn, navigationen och tursammanfattningen är omgjorda, med ett enda rent typsnitt genomgående.
-• Talad vägledning sväng för sväng, plus en Live-aktivitet och Dynamic Island så att nästa sväng syns på låsskärmen.
-• Flera samlingsanrop och nödlarm kan nu visas samtidigt, och den som ropade eller turledaren kan avfärda ett samlingsanrop.
-• Din förargräns visas medan du planerar en tur, och lobbyn visar hur full gruppen är.
-• Ett renare överfält och en mer diskret Google-bildkälla på destinationsbilder.
+• Planera turer på kartan: sök efter bensin och mat längs rutten, tryck länge för att sätta ut en nål och undvik vägtullar eller motorvägar.
+• Dela en turs rutt med en länk. Vänner kan förhandsgranska den och köra den själva; din startpunkt förblir privat.
+• Tursammanfattningen visar nu rutten ni faktiskt körde och var turledaren stannade för att samla gruppen.
+• Notiser när en tur startar eller avslutas, när gruppen kallas samman och när en förare skickar ett nödlarm. Välj vilka du vill få under Profil.
+• Ändra ditt namn och din bild under Profil.
+• En tur som avslutades medan appen var stängd öppnas nu direkt i sin sammanfattning.

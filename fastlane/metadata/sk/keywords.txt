@@ -1,1 +1,1 @@
-moto gps,jazda s priateľmi,zdieľanie polohy,plánovač trás,motorkár,skupina,cestovanie,motorka
+konvoj,moto gps,biker,zdieľanie polohy,plánovač trás,motoklub,mototuristika,výlet,navigácia,motorka

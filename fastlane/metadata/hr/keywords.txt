@@ -1,1 +1,1 @@
-moto gps,vožnja s prijateljima,dijeljenje lokacije,planer rute,motorist,grupa,turing,biker
+konvoj,motocikl gps,bajker,dijeljenje lokacije,planer rute,motoklub,mototuring,putovanje,navigacija

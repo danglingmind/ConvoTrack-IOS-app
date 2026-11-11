@@ -1,5 +1,6 @@
-• A fresh new look: Home, ride lobby, navigation and ride summary are redesigned, with one clean typeface throughout.
-• Spoken turn-by-turn directions, plus a Live Activity and Dynamic Island so the next turn stays on your Lock Screen.
-• Several regroup calls and emergencies can now show at once, and the caller or leader can dismiss a regroup.
-• Your rider limit is shown while you plan a ride, and the lobby shows how full the pack is.
-• A cleaner top bar and a quieter Google photo credit on destination photos.
+• Plan rides on the map: search for fuel and food along your route, long-press to drop a pin, and avoid tolls or highways.
+• Share a ride's route with a link. Friends can preview it and ride it themselves; your start point stays private.
+• The ride summary now shows the route you actually rode and where the leader stopped to regroup.
+• Notifications when a ride starts or ends, when a regroup is called and when a rider sends an emergency alert. Choose which ones you get in Profile.
+• Change your name and photo in Profile.
+• A ride that ended while the app was closed now opens straight to its summary.

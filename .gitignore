@@ -32,3 +32,34 @@ fastlane/test_output
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Media stays local: never commit images, video or audio outside the app bundle
+# (app assets under convotrack/ are still tracked). Already-tracked files are unaffected.
+**/.hyperframes/
+/design/**/*.png
+/design/**/*.jpg
+/design/**/*.jpeg
+/design/**/*.webp
+/design/**/*.heic
+/design/**/*.gif
+/design/**/*.mp4
+/design/**/*.mov
+/design/**/*.m4a
+/design/**/*.mp3
+/design/**/*.wav
+/docs/**/*.png
+/docs/**/*.jpg
+/docs/**/*.jpeg
+/docs/**/*.webp
+/docs/**/*.heic
+/docs/**/*.gif
+/docs/**/*.mp4
+/docs/**/*.mov
+/.claude/**/*.png
+/.claude/**/*.jpg
+/.claude/**/*.jpeg
+/.claude/**/*.webp
+/.claude/**/*.mp4
+/.claude/**/*.mov
+/founder/**/*.png
+/founder/**/*.jpg

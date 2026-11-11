@@ -1,5 +1,6 @@
-• Et helt nyt udtryk: Hjem, turlobby, navigation og turopsummering er redesignet med én ren skrifttype hele vejen igennem.
-• Talt sving-for-sving-vejledning plus en Live aktivitet og Dynamic Island, så næste sving står på din låseskærm.
-• Flere samlingskald og nødsituationer kan nu vises samtidig, og den, der kaldte, eller turlederen kan afvise et samlingskald.
-• Din grænse for antal kørere vises, mens du planlægger en tur, og turlobbyen viser, hvor fyldt gruppen er.
-• En renere topbjælke og en mere diskret Google-fotokreditering på fotos af destinationer.
+• Planlæg ture på kortet: Søg efter brændstof og mad langs ruten, tryk længe for at sætte en nål, og undgå betalingsveje eller motorveje.
+• Del en turs rute med et link. Venner kan se den på forhånd og selv køre den; dit startpunkt forbliver privat.
+• Turopsummeringen viser nu den rute, I faktisk kørte, og hvor turlederen holdt ind for at samle gruppen.
+• Notifikationer, når en tur starter eller slutter, når der sendes et samlingskald, og når en kører sender en nødalarm. Vælg under Profil, hvilke du vil have.
+• Skift dit navn og billede under Profil.
+• En tur, der sluttede, mens appen var lukket, åbner nu direkte i sin opsummering.

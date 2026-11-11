@@ -1,1 +1,1 @@
-gps moto,rolê em grupo,localização ao vivo,rota,motociclista,motoclube,motoqueiro,turismo
+gps,motoqueiro,comboio,localização,compartilhar,rota,motoclube,rolê,mototurismo,navegação,viagem

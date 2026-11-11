@@ -1,5 +1,6 @@
-• Een frisse nieuwe look: Home, ritlobby, navigatie en ritsamenvatting zijn opnieuw ontworpen, met overal één strak lettertype.
-• Gesproken navigatie met rijinstructies, plus een Live-activiteit en Dynamic Island zodat de volgende afslag op je toegangsscherm blijft staan.
-• Meerdere oproepen om te hergroeperen en noodmeldingen kunnen nu tegelijk worden getoond, en de beller of ritleider kan een hergroepering sluiten.
-• Je rijderslimiet wordt getoond tijdens het plannen van een rit en de lobby laat zien hoe vol de groep zit.
-• Een rustigere bovenbalk en een subtielere Google-fotovermelding bij bestemmingsfoto's.
+• Plan ritten op de kaart: zoek tankstations en eetplekken langs je route, houd ingedrukt om een speld te plaatsen en vermijd tolwegen of snelwegen.
+• Deel de route van een rit met een link. Vrienden kunnen hem vooraf bekijken en zelf rijden; je startpunt blijft privé.
+• De ritsamenvatting laat nu de route zien die je echt hebt gereden en waar de ritleider stopte om te hergroeperen.
+• Meldingen als een rit begint of eindigt, als er een oproep om te hergroeperen komt en als een rijder een noodoproep stuurt. Kies in je profiel welke je wilt ontvangen.
+• Wijzig je naam en foto in je profiel.
+• Een rit die eindigde terwijl de app gesloten was, opent nu direct op de samenvatting.

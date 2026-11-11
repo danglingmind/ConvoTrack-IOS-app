@@ -1,5 +1,6 @@
-• Úplně nový vzhled: přepracované jsou Domů, vstupní místnost jízdy, navigace i shrnutí jízdy, všude s jedním čistým písmem.
-• Hlasové navádění zatáčku po zatáčce a Živá aktivita s Dynamic Island, aby další odbočka zůstala na zamčené obrazovce.
-• Nyní se může zobrazit několik výzev ke srazu a nouzových alarmů najednou a ten, kdo sraz svolal, nebo vedoucí jej může zrušit.
-• Při plánování jízdy vidíte limit jezdců a vstupní místnost ukazuje, jak moc je skupina zaplněná.
-• Čistší horní lišta a nenápadnější uvedení zdroje fotek od Google u fotografií cílů.
+• Plánujte jízdy na mapě: hledejte benzinky a jídlo podél trasy, dlouhým podržením přidejte špendlík a vyhněte se mýtným úsekům nebo dálnicím.
+• Sdílejte trasu jízdy odkazem. Přátelé si ji mohou prohlédnout a projet sami; váš výchozí bod zůstane soukromý.
+• Shrnutí jízdy nyní ukazuje trasu, kterou jste skutečně projeli, a místa, kde vedoucí zastavil kvůli srazu.
+• Oznámení, když jízda začne nebo skončí, když je svolán sraz a když jezdec pošle nouzový alarm. Která chcete dostávat, vyberete v Profilu.
+• Změňte své jméno a fotku v Profilu.
+• Jízda, která skončila při zavřené aplikaci, se nyní otevře rovnou na svém shrnutí.

@@ -1,5 +1,6 @@
-• Potpuno novi izgled: početni zaslon, predvorje vožnje, navigacija i sažetak vožnje redizajnirani su, s jednim čistim fontom svuda.
-• Glasovne upute zavoj po zavoj, uz Live Activity (Aktivnosti uživo) i Dynamic Island kako bi sljedeći zavoj ostao na vašem zaključanom zaslonu.
-• Više poziva na okupljanje i hitnih slučajeva sada se može prikazati istodobno, a pozivatelj ili vođa može odbaciti okupljanje.
-• Ograničenje broja vozača prikazuje se dok planirate vožnju, a predvorje pokazuje koliko je grupa popunjena.
-• Čišća gornja traka i diskretniji Google naziv autora na fotografijama odredišta.
+• Planirajte vožnje na karti: tražite gorivo i hranu uz rutu, dugim pritiskom postavite oznaku te izbjegnite cestarine ili autoceste.
+• Podijelite rutu vožnje poveznicom. Prijatelji je mogu pregledati i sami je odvoziti, a vaša početna točka ostaje privatna.
+• Sažetak vožnje sada prikazuje rutu koju ste stvarno vozili i gdje je vođa stao radi okupljanja.
+• Obavijesti kad vožnja počne ili završi, kad se pozove okupljanje i kad netko pošalje hitno upozorenje. U Profilu odaberite koje želite primati.
+• Promijenite ime i fotografiju u Profilu.
+• Vožnja koja je završila dok je aplikacija bila zatvorena sada se otvara izravno na svom sažetku.

@@ -1,5 +1,6 @@
-• Ein ganz neuer Look: Start, Tour-Lobby, Navigation und Tour-Auswertung wurden neu gestaltet – mit einer einheitlichen, klaren Schrift.
-• Gesprochene Abbiegehinweise sowie eine Live-Aktivität und Dynamic Island, damit die nächste Abbiegung auf dem Sperrbildschirm sichtbar bleibt.
-• Mehrere Sammel-Rufe und Notfälle können jetzt gleichzeitig angezeigt werden, und wer den Ruf ausgelöst hat oder der Tourleiter kann einen Sammel-Ruf schließen.
-• Dein Fahrerlimit wird bei der Tourplanung angezeigt, und die Tour-Lobby zeigt, wie voll die Gruppe ist.
-• Eine aufgeräumtere obere Leiste und ein dezenterer Google-Fotonachweis bei Zielfotos.
+• Plane Touren auf der Karte: Suche Tankstellen und Essen entlang der Route, setze per langem Druck eine Stecknadel und meide Maut oder Autobahnen.
+• Teile die Route einer Tour per Link. Freunde können sie vorab ansehen und selbst fahren – dein Startpunkt bleibt privat.
+• Die Tour-Auswertung zeigt jetzt die tatsächlich gefahrene Route und wo der Tourleiter zum Sammeln angehalten hat.
+• Benachrichtigungen, wenn eine Tour startet oder endet, ein Sammel-Ruf kommt oder ein Fahrer einen Notfall-Alarm sendet. Im Profil legst du fest, welche du bekommst.
+• Ändere deinen Namen und dein Foto im Profil.
+• Eine Tour, die bei geschlossener App beendet wurde, öffnet sich jetzt direkt mit ihrer Auswertung.

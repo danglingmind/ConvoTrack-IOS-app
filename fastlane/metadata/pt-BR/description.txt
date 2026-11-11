@@ -2,11 +2,10 @@ Ande em grupo de verdade, não numa fila de faróis espalhados pela estrada.
 
 O ConvoTrack mantém cada motociclista do seu grupo em um único mapa ao vivo: ninguém fica para trás num cruzamento, ninguém precisa adivinhar qual saída o líder pegou e ninguém precisa encostar para perguntar onde a galera foi parar.
 
+A localização em tempo real num grupo de conversa mostra pontinhos num mapa. O ConvoTrack mostra quem ficou para trás e deixa você chamar o reagrupamento.
+
 MAPA DO GRUPO AO VIVO
 Veja cada motociclista em tempo real, com a distância entre você e cada um deles. Quem sai da tela aparece como marcador na borda, então você sempre sabe quem está atrás e a que distância.
-
-NAVEGAÇÃO CURVA A CURVA
-Orientação completa até o destino, com horário previsto de chegada e distância restante sempre na tela. Adicione paradas no caminho na hora de planejar o rolê.
 
 REAGRUPAR COM UM TOQUE
 Precisa de gasolina, de comer alguma coisa ou de uma parada para foto? Mande um chamado de reagrupamento para o grupo inteiro e escolha a que distância à frente todo mundo deve se encontrar. Cada motociclista recebe o ponto na hora.
@@ -17,11 +16,14 @@ Se alguém cair ou precisar de ajuda, um toque envia a localização exata dessa
 ENTRE EM SEGUNDOS
 Cada rolê ganha um código de convite de seis caracteres. Compartilhe o link, dite o código ou escaneie o QR: os motociclistas já estão no mapa antes de calçar as luvas.
 
-FUNÇÕES DO ROLÊ
-Líder do rolê, Regulador de ritmo, Guardião da retaguarda e Piloto de formação são definidos pelo jeito que o grupo realmente andou, não por quem se inscreveu primeiro.
+NAVEGAÇÃO CURVA A CURVA
+Orientação completa até o destino, com horário previsto de chegada e distância restante sempre na tela. Adicione paradas no caminho na hora de planejar o rolê.
 
 RESUMO DO ROLÊ
 Quando o rolê termina, todo mundo recebe os números reais: tempo de estrada de verdade, distância percorrida, o maior vão que o grupo chegou a abrir e a ordem final de chegada. Compartilhe o card de resumo com a turma.
+
+FUNÇÕES DO ROLÊ
+Líder do rolê, Regulador de ritmo, Guardião da retaguarda e Piloto de formação são definidos pelo jeito que o grupo realmente andou, não por quem se inscreveu primeiro.
 
 HISTÓRICO
 Todo rolê que você liderou ou de que participou, guardado em um só lugar.

@@ -1,1 +1,1 @@
-gps moto,rutas en grupo,compartir ubicación,motero,quedada,ruta moto,viaje,motorista
+gps,motorista,biker,compartir ubicación,planificador,rutas,motoclub,quedada,mototurismo,navegador

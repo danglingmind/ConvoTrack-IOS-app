@@ -1,5 +1,6 @@
-• Yepyeni bir görünüm: Ana sayfa, sürüş lobisi, navigasyon ve sürüş özeti yeniden tasarlandı; baştan sona tek bir temiz yazı tipi kullanılıyor.
-• Sesli adım adım yol tarifi ve bir sonraki dönüşün Kilit Ekranı'da görünmesi için Canlı Etkinlik ile Dynamic Island desteği.
-• Birden fazla toplanma çağrısı ve acil durum artık aynı anda görünebiliyor; çağrıyı yapan kişi veya lider bir toplanma çağrısını kapatabiliyor.
-• Sürüşü planlarken sürücü sınırınız görünür, lobi de grubun ne kadar dolu olduğunu gösterir.
-• Daha sade bir üst çubuk ve varış noktası fotoğraflarında daha sessiz bir Google fotoğraf künyesi.
+• Sürüşleri harita üzerinde planlayın: rotanız boyunca yakıt ve yemek arayın, iğne bırakmak için basılı tutun, ücretli yollardan veya otoyollardan kaçının.
+• Bir sürüşün rotasını bağlantıyla paylaşın. Arkadaşlarınız rotayı önizleyip kendileri sürebilir; başlangıç noktanız gizli kalır.
+• Sürüş özeti artık gerçekte sürdüğünüz rotayı ve liderin toplanma için nerede durduğunu gösteriyor.
+• Sürüş başladığında veya bittiğinde, toplanma çağrısı yapıldığında ve bir motorcu acil durum uyarısı gönderdiğinde bildirim alın. Hangilerini alacağınızı Profil'den seçin.
+• Adınızı ve fotoğrafınızı Profil'den değiştirin.
+• Uygulama kapalıyken biten bir sürüş artık doğrudan özetiyle açılıyor.

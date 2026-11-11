@@ -1,5 +1,6 @@
-• Un aspecte completament nou: s'han redissenyat l'inici, la sala d'espera de la ruta, la navegació i el resum de la ruta, amb una sola tipografia neta a tot arreu.
-• Indicacions de veu pas a pas, amb una Activitat en directe i la Dynamic Island perquè el proper gir es vegi a la pantalla de bloqueig.
-• Ara es poden mostrar alhora diversos avisos de reagrupament i emergències, i qui l'ha llançat o el líder pot descartar un reagrupament.
-• El límit de motoristes es veu mentre planifiques una ruta, i la sala d'espera mostra com de ple està el grup.
-• Una barra superior més neta i un crèdit de fotos de Google més discret a les fotos de destinació.
+• Planifica rutes al mapa: cerca benzineres i llocs per menjar al llarg del recorregut, mantén premut per deixar una xinxeta i evita peatges o autopistes.
+• Comparteix el recorregut d'una ruta amb un enllaç. Els amics poden fer-hi un cop d'ull i fer-lo pel seu compte; el teu punt de sortida continua sent privat.
+• El resum de la ruta ara mostra el recorregut que heu fet de debò i on s'ha aturat el líder per reagrupar el grup.
+• Notificacions quan una ruta comença o acaba, quan es crida un reagrupament i quan un motorista envia una alerta d'emergència. Tria quines vols rebre a Perfil.
+• Canvia el teu nom i la teva foto a Perfil.
+• Una ruta que ha acabat amb l'app tancada ara s'obre directament al seu resum.

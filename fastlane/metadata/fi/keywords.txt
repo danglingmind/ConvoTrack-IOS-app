@@ -1,1 +1,1 @@
-moottoripyörä,gps,reittisuunnittelu,sijainnin jako,live-seuranta,konvoi,kaverit,mp kerho
+konvoi,moottoripyörä,gps,sijainnin jako,reittisuunnittelu,moottoripyöräkerho,navigointi,roadtrip

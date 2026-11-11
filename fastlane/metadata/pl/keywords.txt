@@ -1,1 +1,1 @@
-motocykl gps,jazda z przyjaciółmi,lokalizacja na żywo,trasa moto,motocyklista,grupa,turystyka
+konwój,motocykl,motor,gps,lokalizacja na żywo,planer tras,klub motocyklowy,turystyka,nawigacja

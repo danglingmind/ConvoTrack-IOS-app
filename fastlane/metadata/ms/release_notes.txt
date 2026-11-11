@@ -1,5 +1,6 @@
-• Rupa baharu yang segar: Laman Utama, lobi tunggangan, navigasi dan ringkasan tunggangan direka semula, dengan satu fon yang kemas di seluruh aplikasi.
-• Arahan selekoh demi selekoh secara lisan, serta Aktiviti Langsung dan Dynamic Island supaya selekoh seterusnya kekal pada Skrin Kunci anda.
-• Beberapa panggilan berkumpul semula dan kecemasan kini boleh dipaparkan serentak, dan pemanggil atau ketua boleh menutup panggilan berkumpul semula.
-• Had penunggang dipaparkan semasa anda merancang tunggangan, dan lobi menunjukkan betapa penuhnya kumpulan.
-• Bar atas yang lebih kemas dan kredit foto Google yang lebih halus pada foto destinasi.
+• Rancang perjalanan pada peta: cari stesen minyak dan tempat makan di sepanjang laluan, tekan lama untuk meletakkan pin, dan elakkan tol atau lebuh raya.
+• Kongsi laluan perjalanan dengan pautan. Rakan boleh pratonton dan menunggangnya sendiri, manakala titik mula anda kekal peribadi.
+• Ringkasan perjalanan kini menunjukkan laluan yang benar-benar anda tunggang dan tempat ketua berhenti untuk berkumpul semula.
+• Pemberitahuan apabila perjalanan bermula atau tamat, apabila panggilan berkumpul dibuat dan apabila penunggang menghantar amaran kecemasan. Pilih yang anda mahu terima dalam Profil.
+• Tukar nama dan foto anda dalam Profil.
+• Perjalanan yang tamat semasa aplikasi ditutup kini terus dibuka pada ringkasannya.

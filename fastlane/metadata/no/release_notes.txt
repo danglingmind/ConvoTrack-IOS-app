@@ -1,5 +1,6 @@
-• Nytt og friskt utseende: Hjem, turlobby, navigasjon og turoppsummering er redesignet, med én ren skrifttype overalt.
-• Talt navigasjon sving for sving, pluss en Live-aktivitet og Dynamic Island, så neste sving blir stående på låseskjermen.
-• Flere samlingskall og nødvarsler kan nå vises samtidig, og den som ropte opp eller turlederen kan avslutte et samlingskall.
-• Førergrensen vises mens du planlegger en tur, og lobbyen viser hvor full gruppen er.
-• En ryddigere toppstolpe og en mer dempet Google-bildekreditering på bilder av reisemål.
+• Planlegg turer på kartet: søk etter drivstoff og mat langs ruta, hold inne for å slippe en nål, og unngå bomveier eller motorveier.
+• Del ruta for en tur med en lenke. Venner kan forhåndsvise den og kjøre den selv – startpunktet ditt forblir privat.
+• Turoppsummeringen viser nå ruta dere faktisk kjørte og hvor turlederen stoppet for å samle gruppa.
+• Varsler når en tur starter eller slutter, når noen sender et samlingskall og når en kjører sender et nødvarsel. Velg hvilke du vil få under Profil.
+• Endre navn og bilde under Profil.
+• En tur som ble avsluttet mens appen var lukket, åpnes nå rett i oppsummeringen.

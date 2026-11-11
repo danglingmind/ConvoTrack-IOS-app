@@ -2,11 +2,10 @@ Kør som en samlet gruppe – ikke som en spredt række af forlygter.
 
 ConvoTrack holder alle motorcyklister i din gruppe på ét fælles livekort, så ingen taber gruppen i et kryds, ingen skal gætte, hvilken afkørsel turlederen tog, og ingen behøver at holde ind for at spørge, hvor de andre blev af.
 
+Live-position i en gruppechat viser dig prikker på et kort. ConvoTrack viser dig, hvem der er faldet bagud, og lader dig kalde gruppen sammen.
+
 LIVEKORT OVER GRUPPEN
 Se alle kørere i realtid – med afstanden mellem dig og hver enkelt. Kørere, der glider ud af skærmen, vises som markører i kanten, så du altid ved, hvem der er bag dig, og hvor langt tilbage.
-
-NAVIGATION SVING FOR SVING
-Fuld rutevejledning hele vejen til målet med forventet ankomsttid og resterende afstand på skærmen. Tilføj stop undervejs, når du planlægger turen.
 
 SAML GRUPPEN MED ÉT TRYK
 Brug for brændstof, mad eller et fotostop? Send et samlingskald til hele gruppen, og vælg hvor langt fremme I skal mødes. Alle får stedet med det samme.
@@ -17,11 +16,14 @@ Vælter nogen eller har brug for hjælp, sender ét tryk den præcise position t
 MED PÅ FÅ SEKUNDER
 Hver tur får en invitationskode på seks tegn. Del linket, læs koden højt, eller scan QR-koden – kørerne er på kortet, før de har fået handskerne på.
 
-ROLLER PÅ TUREN
-Turleder, Tempoholder, Bagtrop og Formationskører tildeles efter, hvordan gruppen rent faktisk kørte – ikke efter, hvem der meldte sig først.
+NAVIGATION SVING FOR SVING
+Fuld rutevejledning hele vejen til målet med forventet ankomsttid og resterende afstand på skærmen. Tilføj stop undervejs, når du planlægger turen.
 
 TUROPSUMMERING
 Når turen slutter, får alle de rigtige tal: den faktiske tid på vejen, den tilbagelagte afstand, det største hul gruppen nåede at åbne, og den endelige rækkefølge. Del opsummeringen med holdet.
+
+ROLLER PÅ TUREN
+Turleder, Tempoholder, Bagtrop og Formationskører tildeles efter, hvordan gruppen rent faktisk kørte – ikke efter, hvem der meldte sig først.
 
 TURHISTORIK
 Alle ture, du har ført eller kørt med på, samlet ét sted.

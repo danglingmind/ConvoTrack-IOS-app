@@ -1,5 +1,6 @@
-• Un tout nouveau look : l'accueil, le lobby de la randonnée, la navigation et le bilan de randonnée sont repensés, avec une seule police épurée partout.
-• Directives virage par virage à voix haute, plus une Live Activity (Activité en direct) et la Dynamic Island pour garder le prochain virage sur votre écran verrouillé.
-• Plusieurs appels de regroupement et urgences peuvent maintenant s'afficher en même temps, et l'auteur de l'appel ou le meneur peut fermer un regroupement.
-• La limite de motocyclistes s'affiche pendant que vous planifiez une randonnée, et le lobby indique à quel point le groupe est plein.
-• Une barre du haut plus épurée et une mention de crédit Google plus discrète sur les photos de destination.
+• Planifiez vos randonnées sur la carte: cherchez des postes d'essence et de quoi manger le long du trajet, maintenez le doigt pour déposer une épingle, et évitez les péages ou les autoroutes.
+• Partagez le trajet d'une randonnée avec un lien. Vos amis peuvent le prévisualiser et le rouler eux-mêmes; votre point de départ reste privé.
+• Le bilan de randonnée montre maintenant le trajet réellement parcouru et les endroits où le meneur s'est arrêté pour regrouper la gang.
+• Notifications quand une randonnée commence ou se termine, quand un regroupement est lancé et quand un motocycliste envoie une alerte d'urgence. Choisissez lesquelles recevoir dans Profil.
+• Changez votre nom et votre photo dans Profil.
+• Une randonnée terminée pendant que l'appli était fermée s'ouvre maintenant directement sur son bilan.

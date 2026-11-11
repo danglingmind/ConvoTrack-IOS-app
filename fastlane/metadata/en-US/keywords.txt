@@ -1,1 +1,1 @@
-motorcycle gps,ride with friends,live location sharing,route planner,rider,pack,touring,biker
+convoy,rideout,biker,location sharing,route planner,riding club,touring,road trip,gps,navigation

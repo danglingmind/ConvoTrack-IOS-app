@@ -1,5 +1,6 @@
-• Vadonatúj megjelenés: a kezdőképernyő, a túra előszobája, a navigáció és a túraösszegzés újratervezve, mindenhol egyetlen letisztult betűtípussal.
-• Hangos fordulónkénti navigáció, valamint Live Activity (Élő tevékenység) és Dynamic Island, hogy a következő kanyar a zárolt képernyőn is látszódjon.
-• Mostantól több gyülekezőhívás és vészhelyzet is megjelenhet egyszerre, a hívó vagy a vezető pedig elvetheti a gyülekezőt.
-• A motorosok létszámkorlátja a túra tervezése közben látszik, a túra előszobája pedig mutatja, mennyire telt a csapat.
-• Letisztultabb felső sáv és visszafogottabb Google fotókredit a célállomás-fotókon.
+• Tervezz túrát a térképen: keress tankolási és evési lehetőséget az útvonal mentén, nyomj hosszan egy gombostű letűzéséhez, és kerüld el a fizetős utakat vagy az autópályákat.
+• Oszd meg egy túra útvonalát linkkel. A barátaid megnézhetik, és maguk is végigmehetnek rajta; a kiindulópontod rejtve marad.
+• A túraösszegzés most már a ténylegesen megtett útvonalat is mutatja, és azt, hol állt meg a túravezető gyülekezőre.
+• Értesítések, ha egy túra elindul vagy véget ér, ha gyülekezőt hívnak, és ha egy motoros vészjelzést küld. A Profilban választhatod ki, melyeket kapod meg.
+• A nevedet és a fotódat a Profilban módosíthatod.
+• Ha egy túra akkor ért véget, amikor az app be volt zárva, most egyenesen az összegzésére nyílik meg.

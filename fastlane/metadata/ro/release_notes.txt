@@ -1,5 +1,6 @@
-• Un aspect complet nou: Acasă, lobby-ul turei, navigația și rezumatul turei au fost reproiectate, cu un singur font curat peste tot.
-• Indicații vocale pas cu pas, plus o Activitate live și Dynamic Island, ca următoarea manevră să rămână pe ecranul de blocare.
-• Acum pot apărea simultan mai multe apeluri de regrupare și urgențe, iar cel care a inițiat apelul sau liderul poate închide o regrupare.
-• Limita de motocicliști se vede cât planifici tura, iar lobby-ul arată cât de plin este grupul.
-• O bară de sus mai curată și o mențiune Google mai discretă pe fotografiile destinațiilor.
+• Planifică ture pe hartă: caută combustibil și mâncare de-a lungul traseului, ține apăsat ca să plasezi un pin și evită taxele de drum sau autostrăzile.
+• Trimite traseul unei ture printr-un link. Prietenii îl pot previzualiza și îl pot parcurge singuri; punctul tău de plecare rămâne privat.
+• Rezumatul turei arată acum traseul parcurs efectiv și locurile unde liderul s-a oprit pentru regrupare.
+• Notificări când o tură începe sau se încheie, când se cere o regrupare și când un motociclist trimite o alertă de urgență. Alege în Profil pe care le primești.
+• Schimbă-ți numele și fotografia din Profil.
+• O tură care s-a încheiat cât timp aplicația era închisă se deschide acum direct la rezumatul ei.

@@ -1,5 +1,6 @@
-• Diện mạo hoàn toàn mới: Trang chủ, sảnh chuyến đi, dẫn đường và tổng kết chuyến đi đều được thiết kế lại, dùng một phông chữ gọn gàng xuyên suốt.
-• Dẫn đường bằng giọng nói từng chặng rẽ, cùng Hoạt động trực tiếp và Dynamic Island để lần rẽ tiếp theo luôn hiện trên Màn hình khóa.
-• Giờ đây có thể hiển thị cùng lúc nhiều lời gọi tập hợp và cảnh báo khẩn cấp, và người gọi hoặc trưởng đoàn có thể tắt lời gọi tập hợp.
-• Giới hạn số người lái hiển thị khi bạn lên kế hoạch chuyến đi, và sảnh chuyến đi cho biết đoàn đã đầy đến đâu.
-• Thanh trên cùng gọn gàng hơn và phần ghi công ảnh của Google trên ảnh điểm đến kín đáo hơn.
+• Lên kế hoạch chuyến đi trên bản đồ: tìm cây xăng và quán ăn dọc lộ trình, nhấn giữ để thả ghim, và tránh trạm thu phí hoặc đường cao tốc.
+• Chia sẻ lộ trình chuyến đi bằng một liên kết. Bạn bè có thể xem trước và tự mình đi lại; điểm xuất phát của bạn vẫn được giữ kín.
+• Tổng kết chuyến đi giờ hiển thị lộ trình bạn thực sự đã đi và những nơi người dẫn đoàn dừng lại để tập hợp.
+• Thông báo khi chuyến đi bắt đầu hoặc kết thúc, khi có lời gọi tập hợp và khi một người lái gửi cảnh báo khẩn cấp. Chọn loại bạn muốn nhận trong Hồ sơ.
+• Đổi tên và ảnh của bạn trong Hồ sơ.
+• Chuyến đi kết thúc khi ứng dụng đang đóng giờ sẽ mở thẳng vào phần tổng kết.
