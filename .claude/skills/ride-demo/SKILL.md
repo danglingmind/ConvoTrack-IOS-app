@@ -80,3 +80,13 @@ The app is hardcoded to **`pk_live_` Clerk + `api.convotrack.in`**. Every demo r
 a real ride under real accounts and consumes one of each account's 10 free monthly ride
 participations. Ending the ride is irreversible — get explicit user approval first, and
 never leave an orphaned ACTIVE ride behind.
+
+**Demo accounts (Pro, no quota):** sign every sim into one of the owner's two Google accounts:
+sim L = @Ricky, live Clerk id `user_3Fu3S9ZiUpcBYSTxqL8J8sLJn09`; sim R2 = @Prateek,
+`user_3Itbl66QBh7Pva7PMBsub7w5NcL` (Profile → Account shows each sign-in email). Both have a
+permanent manual premium grant (`user_memberships` row, premium plan, `ends_at` NULL,
+`provider` NULL, added 11 Nov 2026), so the trial and the monthly limit never block them.
+Deleting either account in-app deletes the grant (`userRepo.ts` account deletion).
+The backend's local `.env` Clerk key is the **dev** instance (`sk_test_`): looking an email up
+with it returns a dev-instance id, not the live id the app signs in with. Find live ids in
+the DB instead (e.g. the leader of a ride the sim shows as LEADER).

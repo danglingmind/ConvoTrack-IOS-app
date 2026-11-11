@@ -3,7 +3,7 @@
 #           [--chip ..] [--chipk ..] [--chip-icon people|gap|alert|link|flag] [--pin fx,fy]
 #           [--rider "Name,I,280 m"] [--rider-img portrait.png] [--pin-r 0.031]   (radius of the pinned marker, fraction of screenshot width; leader stops there)
 #           [--look dark|sat] [--sat lat,lon,spanMetres | --bg <image>] [--scale std|xl]
-#           [--layout stack|split] [--tilt -5] [--shift px] [--chip-dx px] [--chip-dy px]
+#           [--layout stack|split|duo] [--shot2 right-phone.png] [--steps "Left|Right"] [--tilt -5] [--shift px] [--chip-dx px] [--chip-dy px]
 #           [--sizes feed,square,story]
 # Renders assets/template.html in headless Chrome and writes flattened, exact-size PNGs to
 # design/ad-creatives/<slug>/<slug>-<size>.png (plus hires @2x copies in hires/).
@@ -25,6 +25,7 @@ while [[ $# -gt 0 ]]; do
     --sat) sat="$2"; look="sat"; shift 2;; --bg) bg="$2"; look="sat"; shift 2;;
     --pin-r) pinr="$2"; shift 2;; --rider) rider="$2"; chipi="rider"; shift 2;; --rider-img) riderimg="$2"; shift 2;;
     --chip-style) chipstyle="$2"; shift 2;;
+    --shot2) shot2="$2"; shift 2;; --steps) steps="$2"; shift 2;;
     *) echo "unknown arg $1" >&2; exit 2;;
   esac
 done
@@ -50,6 +51,8 @@ for size in ${(s:,:)sizes}; do
   [[ -n "$pinr" ]] && url="$url&pinr=$pinr"; [[ -n "$rider" ]] && url="$url&rider=$(enc "$rider")"
   [[ -n "$riderimg" ]] && url="$url&riderimg=$(enc "file://${riderimg:A}")"
   [[ -n "$chipstyle" ]] && url="$url&chipstyle=$chipstyle"
+  [[ -n "$shot2" ]] && url="$url&shot2=$(enc "file://${shot2:A}")"
+  [[ -n "$steps" ]] && url="$url&steps=$(enc "$steps")"
   raw="$out/hires/$slug-$size.raw.png"
   "$CHROME" --headless=new --disable-gpu --hide-scrollbars --window-size=$W,$H \
     --force-device-scale-factor=2 --default-background-color=FF090B0D \

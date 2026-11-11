@@ -19,6 +19,6 @@ composites arjun / meera / ananya into the map markers, the rider strip and the 
 | Arjun Rao | arjun.png (square face crop of source/arjun-source.webp) | AI-generated, supplied by the user; generator not recorded | 2026-10-29 | olive tee, no jacket |
 | Meera Iyer | meera.png (square face crop of source/meera-source.webp) | AI-generated, supplied by the user; generator not recorded | 2026-10-29 | source shows a RYNOX jacket logo; the crop excludes it, keep it out of any larger crop |
 | Ananya Das | ananya.png (square face crop of source/ananya-source.webp) | AI-generated, supplied by the user; generator not recorded | 2026-10-29 | source shows a partial jacket logo; the crop excludes it |
-| Kabir Shah | kabir.png (square face crop of source/kabir-source.webp) | AI-generated, supplied by the user; generator not recorded | 2026-10-30 | dark green tee, mountain backdrop |
+| Kabir Shah | kabir.png (512 px square face crop of source/kabir-source.webp) | Photo supplied by the user for this use; source not recorded | 2026-11-11 | black riding jacket; the source shows a DAINESE logo and a shoulder brand mark, the crop excludes both, keep them out of any larger crop. Replaces the 2026-10-30 portrait, which was the same man as arjun.png |
 
 Illustrative riders, not customers: never pair them with quotes or ratings.

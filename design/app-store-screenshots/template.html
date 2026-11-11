@@ -1,0 +1,106 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!--
+  App Store screenshot, 6.9" (1290x2796). Brand values from Tokens.swift (see ad-creative brand.md).
+  Query: v=a|b|c|d  shot=<file url> bg=<file url> logo=<file url> l1= l2= (l2 is the accent line)
+         chipk= chipv= (callout chip, v=b)  card=x,y,w,h (source-px crop of the card to magnify, v=d)
+  a  category promise: satellite, straight phone under the headline
+  b  problem hook: satellite, big tilted phone cropped right, callout chip
+  c  lime canvas: pattern interrupt against dark-map competitors
+  d  feature zoom: the key card magnified out of the phone
+-->
+<style>
+  :root { --bg:#090B0D; --lime:#CDEF1E; --ink:#0C0E02; --text:#F5F7FA; --muted:#B4B9C1; --danger:#FBB0A9; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; width:1290px; height:2796px; overflow:hidden; background:var(--bg);
+    font-family:system-ui,-apple-system,"SF Pro Display",sans-serif; color:var(--text); }
+  .stage { position:relative; width:1290px; height:2796px; overflow:hidden; }
+  .sat { position:absolute; inset:0; background-size:cover; background-position:center;
+    filter:saturate(0.85) brightness(0.72); }
+  .scrim { position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(4,5,6,0.94) 0%, rgba(4,5,6,0.80) 30%, rgba(4,5,6,0.25) 55%, rgba(4,5,6,0.55) 100%); }
+  .glow { position:absolute; left:50%; top:62%; width:1300px; height:1300px; transform:translate(-50%,-50%);
+    background:radial-gradient(closest-side, rgba(205,239,30,0.22), transparent 70%); }
+  .brand { position:absolute; left:96px; top:150px; display:flex; align-items:center; gap:22px; z-index:3; }
+  .brand img { width:76px; height:76px; border-radius:50%; }
+  .brand span { font-size:34px; font-weight:800; letter-spacing:12px; }
+  .h1 { position:absolute; left:96px; right:80px; top:300px; margin:0; font-weight:900; z-index:3;
+    font-size:var(--h1, 124px); line-height:0.98; letter-spacing:-0.035em; font-variation-settings:"wdth" 125;
+    text-shadow:0 4px 30px rgba(0,0,0,0.6); }
+  .h1 .l2 { color:var(--lime); display:block; margin-top:14px; }
+  /* Phone: screen keeps the 1206x2622 ratio. */
+  .phone { position:absolute; left:50%; top:930px; width:1010px; transform:translateX(-50%); z-index:1;
+    padding:17px; background:linear-gradient(145deg,#3a3d40,#16181a 40%,#2b2e31); border-radius:150px;
+    box-shadow:0 60px 140px rgba(0,0,0,0.7), 0 0 0 2px rgba(255,255,255,0.06), 0 0 120px rgba(205,239,30,0.18); }
+  .bezel { padding:24px; background:#000; border-radius:133px; }
+  .screen { width:100%; aspect-ratio:1206/2622; border-radius:110px; overflow:hidden; background:#000; }
+  .screen img { width:100%; height:100%; display:block; }
+
+  /* b: problem hook */
+  body[data-v="b"] .h1 { --h1:150px; }
+  body[data-v="b"] .phone { width:1180px; left:63%; transform:translateX(-50%) rotate(-6deg); transform-origin:50% 0; }
+  .chip { position:absolute; left:70px; z-index:4; display:none; align-items:center; gap:26px;
+    padding:26px 40px 26px 26px; border-radius:34px; background:rgba(14,16,18,0.88);
+    border:2px solid rgba(205,239,30,0.55); box-shadow:0 30px 80px rgba(0,0,0,0.7), 0 0 60px rgba(205,239,30,0.25);
+    backdrop-filter:blur(14px); }
+  body[data-v="b"] .chip { display:flex; transform:scale(1.55); transform-origin:0 50%; }
+  .chip .ic { width:92px; height:92px; border-radius:24px; background:var(--danger); display:grid; place-items:center; }
+  .chip .ic svg { width:52px; height:52px; }
+  .chip .k { font-size:24px; font-weight:800; letter-spacing:5px; text-transform:uppercase; color:var(--lime); }
+  .chip .v { font-size:44px; font-weight:800; margin-top:4px; }
+
+  /* c: lime canvas */
+  body[data-v="c"] { background:var(--lime); color:var(--ink); }
+  body[data-v="c"] .sat, body[data-v="c"] .scrim { display:none; }
+  body[data-v="c"] .stage { background:radial-gradient(1200px 1400px at 50% 80%, #E4FF4A 0%, var(--lime) 55%, #B5D412 100%); }
+  body[data-v="c"] .glow { background:radial-gradient(closest-side, rgba(12,14,2,0.18), transparent 70%); top:70%; }
+  body[data-v="c"] .h1 { text-shadow:none; }
+  body[data-v="c"] .h1 .l2 { color:var(--ink); opacity:0.62; }
+  body[data-v="c"] .brand img { box-shadow:0 0 0 3px var(--ink); }
+  body[data-v="c"] .phone { box-shadow:0 70px 140px rgba(12,14,2,0.45), 0 0 0 2px rgba(0,0,0,0.25); }
+
+  /* d: feature zoom */
+  .zoom { position:absolute; left:50%; transform:translateX(-50%); z-index:4; display:none;
+    border-radius:52px; background-repeat:no-repeat; border:3px solid rgba(205,239,30,0.75);
+    box-shadow:0 50px 120px rgba(0,0,0,0.85), 0 0 90px rgba(205,239,30,0.35); }
+  body[data-v="d"] .zoom { display:block; }
+  body[data-v="d"] .phone { width:880px; }
+  body[data-v="d"] .phone .screen img { filter:brightness(0.55); }
+</style></head>
+<body><div class="stage">
+  <div class="sat" id="sat"></div><div class="scrim"></div><div class="glow"></div>
+  <div class="brand"><img id="logo" alt=""><span>CONVOTRACK</span></div>
+  <h1 class="h1"><span id="l1"></span><span class="l2" id="l2"></span></h1>
+  <div class="phone"><div class="bezel"><div class="screen"><img id="shot" alt=""></div></div></div>
+  <div class="chip" id="chip"><div class="ic"><svg viewBox="0 0 24 24"><path fill="#2A0A08" d="M12 2 1 21h22L12 2zm1 15h-2v-2h2v2zm0-4h-2V9h2v4z"/></svg></div>
+    <div><div class="k" id="chipk"></div><div class="v" id="chipv"></div></div></div>
+  <div class="zoom" id="zoom"></div>
+</div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const v = q.get('v') || 'a'; document.body.dataset.v = v;
+  const shot = q.get('shot');
+  document.getElementById('sat').style.backgroundImage = `url("${q.get('bg')}")`;
+  document.getElementById('shot').src = shot;
+  document.getElementById('logo').src = q.get('logo');
+  document.getElementById('l1').textContent = q.get('l1') || '';
+  document.getElementById('l2').textContent = q.get('l2') || '';
+  document.getElementById('chipk').textContent = q.get('chipk') || '';
+  document.getElementById('chipv').textContent = q.get('chipv') || '';
+  // Phone sits just under the headline, however many lines it wrapped to.
+  const h = document.querySelector('.h1'), phone = document.querySelector('.phone');
+  const below = h.offsetTop + h.offsetHeight;
+  phone.style.top = (below + (v === 'b' ? 60 : 90)) + 'px';
+  if (v === 'b') document.getElementById('chip').style.top = (below + 1150) + 'px';
+  if (v === 'd') {
+    // Magnify the source card at its own position inside the phone, 1.4x the in-phone size.
+    const [cx, cy, cw, ch] = (q.get('card') || '61,530,1087,533').split(',').map(Number);
+    const scrW = phone.offsetWidth - 2 * (17 + 24), k = scrW / 1206, s = k * 1.4;
+    const z = document.getElementById('zoom');
+    Object.assign(z.style, { width: cw * s + 'px', height: ch * s + 'px',
+      top: (phone.offsetTop + 41 + cy * k - (ch * s - ch * k) / 2) + 'px',
+      backgroundImage: `url("${shot}")`, backgroundSize: 1206 * s + 'px auto',
+      backgroundPosition: `${-cx * s}px ${-cy * s}px` });
+  }
+</script>
+</body></html>

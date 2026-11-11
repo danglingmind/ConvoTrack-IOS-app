@@ -187,6 +187,32 @@
   body[data-scale="xl"][data-size="feed"]   .stage { --phone-w: 650px; --phone-top: 560px; --phone-left: 64%; --chip-left: 30px; --chip-top: 1160px; --scrim-solid: 28%; --scrim-clear: 46%; }
   body[data-scale="xl"][data-size="square"] .stage { --phone-w: 540px; --phone-top: 470px; --phone-left: 64%; --chip-left: 26px; --chip-top: 900px; --scrim-solid: 32%; --scrim-clear: 52%; }
   body[data-scale="xl"][data-size="story"]  .stage { --phone-w: 760px; --phone-top: 720px; --phone-left: 63%; --chip-left: 24px; --chip-top: 1330px; --scrim-solid: 28%; --scrim-clear: 42%; }
+  /* ---- duo: two phones facing each other, a step on each (e.g. link shared in chat → lobby
+     filling). Centred copy, no map, no card: the dotted link between the screens is the idea.
+     shot2= the right phone, steps="Left label|Right label" (optional). ---- */
+  .phone.b, .duo-link, .step, svg.duo { display: none; }
+  body[data-layout="duo"] .phone.b, body[data-layout="duo"] .duo-link, body[data-layout="duo"] svg.duo { display: block; }
+  body[data-layout="duo"] .ground, body[data-layout="duo"] .chip, body[data-layout="duo"] svg.road { display: none; }
+  body[data-layout="duo"] .copy { text-align: center; }
+  body[data-layout="duo"] .sub { margin-left: auto; margin-right: auto; }
+  body[data-layout="duo"] .phone { box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.6),
+      0 0 0 1px rgba(0,0,0,0.7), 0 0 80px rgba(205,239,30,0.12), 0 40px 90px rgba(0,0,0,0.75); }
+  body[data-layout="duo"] .phone.a { left: var(--a-left); top: var(--a-top);
+    transform: perspective(2400px) rotateY(10deg) rotateZ(-5deg); }
+  body[data-layout="duo"] .phone.b { left: var(--b-left); top: var(--b-top); z-index: 4;
+    transform: perspective(2400px) rotateY(-10deg) rotateZ(5deg); }
+  svg.duo { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; overflow: visible; }
+  .duo-link { position: absolute; z-index: 6; width: 112px; height: 112px; margin: -56px 0 0 -56px;
+    border-radius: 50%; background: var(--lime); display: none; place-items: center;
+    box-shadow: 0 0 0 10px rgba(205,239,30,0.16), 0 0 60px rgba(205,239,30,0.55), 0 20px 40px rgba(0,0,0,0.6); }
+  body[data-layout="duo"] .duo-link { display: grid; }
+  .step { position: absolute; z-index: 6; transform: translateX(-50%); white-space: nowrap;
+    font-size: 22px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; color: var(--text); }
+  .step b { color: var(--lime); margin-right: 12px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  body[data-layout="duo"] .step { display: block; }
+  body[data-layout="duo"][data-size="feed"]   .stage { --phone-w: 470px; --a-left: 27%; --a-top: 650px; --b-left: 73%; --b-top: 600px; --gx: 50%; --gy: 72%; }
+  body[data-layout="duo"][data-size="square"] .stage { --phone-w: 380px; --a-left: 28%; --a-top: 540px; --b-left: 72%; --b-top: 495px; --gx: 50%; --gy: 75%; }
+  body[data-layout="duo"][data-size="story"]  .stage { --phone-w: 500px; --a-left: 27%; --a-top: 930px; --b-left: 73%; --b-top: 870px; --gx: 50%; --gy: 65%; }
   /* split: copy left, phone right — suits square and wide crops */
   body[data-layout="split"][data-size="square"] .copy { right: 520px; }
   body[data-layout="split"][data-size="square"] .stage { --h1: 84px; --phone-left: 790px; --phone-top: 120px; --phone-w: 400px; --chip-left: 64px; --chip-top: 800px; }
@@ -204,7 +230,11 @@
     <p class="sub" id="sub"></p>
   </div>
   <div class="ground"></div>
-  <div class="phone"><i class="btn l action"></i><i class="btn l volup"></i><i class="btn l voldn"></i><i class="btn r side"></i><div class="bezel"><div class="screen"><img id="shot" alt=""><div class="marker" id="marker"></div></div></div></div>
+  <div class="phone a"><i class="btn l action"></i><i class="btn l volup"></i><i class="btn l voldn"></i><i class="btn r side"></i><div class="bezel"><div class="screen"><img id="shot" alt=""><div class="marker" id="marker"></div></div></div></div>
+  <div class="phone b"><i class="btn l action"></i><i class="btn l volup"></i><i class="btn l voldn"></i><i class="btn r side"></i><div class="bezel"><div class="screen"><img id="shot2" alt=""></div></div></div>
+  <svg class="duo" id="duo"></svg>
+  <div class="duo-link" id="duolink"><svg viewBox="0 0 24 24" width="58" height="58" fill="none" stroke="#0C0E02" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></div>
+  <div class="step" id="step1"></div><div class="step" id="step2"></div>
   <svg class="callout" id="callout"></svg>
   <div class="chip" id="chip"><div class="ic"><svg id="chipsvg" viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#0C0E02" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></svg></div><div class="rider"><span class="nm" id="rnm"></span><span class="mk" id="rmk"></span><span class="ds" id="rds"></span></div><div><div class="k" id="chipk"></div><div class="v" id="chipv"></div></div></div>
 </div>
@@ -233,7 +263,7 @@
     link:   '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
     flag:   '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>'
   };
-  document.getElementById('chipsvg').innerHTML = icons[q.get('chipi')] || icons.people;
+  if (chip) document.getElementById('chipsvg').innerHTML = icons[q.get('chipi')] || icons.people;
   if (q.get('chipi') === 'alert') chipEl.classList.add('danger');
   const textOnly = q.get('chipstyle') === 'text';
   if (textOnly) chipEl.classList.add('textonly');
@@ -297,6 +327,28 @@
     document.getElementById('callout').innerHTML = `
       <line x1="${ex}" y1="${ey}" x2="${cx}" y2="${cy}" stroke="#CDEF1E" stroke-width="${xl ? 4 : 3}" stroke-dasharray="2 12" stroke-linecap="round"/>
       <circle cx="${cx}" cy="${cy}" r="${xl ? 8 : 6}" fill="#CDEF1E"/>`;
+  }
+
+  // Duo: second screen, the dotted link arcing across the V between the phones with a lime
+  // link badge at its apex, and optional step labels above each phone.
+  if (document.body.dataset.layout === 'duo') {
+    const pb = document.querySelector('.phone.b');
+    document.getElementById('shot2').src = q.get('shot2') || '';
+    phone.style.top = (parseFloat(cs.getPropertyValue('--a-top')) + num('shift')) + 'px';
+    pb.style.top = (parseFloat(cs.getPropertyValue('--b-top')) + num('shift')) + 'px';
+    const s = stage.getBoundingClientRect(), a = phone.getBoundingClientRect(), b = pb.getBoundingClientRect();
+    // Badge on the seam between the phones, level with the top of the screens.
+    const mx = (a.right + b.left) / 2 - s.left, my = Math.max(a.top, b.top) - s.top + 90;
+    Object.assign(document.getElementById('duolink').style, { left: mx + 'px', top: my + 'px' });
+    // Both labels on one line, above the higher phone.
+    const steps = (q.get('steps') || '').split('|'), sy = Math.min(a.top, b.top) - s.top - 58;
+    [[a, 'step1'], [b, 'step2']].forEach(([r, id], i) => {
+      const el = document.getElementById(id);
+      if (!steps[i]) { el.remove(); return; }
+      el.innerHTML = `<b>${i + 1}</b>${esc(steps[i])}`;
+      el.style.left = (r.left - s.left + r.width / 2) + 'px';
+      el.style.top = sy + 'px';
+    });
   }
 
   // Glowing lime road ribbon behind the phone (dark look only; the brand motif from the App Store header).
