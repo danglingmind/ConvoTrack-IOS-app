@@ -11,6 +11,7 @@ enum MembershipPresentation {
 struct MembershipView: View {
     @EnvironmentObject private var store: MembershipStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -84,7 +85,7 @@ struct MembershipView: View {
                         VStack(spacing: DS.Space.p6) {
                             heroSection
                             benefitsGrid
-                            plansSection
+                            if !store.isPremium { plansSection }
                             ctaStack
                         }
                         .padding(.horizontal, DS.Space.screenInset)
@@ -436,6 +437,15 @@ struct MembershipView: View {
                     .padding(.bottom, DS.Space.p3)
             }
 
+            if store.isPremium {
+                Button {
+                    DSHaptic.primary()
+                    if let url = URL(string: "https://apps.apple.com/account/subscriptions") { openURL(url) }
+                } label: {
+                    Label("Manage subscription", systemImage: "rosette").dsText(.button)
+                }
+                .buttonStyle(DSGoProButtonStyle())
+            } else {
             Button {
                 DSHaptic.primary()
                 Task { await doPurchase() }
@@ -461,6 +471,7 @@ struct MembershipView: View {
             }
             .buttonStyle(DSGoProButtonStyle())
             .disabled(isPurchasing || store.products.isEmpty)
+            }
 
             if let line = trialLine {
                 line

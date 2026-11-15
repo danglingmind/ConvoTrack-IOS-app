@@ -74,13 +74,16 @@ struct ProfileView: View {
                 VStack(spacing: DS.Space.sectionGap) {
                     identity
                     stats
-                    DSPromoBanner(
-                        eyebrow: "ConvoTrack Pro",
-                        message: promoMessage,
-                        actionTitle: store.isPremium ? "Active" : "Go Pro",
-                        isSubscribed: store.isPremium,
-                        goProStyle: true
-                    ) { paywall.present(.profile) }
+                    // Pro riders carry a badge on their photo instead of a card.
+                    if !store.isPremium {
+                        DSPromoBanner(
+                            eyebrow: "ConvoTrack Pro",
+                            message: promoMessage,
+                            actionTitle: "Go Pro",
+                            isSubscribed: false,
+                            goProStyle: true
+                        ) { paywall.present(.profile) }
+                    }
 
                     notificationsSection
 
@@ -182,7 +185,7 @@ struct ProfileView: View {
     private var promoMessage: LocalizedStringKey {
         switch store.access {
         case .pro:
-            return "Your membership is active"
+            return "Unlimited rides & bigger packs"
         case .trial:
             guard let days = store.trialDaysLeft, days > 1 else { return "Your free trial ends today" }
             return "\(days) days left in your free trial"
@@ -223,10 +226,14 @@ struct ProfileView: View {
                 DSSquareIconButton(systemImage: "pencil", label: "Edit profile") { showEditProfile = true }
                     .disabled(userProfile == nil)
             }
-            if let username = userProfile?.username, !username.isEmpty {
-                Text(verbatim: "@\(username)")
-                    .dsText(.body)
-                    .foregroundStyle(DS.Text.secondary)
+            // Pro sits with the identity text, not on the photo, so it never covers the face.
+            HStack(spacing: DS.Space.p2) {
+                if let username = userProfile?.username, !username.isEmpty {
+                    Text(verbatim: "@\(username)")
+                        .dsText(.body)
+                        .foregroundStyle(DS.Text.secondary)
+                }
+                if store.isPremium { DSPlanBadge(kind: .pro) }
             }
         }
         .frame(maxWidth: .infinity)
@@ -410,6 +417,8 @@ struct AvatarEditBadge: View {
 struct EditProfileSheet: View {
     /// What riders may call themselves; matches the server's `NAME_MAX_LENGTH`.
     static let nameMaxLength = 40
+    /// Matches the server's `USERNAME_MAX_LENGTH`.
+    static let usernameMaxLength = 20
 
     let userId: String
     let initialName: String
@@ -458,7 +467,7 @@ struct EditProfileSheet: View {
         self.initialEmailContactVisible = initialEmailContactVisible
         self.onSaved                    = onSaved
         _name                = State(initialValue: initialName)
-        _username            = State(initialValue: initialUsername)
+        _username            = State(initialValue: String(initialUsername.prefix(Self.usernameMaxLength)))
         _phone               = State(initialValue: initialPhone)
         _phoneVisible        = State(initialValue: initialPhoneVisible)
         _emailContact        = State(initialValue: initialEmailContact)
@@ -501,11 +510,16 @@ struct EditProfileSheet: View {
                         // Username
                         fieldSection(
                             header: "USERNAME",
-                            note: "Optional. Shown under your name on your profile."
+                            note: "Optional. Shown under your name on your profile.",
+                            counter: (username.count, Self.usernameMaxLength)
                         ) {
                             styledTextField("Choose a username", text: $username)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
+                                .onChange(of: username) { _, new in
+                                    // Hard stop at the limit rather than an error after the fact.
+                                    if new.count > Self.usernameMaxLength { username = String(new.prefix(Self.usernameMaxLength)) }
+                                }
                         }
 
                         // Phone
@@ -659,6 +673,7 @@ struct EditProfileSheet: View {
     private func fieldSection<Content: View>(
         header: String,
         note: String? = nil,
+        counter: (count: Int, max: Int)? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -669,11 +684,23 @@ struct EditProfileSheet: View {
                 .background(DS.Surface.raised)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(DS.Border.strongColor.opacity(0.4), lineWidth: 1))
-            if let note {
-                Text(LocalizedStringKey(note))
-                    .dsText(.helper)
-                    .foregroundColor(DS.Text.secondary.base)
-                    .padding(.horizontal, 4)
+            if note != nil || counter != nil {
+                HStack(alignment: .firstTextBaseline, spacing: DS.Space.p2) {
+                    if let note {
+                        Text(LocalizedStringKey(note))
+                            .dsText(.helper)
+                            .foregroundColor(DS.Text.secondary.base)
+                    }
+                    Spacer(minLength: 0)
+                    if let counter {
+                        Text(verbatim: "\(counter.count)/\(counter.max)")
+                            .dsText(.helper)
+                            .monospacedDigit()
+                            .foregroundColor(counter.count >= counter.max ? DS.Status.warning : DS.Text.secondary.base)
+                            .accessibilityLabel("\(counter.count) of \(counter.max) characters")
+                    }
+                }
+                .padding(.horizontal, 4)
             }
         }
     }
