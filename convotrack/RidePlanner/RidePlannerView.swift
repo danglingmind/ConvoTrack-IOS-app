@@ -31,8 +31,11 @@ struct RidePlannerView<PrimaryAction: View>: View {
     @State private var searchCategory: PlaceCategory?
     /// Where the camera last came to rest, so "near the map" means what's on screen.
     @State private var mapTarget: CLLocationCoordinate2D?
-    /// A pin the rider dropped with a long-press, waiting for them to say what it is.
+    /// A pin the rider dropped by tapping the map, waiting for them to say what it is.
     @State private var droppedPin: PlaceCandidate?
+    @State private var droppedPhoto: DestinationPhoto?
+    /// Which way the phone faces, so the location marker points like other map apps' do.
+    @State private var compassHeading: Double = 0
     /// The stop being placed by moving the map under a fixed pin ("Choose on map").
     @State private var choosingStopID: UUID?
     /// The spot under that fixed pin, once the map comes to rest.
@@ -116,7 +119,11 @@ struct RidePlannerView<PrimaryAction: View>: View {
         .dsAnimation(DS.Motion.standard, value: model.hasDestination)
         .dsAnimation(DS.Motion.standard, value: choosingStopID)
         .dsAnimation(DS.Motion.standard, value: droppedPin?.coordinate.latitude)
-        .onAppear { model.locateUser() }
+        .onAppear {
+            model.locateUser()
+            LocationService.shared.onHeadingUpdate = { heading in compassHeading = heading }
+        }
+        .onDisappear { LocationService.shared.onHeadingUpdate = nil }
         // The opening view is the same one the recentre button gives: the rider, centred in the
         // part of the map between the top card and the sheet. That area isn't known until both
         // have been measured (and the rider's position can arrive after that), so re-centre as
@@ -144,8 +151,7 @@ struct RidePlannerView<PrimaryAction: View>: View {
             mapPadding: UIEdgeInsets(top: topChromeBottom + DS.Space.p2, left: 0,
                                      bottom: mapBottomPadding, right: 0),
             routeBubbles: routeBubbles,
-            onLongPress: { dropPin(at: $0) },
-            onTapMap: { _ in if droppedPin != nil { clearDroppedPin() } },
+            onTapMap: { dropPin(at: $0) },
             onCameraIdle: { mapCameToRest(at: $0) }
         )
         .accessibilityElement(children: .ignore)
@@ -171,7 +177,7 @@ struct RidePlannerView<PrimaryAction: View>: View {
             }
         } else if let me = model.userLocation?.coordinate {
             pins = [MapPin(id: "me", coordinate: me,
-                           style: .simpleDot(color: UIColor(DS.Map.startMarker), size: 16), anchorBottom: false)]
+                           style: .headingDot(heading: compassHeading), anchorBottom: false)]
         } else {
             pins = []
         }
@@ -671,7 +677,7 @@ struct RidePlannerView<PrimaryAction: View>: View {
 
     private var droppedPinCard: some View {
         PlannerPlaceCard(eyebrow: "Dropped pin", candidate: droppedPin, actions: droppedPinActions,
-                         onClose: clearDroppedPin)
+                         photo: droppedPhoto, onClose: clearDroppedPin)
     }
 
     /// With a route, the likely wish is a stop on the way; before one, it's where to ride to.
@@ -700,11 +706,19 @@ struct RidePlannerView<PrimaryAction: View>: View {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         titleFocused = false
         droppedPin = PlaceCandidate(coordinate: coordinate)
+        droppedPhoto = nil
         withAnimation(reduceMotion ? nil : DS.Motion.spring) { detent = .low }
         lookUp(coordinate, after: .zero) { place in
             guard let pin = droppedPin, pin.coordinate.isSame(as: coordinate) else { return }
             droppedPin?.place = place
             droppedPin?.isResolving = false
+            guard let place else { return }
+            Task {
+                let photo = await GooglePlacePhotoService.shared.photo(destinationName: place.name, coordinate: coordinate)
+                // The pin may have moved or been cleared while this was in flight.
+                guard droppedPin?.coordinate.isSame(as: coordinate) == true else { return }
+                withAnimation(reduceMotion ? nil : DS.Motion.standard) { droppedPhoto = photo }
+            }
         }
     }
 
@@ -718,6 +732,7 @@ struct RidePlannerView<PrimaryAction: View>: View {
     private func clearDroppedPin() {
         geocodeTask?.cancel()
         droppedPin = nil
+        droppedPhoto = nil
         mapBottomPadding = sheetRestingHeight
     }
 

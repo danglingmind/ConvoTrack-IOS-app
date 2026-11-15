@@ -7,6 +7,9 @@ import CoreLocation
 struct MapPin: Identifiable {
     enum Style {
         case userLocation(heading: Double)
+        /// Dot with a view cone toward the compass heading; for screens where you're standing
+        /// still (the planner), where a travel chevron would imply movement.
+        case headingDot(heading: Double)
         case destination(name: String)
         case waypoint(name: String)
         case lobbyStart
@@ -30,6 +33,8 @@ struct MapPin: Identifiable {
         // including it re-baked a fresh bitmap on every GPS fix for an identical image.
         case .userLocation:
             h.combine(0)
+        case .headingDot:
+            h.combine(8)
         case .destination(let n):
             h.combine(1); h.combine(n)
         case .waypoint(let n):
@@ -387,7 +392,7 @@ extension GoogleMapView {
             switch style {
             case .emergency:    return 100
             case .regroup:      return 90
-            case .userLocation: return 80
+            case .userLocation, .headingDot: return 80
             case .destination:  return 70
             case .waypoint:     return 65
             case .lobbyStart:   return 60
@@ -732,6 +737,8 @@ extension GoogleMapView {
                     marker.groundAnchor = baked.anchor
                     marker.icon         = baked.image
                     marker.zIndex       = Self.zIndex(for: pin.style)
+                    // The cone's canvas is ~120pt square; a tap anywhere on it must still pick a spot.
+                    if case .headingDot = pin.style { marker.isTappable = false }
                     if let rotation = Self.groundRotation(for: pin.style) {
                         // Flat = lies on the road plane and turns with the map, and `rotation` is
                         // then measured clockwise from NORTH rather than from screen-up. That is
@@ -753,6 +760,7 @@ extension GoogleMapView {
         /// upright on screen however the camera is rotated.
         private static func groundRotation(for style: MapPin.Style) -> CLLocationDirection? {
             if case .userLocation(let heading) = style { return heading }
+            if case .headingDot(let heading) = style { return heading }
             return nil
         }
 
@@ -850,6 +858,8 @@ extension GoogleMapView {
             switch pin.style {
             case .userLocation:
                 return (renderUserLocationIcon(), CGPoint(x: 0.5, y: 0.5))
+            case .headingDot:
+                return (renderHeadingDotIcon(), CGPoint(x: 0.5, y: 0.5))
             case .simpleDot(let c, let s):
                 return (renderDotIcon(color: c, size: s), CGPoint(x: 0.5, y: 0.5))
             // .lobbyStart is handled by renderBody: baking it into a fixed 70×80 canvas
@@ -987,6 +997,36 @@ extension GoogleMapView {
                 cg.setLineJoin(.miter)
                 cg.setMiterLimit(4)
                 cg.strokePath()
+            }
+        }
+
+        /// Lime dot, white keyline, and a translucent cone fading out along the heading — drawn
+        /// pointing north; the flat marker's `rotation` turns it. Square canvas centred on the dot
+        /// so it rotates about the dot.
+        private func renderHeadingDotIcon() -> UIImage {
+            let reach: CGFloat = 60, dot: CGFloat = 9, ring: CGFloat = 3, half: CGFloat = 34 * .pi / 180
+            let canvas = reach * 2 + 8
+            let f = UIGraphicsImageRendererFormat(); f.scale = UIScreen.main.scale
+            let lime = UIColor(DS.Map.riderRing)
+            return UIGraphicsImageRenderer(size: CGSize(width: canvas, height: canvas), format: f).image { ctx in
+                let cg = ctx.cgContext
+                cg.translateBy(x: canvas / 2, y: canvas / 2)
+                cg.saveGState()
+                cg.move(to: .zero)
+                cg.addArc(center: .zero, radius: reach, startAngle: -.pi / 2 - half,
+                          endAngle: -.pi / 2 + half, clockwise: false)
+                cg.closePath(); cg.clip()
+                let colors = [lime.withAlphaComponent(0.6).cgColor, lime.withAlphaComponent(0).cgColor] as CFArray
+                let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1])!
+                cg.drawRadialGradient(g, startCenter: .zero, startRadius: dot, endCenter: .zero,
+                                      endRadius: reach, options: [])
+                cg.restoreGState()
+                let outer = CGRect(x: -dot - ring, y: -dot - ring, width: (dot + ring) * 2, height: (dot + ring) * 2)
+                cg.setShadow(offset: CGSize(width: 0, height: 1.5), blur: 4,
+                             color: UIColor.black.withAlphaComponent(0.55).cgColor)
+                cg.setFillColor(UIColor.white.cgColor); cg.fillEllipse(in: outer)
+                cg.setShadow(offset: .zero, blur: 0)
+                cg.setFillColor(lime.cgColor); cg.fillEllipse(in: outer.insetBy(dx: ring, dy: ring))
             }
         }
 

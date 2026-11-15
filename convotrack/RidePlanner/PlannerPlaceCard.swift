@@ -45,10 +45,14 @@ struct PlannerPlaceCard: View {
     /// Shown instead of a name until there's a spot to name.
     var emptyMessage: LocalizedStringKey = "Move the map to choose a spot"
     let actions: [PlannerPlaceAction]
+    /// What Google shows for the spot, when it has a photo. Its credit is shown with it, as
+    /// Google's Places policy requires.
+    var photo: DestinationPhoto? = nil
     var onClose: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Space.p3) {
+            if let photo { photoBanner(photo) }
             HStack(alignment: .top, spacing: DS.Space.p2) {
                 VStack(alignment: .leading, spacing: DS.Space.p1) {
                     Text(eyebrow)
@@ -57,19 +61,9 @@ struct PlannerPlaceCard: View {
                     nameBlock
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Room for the close button, which floats over the card's corner.
+                .padding(.trailing, photo == nil ? DS.Target.minimum + DS.Space.p2 : 0)
                 .accessibilityElement(children: .combine)
-
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .dsIcon(DS.IconSize.sm, weight: .semibold)
-                        .foregroundStyle(DS.Text.primary)
-                        .frame(width: 30, height: 30)
-                        .background(DS.Control.removeFill, in: Circle())
-                        .frame(width: DS.Target.minimum, height: DS.Target.minimum)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text("Close"))
             }
 
             if let primary = actions.first {
@@ -85,6 +79,46 @@ struct PlannerPlaceCard: View {
                 }
             }
         }
+        // Always the sheet's top-right corner, over the photo when there is one.
+        .overlay(alignment: .topTrailing) {
+            Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .dsIcon(DS.IconSize.sm, weight: .semibold)
+                        .foregroundStyle(DS.Text.primary)
+                        .frame(width: 30, height: 30)
+                        .background(photo == nil ? AnyShapeStyle(DS.Control.removeFill)
+                                                 : AnyShapeStyle(Color.black.opacity(0.55)), in: Circle())   // legible over a photo
+                        .frame(width: DS.Target.minimum, height: DS.Target.minimum)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Close"))
+        }
+    }
+
+    private func photoBanner(_ photo: DestinationPhoto) -> some View {
+        Color.clear
+            .frame(height: 120)
+            .overlay {
+                Image(uiImage: photo.image).resizable().scaledToFill()
+            }
+            .overlay(alignment: .bottom) {
+                LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 36)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if let credit = photo.attribution {
+                    Text("Photo: \(credit) · Google")
+                        .font(.system(size: 9))
+                        .foregroundStyle(DS.Text.onPhoto)
+                        .dsShadow(DS.Shadow.textOnPhoto)
+                        .lineLimit(1)
+                        .padding(DS.Space.p1)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .accessibilityHidden(true)   // decoration; the name and address say where it is
+            .transition(.opacity)
     }
 
     @ViewBuilder
