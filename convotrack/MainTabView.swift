@@ -207,6 +207,8 @@ struct MainTabView: View {
         #endif
         if !forced {
             guard appState.currentRideId == nil else { return }
+            // Trial over: skip the soft nudge and open the same paywall Create Ride would.
+            if membershipStore.access == .trialExpired { paywall.present(.appOpen); return }
             let inputs = UpsellPolicy.Inputs(
                 access: membershipStore.access,
                 now: Date(),
