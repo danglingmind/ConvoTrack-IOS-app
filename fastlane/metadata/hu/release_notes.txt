@@ -1,6 +1,4 @@
-• Tervezz túrát a térképen: keress tankolási és evési lehetőséget az útvonal mentén, nyomj hosszan egy gombostű letűzéséhez, és kerüld el a fizetős utakat vagy az autópályákat.
-• Oszd meg egy túra útvonalát linkkel. A barátaid megnézhetik, és maguk is végigmehetnek rajta; a kiindulópontod rejtve marad.
-• A túraösszegzés most már a ténylegesen megtett útvonalat is mutatja, és azt, hol állt meg a túravezető gyülekezőre.
-• Értesítések, ha egy túra elindul vagy véget ér, ha gyülekezőt hívnak, és ha egy motoros vészjelzést küld. A Profilban választhatod ki, melyeket kapod meg.
-• A nevedet és a fotódat a Profilban módosíthatod.
-• Ha egy túra akkor ért véget, amikor az app be volt zárva, most egyenesen az összegzésére nyílik meg.
+• Tervezz túrát: koppints bárhová a térképen egy tű elhelyezéséhez.
+• A helyzeted mostantól pontként jelenik meg, egy kúp mutatja, merre nézel.
+• A kitűzött tű megjeleníti a hely fotóját, ha van.
+• A Pro motorosok a profilban Pro jelvényt kapnak a nevük mellett.

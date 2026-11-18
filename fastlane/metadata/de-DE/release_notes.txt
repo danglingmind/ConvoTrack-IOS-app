@@ -1,6 +1,4 @@
-• Plane Touren auf der Karte: Suche Tankstellen und Essen entlang der Route, setze per langem Druck eine Stecknadel und meide Maut oder Autobahnen.
-• Teile die Route einer Tour per Link. Freunde können sie vorab ansehen und selbst fahren – dein Startpunkt bleibt privat.
-• Die Tour-Auswertung zeigt jetzt die tatsächlich gefahrene Route und wo der Tourleiter zum Sammeln angehalten hat.
-• Benachrichtigungen, wenn eine Tour startet oder endet, ein Sammel-Ruf kommt oder ein Fahrer einen Notfall-Alarm sendet. Im Profil legst du fest, welche du bekommst.
-• Ändere deinen Namen und dein Foto im Profil.
-• Eine Tour, die bei geschlossener App beendet wurde, öffnet sich jetzt direkt mit ihrer Auswertung.
+• Tour planen: Tippe irgendwo auf die Karte, um eine Stecknadel zu setzen.
+• Dein Standort erscheint jetzt als Punkt mit einem Kegel, der zeigt, in welche Richtung du blickst.
+• Eine Stecknadel zeigt ein Foto des Ortes, falls es eines gibt.
+• Pro-Fahrer erhalten im Profil ein Pro-Abzeichen neben ihrem Namen.

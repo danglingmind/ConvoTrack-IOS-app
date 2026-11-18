@@ -1,6 +1,4 @@
-• Planifica rutas en el mapa: busca gasolineras y sitios para comer a lo largo del recorrido, mantén pulsado para soltar un pin y evita peajes o autopistas.
-• Comparte el recorrido de una ruta con un enlace. Tus colegas pueden echarle un vistazo y hacerlo por su cuenta; tu punto de salida sigue siendo privado.
-• El resumen de la ruta muestra ahora el recorrido que hicisteis de verdad y dónde paró el líder para reagrupar.
-• Notificaciones cuando una ruta empieza o termina, cuando se lanza un reagrupamiento y cuando un motero envía un aviso de emergencia. Elige cuáles recibes en Perfil.
-• Cambia tu nombre y tu foto en Perfil.
-• Una ruta que terminó con la app cerrada ahora se abre directamente en su resumen.
+• Planifica una ruta: toca cualquier punto del mapa para colocar un marcador.
+• Tu ubicación ahora es un punto con un cono que indica hacia dónde miras.
+• Un marcador muestra una foto del lugar cuando la hay.
+• Los pilotos Pro tienen una insignia Pro junto a su nombre en el Perfil.

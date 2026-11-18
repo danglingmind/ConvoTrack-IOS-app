@@ -1,6 +1,4 @@
-• Plan ritten op de kaart: zoek tankstations en eetplekken langs je route, houd ingedrukt om een speld te plaatsen en vermijd tolwegen of snelwegen.
-• Deel de route van een rit met een link. Vrienden kunnen hem vooraf bekijken en zelf rijden; je startpunt blijft privé.
-• De ritsamenvatting laat nu de route zien die je echt hebt gereden en waar de ritleider stopte om te hergroeperen.
-• Meldingen als een rit begint of eindigt, als er een oproep om te hergroeperen komt en als een rijder een noodoproep stuurt. Kies in je profiel welke je wilt ontvangen.
-• Wijzig je naam en foto in je profiel.
-• Een rit die eindigde terwijl de app gesloten was, opent nu direct op de samenvatting.
+• Plan een rit: tik ergens op de kaart om een speld te plaatsen.
+• Je locatie is nu een stip met een kegel die laat zien welke kant je op kijkt.
+• Een speld toont een foto van de plek, als die er is.
+• Pro-rijders krijgen een Pro-badge naast hun naam in Profiel.

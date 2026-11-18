@@ -1,6 +1,4 @@
-• Planeie passeios no mapa: procure combustível e comida ao longo da rota, mantenha o dedo premido para largar um pin e evite portagens ou autoestradas.
-• Partilhe a rota de um passeio com uma ligação. Os amigos podem pré-visualizá-la e fazê-la por conta própria; o seu ponto de partida fica privado.
-• O resumo do passeio mostra agora a rota que realmente fez e onde o líder parou para o reagrupamento.
-• Notificações quando um passeio começa ou termina, quando é chamado um reagrupamento e quando um motard envia um alerta de emergência. Escolha quais recebe no Perfil.
-• Altere o seu nome e fotografia no Perfil.
-• Um passeio que terminou com a app fechada abre agora diretamente no respetivo resumo.
+• Planeie uma volta: toque em qualquer ponto do mapa para colocar um pino.
+• A sua localização é agora um ponto com um cone que mostra para onde está virado.
+• Um pino mostra uma foto do local, quando existir.
+• Os pilotos Pro têm um distintivo Pro junto ao nome no Perfil.

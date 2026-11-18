@@ -1,6 +1,4 @@
-• Pianifica i giri sulla mappa: cerca benzinai e posti dove mangiare lungo il percorso, tieni premuto per aggiungere un segnaposto ed evita pedaggi o autostrade.
-• Condividi il percorso di un giro con un link. Gli amici possono vederlo in anteprima e farlo per conto loro; il tuo punto di partenza resta privato.
-• Il riepilogo del giro ora mostra il percorso che hai fatto davvero e dove il capogruppo si è fermato per il raggruppamento.
-• Notifiche quando un giro inizia o finisce, quando viene chiamato un raggruppamento e quando un motociclista invia un allarme di emergenza. Scegli quali ricevere nel Profilo.
-• Cambia nome e foto nel Profilo.
-• Un giro terminato mentre l'app era chiusa ora si apre direttamente sul suo riepilogo.
+• Pianifica un giro: tocca un punto qualsiasi della mappa per inserire uno spillo.
+• La tua posizione ora è un punto con un cono che indica la direzione in cui guardi.
+• Uno spillo mostra una foto del luogo, se disponibile.
+• I motociclisti Pro hanno un badge Pro accanto al nome nel Profilo.

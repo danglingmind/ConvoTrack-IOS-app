@@ -1,6 +1,4 @@
-• Planifică ture pe hartă: caută combustibil și mâncare de-a lungul traseului, ține apăsat ca să plasezi un pin și evită taxele de drum sau autostrăzile.
-• Trimite traseul unei ture printr-un link. Prietenii îl pot previzualiza și îl pot parcurge singuri; punctul tău de plecare rămâne privat.
-• Rezumatul turei arată acum traseul parcurs efectiv și locurile unde liderul s-a oprit pentru regrupare.
-• Notificări când o tură începe sau se încheie, când se cere o regrupare și când un motociclist trimite o alertă de urgență. Alege în Profil pe care le primești.
-• Schimbă-ți numele și fotografia din Profil.
-• O tură care s-a încheiat cât timp aplicația era închisă se deschide acum direct la rezumatul ei.
+• Planifică o tură: atinge oriunde pe hartă pentru a pune un pin.
+• Locația ta apare acum ca un punct cu un con care arată încotro privești.
+• Un pin afișează o fotografie a locului, dacă există.
+• Motocicliștii Pro primesc o insignă Pro lângă nume în Profil.

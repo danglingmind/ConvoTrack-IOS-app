@@ -1,6 +1,4 @@
-• Planifica rutes al mapa: cerca benzineres i llocs per menjar al llarg del recorregut, mantén premut per deixar una xinxeta i evita peatges o autopistes.
-• Comparteix el recorregut d'una ruta amb un enllaç. Els amics poden fer-hi un cop d'ull i fer-lo pel seu compte; el teu punt de sortida continua sent privat.
-• El resum de la ruta ara mostra el recorregut que heu fet de debò i on s'ha aturat el líder per reagrupar el grup.
-• Notificacions quan una ruta comença o acaba, quan es crida un reagrupament i quan un motorista envia una alerta d'emergència. Tria quines vols rebre a Perfil.
-• Canvia el teu nom i la teva foto a Perfil.
-• Una ruta que ha acabat amb l'app tancada ara s'obre directament al seu resum.
+• Planifica una ruta: toca qualsevol punt del mapa per deixar-hi una xinxeta.
+• La teva ubicació ara és un punt amb un con que mostra cap on mires.
+• Una xinxeta mostra una foto del lloc quan n'hi ha.
+• Els pilots Pro tenen una insígnia Pro al costat del nom al Perfil.

@@ -1,6 +1,4 @@
-• Préparez vos sorties sur la carte : cherchez stations-service et restos le long de l'itinéraire, appuyez longuement pour placer une épingle, et évitez péages ou autoroutes.
-• Partagez l'itinéraire d'une sortie par lien. Vos amis peuvent le découvrir et le rouler à leur tour ; votre point de départ reste privé.
-• Le bilan de sortie affiche désormais l'itinéraire réellement parcouru et les endroits où le chef de groupe s'est arrêté pour le regroupement.
-• Notifications au départ et à la fin d'une sortie, lors d'un appel au regroupement et quand un motard envoie une alerte d'urgence. Choisissez lesquelles recevoir dans Profil.
-• Modifiez votre nom et votre photo dans Profil.
-• Une sortie terminée pendant que l'app était fermée s'ouvre désormais directement sur son bilan.
+• Planifiez une sortie : touchez n'importe où sur la carte pour placer une épingle.
+• Votre position s'affiche maintenant sous forme de point avec un cône indiquant la direction dans laquelle vous êtes tourné.
+• Une épingle affiche une photo du lieu, s'il y en a une.
+• Les motards Pro ont un badge Pro à côté de leur nom dans le Profil.

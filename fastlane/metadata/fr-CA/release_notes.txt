@@ -1,6 +1,4 @@
-• Planifiez vos randonnées sur la carte: cherchez des postes d'essence et de quoi manger le long du trajet, maintenez le doigt pour déposer une épingle, et évitez les péages ou les autoroutes.
-• Partagez le trajet d'une randonnée avec un lien. Vos amis peuvent le prévisualiser et le rouler eux-mêmes; votre point de départ reste privé.
-• Le bilan de randonnée montre maintenant le trajet réellement parcouru et les endroits où le meneur s'est arrêté pour regrouper la gang.
-• Notifications quand une randonnée commence ou se termine, quand un regroupement est lancé et quand un motocycliste envoie une alerte d'urgence. Choisissez lesquelles recevoir dans Profil.
-• Changez votre nom et votre photo dans Profil.
-• Une randonnée terminée pendant que l'appli était fermée s'ouvre maintenant directement sur son bilan.
+• Planifiez une sortie : touchez n'importe où sur la carte pour placer une épingle.
+• Votre position s'affiche maintenant sous forme de point avec un cône indiquant la direction où vous faites face.
+• Une épingle affiche une photo du lieu, s'il y en a une.
+• Les motards Pro ont un badge Pro à côté de leur nom dans le Profil.

@@ -1,6 +1,4 @@
-• Planera turer på kartan: sök efter bensin och mat längs rutten, tryck länge för att sätta ut en nål och undvik vägtullar eller motorvägar.
-• Dela en turs rutt med en länk. Vänner kan förhandsgranska den och köra den själva; din startpunkt förblir privat.
-• Tursammanfattningen visar nu rutten ni faktiskt körde och var turledaren stannade för att samla gruppen.
-• Notiser när en tur startar eller avslutas, när gruppen kallas samman och när en förare skickar ett nödlarm. Välj vilka du vill få under Profil.
-• Ändra ditt namn och din bild under Profil.
-• En tur som avslutades medan appen var stängd öppnas nu direkt i sin sammanfattning.
+• Planera en tur: tryck var som helst på kartan för att sätta en nål.
+• Din position visas nu som en prick med en kon som visar vilket håll du är vänd.
+• En nål visar ett foto av platsen om det finns något.
+• Pro-förare får ett Pro-märke bredvid sitt namn i Profil.

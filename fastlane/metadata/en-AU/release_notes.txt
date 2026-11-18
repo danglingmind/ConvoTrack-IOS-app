@@ -1,6 +1,4 @@
-• Plan rides on the map: search for fuel and food along your route, long-press to drop a pin, and avoid tolls or highways.
-• Share a ride's route with a link. Friends can preview it and ride it themselves; your start point stays private.
-• The ride summary now shows the route you actually rode and where the leader stopped to regroup.
-• Notifications when a ride starts or ends, when a regroup is called and when a rider sends an emergency alert. Choose which ones you get in Profile.
-• Change your name and photo in Profile.
-• A ride that ended while the app was closed now opens straight to its summary.
+• Plan a ride: tap anywhere on the map to drop a pin.
+• Your location is now a dot with a cone showing the direction you're facing.
+• A dropped pin shows a photo of the place when there is one.
+• Pro riders get a Pro badge next to their name in Profile.

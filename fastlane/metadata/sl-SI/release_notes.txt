@@ -1,6 +1,4 @@
-• Načrtujte vožnje na zemljevidu: poiščite gorivo in hrano ob poti, z dolgim pritiskom postavite žebljiček ter se izognite cestninam ali avtocestam.
-• Delite pot vožnje s povezavo. Prijatelji si jo lahko ogledajo in jo prevozijo sami; vaša začetna točka ostane zasebna.
-• Povzetek vožnje zdaj prikaže pot, ki ste jo dejansko prevozili, in kje se je vodja ustavil za zbor.
-• Obvestila, ko se vožnja začne ali konča, ko je sklican zbor in ko motorist pošlje klic v sili. Katera prejemate, izberete v Profilu.
-• Spremenite ime in fotografijo v Profilu.
-• Vožnja, ki se je končala, ko je bila aplikacija zaprta, se zdaj odpre naravnost v njenem povzetku.
+• Načrtuj vožnjo: tapni kjer koli na zemljevidu in postavi buciko.
+• Tvoja lokacija je zdaj pika s stožcem, ki kaže, kam gledaš.
+• Bucika prikaže fotografijo kraja, če obstaja.
+• Pro voznikom se v profilu ob imenu prikaže značka Pro.

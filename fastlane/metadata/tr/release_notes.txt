@@ -1,6 +1,4 @@
-• Sürüşleri harita üzerinde planlayın: rotanız boyunca yakıt ve yemek arayın, iğne bırakmak için basılı tutun, ücretli yollardan veya otoyollardan kaçının.
-• Bir sürüşün rotasını bağlantıyla paylaşın. Arkadaşlarınız rotayı önizleyip kendileri sürebilir; başlangıç noktanız gizli kalır.
-• Sürüş özeti artık gerçekte sürdüğünüz rotayı ve liderin toplanma için nerede durduğunu gösteriyor.
-• Sürüş başladığında veya bittiğinde, toplanma çağrısı yapıldığında ve bir motorcu acil durum uyarısı gönderdiğinde bildirim alın. Hangilerini alacağınızı Profil'den seçin.
-• Adınızı ve fotoğrafınızı Profil'den değiştirin.
-• Uygulama kapalıyken biten bir sürüş artık doğrudan özetiyle açılıyor.
+• Sürüşünü planla: iğne bırakmak için haritada herhangi bir yere dokun.
+• Konumun artık baktığın yönü gösteren bir koniyle nokta olarak görünüyor.
+• İğne, varsa yerin fotoğrafını gösterir.
+• Pro sürücülerin Profil'de adlarının yanında Pro rozeti olur.

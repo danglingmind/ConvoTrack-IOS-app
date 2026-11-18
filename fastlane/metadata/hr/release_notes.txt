@@ -1,6 +1,4 @@
-• Planirajte vožnje na karti: tražite gorivo i hranu uz rutu, dugim pritiskom postavite oznaku te izbjegnite cestarine ili autoceste.
-• Podijelite rutu vožnje poveznicom. Prijatelji je mogu pregledati i sami je odvoziti, a vaša početna točka ostaje privatna.
-• Sažetak vožnje sada prikazuje rutu koju ste stvarno vozili i gdje je vođa stao radi okupljanja.
-• Obavijesti kad vožnja počne ili završi, kad se pozove okupljanje i kad netko pošalje hitno upozorenje. U Profilu odaberite koje želite primati.
-• Promijenite ime i fotografiju u Profilu.
-• Vožnja koja je završila dok je aplikacija bila zatvorena sada se otvara izravno na svom sažetku.
+• Planiraj vožnju: dodirni bilo gdje na karti za postavljanje pribadače.
+• Tvoja lokacija sada je točka sa stošcem koji pokazuje u kojem smjeru gledaš.
+• Pribadača prikazuje fotografiju mjesta ako postoji.
+• Pro vozači imaju Pro oznaku pored imena u profilu.

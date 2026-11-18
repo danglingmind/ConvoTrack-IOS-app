@@ -1,6 +1,4 @@
-• Rencanakan perjalanan di peta: cari tempat isi bensin dan makan di sepanjang rute, tekan lama untuk menaruh pin, dan hindari jalan tol atau jalan raya.
-• Bagikan rute perjalanan lewat tautan. Teman bisa melihatnya dulu lalu menempuhnya sendiri, sementara titik awal Anda tetap privat.
-• Ringkasan perjalanan kini menampilkan rute yang benar-benar Anda tempuh dan titik-titik tempat pemimpin berhenti untuk berkumpul kembali.
-• Notifikasi saat perjalanan dimulai atau berakhir, saat ajakan berkumpul dikirim, dan saat ada pengendara yang mengirim peringatan darurat. Pilih mana yang ingin Anda terima di Profil.
-• Ubah nama dan foto Anda di Profil.
-• Perjalanan yang berakhir saat aplikasi tertutup kini langsung terbuka di ringkasannya.
+• Rencanakan perjalanan: ketuk di mana saja pada peta untuk menaruh pin.
+• Lokasimu kini berupa titik dengan kerucut yang menunjukkan arah hadapmu.
+• Pin menampilkan foto tempat tersebut jika ada.
+• Rider Pro mendapat lencana Pro di samping nama mereka di Profil.

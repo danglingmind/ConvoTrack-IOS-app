@@ -1,6 +1,4 @@
-• Planlegg turer på kartet: søk etter drivstoff og mat langs ruta, hold inne for å slippe en nål, og unngå bomveier eller motorveier.
-• Del ruta for en tur med en lenke. Venner kan forhåndsvise den og kjøre den selv – startpunktet ditt forblir privat.
-• Turoppsummeringen viser nå ruta dere faktisk kjørte og hvor turlederen stoppet for å samle gruppa.
-• Varsler når en tur starter eller slutter, når noen sender et samlingskall og når en kjører sender et nødvarsel. Velg hvilke du vil få under Profil.
-• Endre navn og bilde under Profil.
-• En tur som ble avsluttet mens appen var lukket, åpnes nå rett i oppsummeringen.
+• Planlegg en tur: trykk hvor som helst på kartet for å sette en nål.
+• Posisjonen din vises nå som en prikk med en kjegle som viser hvilken vei du vender.
+• En nål viser et bilde av stedet hvis det finnes.
+• Pro-syklister får et Pro-merke ved siden av navnet i Profil.

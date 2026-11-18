@@ -1,6 +1,4 @@
-• Suunnittele ajot kartalla: hae tankkauspaikkoja ja ruokaa reitin varrelta, lisää nasta pitkällä painalluksella ja vältä tietulleja tai moottoriteitä.
-• Jaa ajon reitti linkillä. Kaverit voivat esikatsella sen ja ajaa sen itse; lähtöpisteesi pysyy yksityisenä.
-• Ajon yhteenveto näyttää nyt todella ajetun reitin ja kohdat, joissa ajon johtaja pysähtyi kokoamaan ryhmän.
-• Ilmoitukset, kun ajo alkaa tai päättyy, kun ryhmä kutsutaan kokoon ja kun ajaja lähettää hätähälytyksen. Valitse Profiilissa, mitkä haluat saada.
-• Vaihda nimesi ja kuvasi Profiilissa.
-• Ajo, joka päättyi sovelluksen ollessa suljettuna, avautuu nyt suoraan yhteenvetoonsa.
+• Suunnittele ajo: napauta karttaa missä tahansa pudottaaksesi nastan.
+• Sijaintisi näkyy nyt pisteenä ja kartiona, joka näyttää katsomasuuntasi.
+• Nasta näyttää paikan kuvan, jos sellainen on.
+• Pro-ajajilla on Pro-merkki nimen vieressä profiilissa.

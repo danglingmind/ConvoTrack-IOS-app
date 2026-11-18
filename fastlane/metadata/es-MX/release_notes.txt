@@ -1,6 +1,4 @@
-• Planea rodadas en el mapa: busca gasolineras y lugares para comer sobre tu ruta, mantén presionado para poner un pin y evita casetas o autopistas.
-• Comparte la ruta de una rodada con un enlace. Tus amigos pueden verla antes y rodarla ellos mismos; tu punto de salida se mantiene privado.
-• El resumen de la rodada ahora muestra la ruta que realmente recorrieron y dónde se detuvo el líder para reagruparse.
-• Notificaciones cuando una rodada empieza o termina, cuando se llama a reagruparse y cuando un motociclista manda una alerta de emergencia. Elige cuáles recibes en Perfil.
-• Cambia tu nombre y tu foto en Perfil.
-• Una rodada que terminó con la app cerrada ahora se abre directo en su resumen.
+• Planea una ruta: toca cualquier punto del mapa para colocar un marcador.
+• Tu ubicación ahora es un punto con un cono que indica hacia dónde miras.
+• Un marcador muestra una foto del lugar cuando hay una.
+• Los pilotos Pro tienen una insignia Pro junto a su nombre en el Perfil.

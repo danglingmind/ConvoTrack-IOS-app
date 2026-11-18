@@ -1,6 +1,4 @@
-• Planlæg ture på kortet: Søg efter brændstof og mad langs ruten, tryk længe for at sætte en nål, og undgå betalingsveje eller motorveje.
-• Del en turs rute med et link. Venner kan se den på forhånd og selv køre den; dit startpunkt forbliver privat.
-• Turopsummeringen viser nu den rute, I faktisk kørte, og hvor turlederen holdt ind for at samle gruppen.
-• Notifikationer, når en tur starter eller slutter, når der sendes et samlingskald, og når en kører sender en nødalarm. Vælg under Profil, hvilke du vil have.
-• Skift dit navn og billede under Profil.
-• En tur, der sluttede, mens appen var lukket, åbner nu direkte i sin opsummering.
+• Planlæg en tur: tryk hvor som helst på kortet for at sætte en nål.
+• Din position vises nu som en prik med en kegle, der viser, hvilken vej du vender.
+• En nål viser et foto af stedet, hvis der er et.
+• Pro-ryttere får et Pro-badge ved siden af deres navn i Profil.
