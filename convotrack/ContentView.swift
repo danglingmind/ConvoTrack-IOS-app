@@ -10,6 +10,7 @@ struct ContentView: View {
 
     @Environment(Clerk.self) private var clerk
     @EnvironmentObject private var membershipStore: MembershipStore
+    @Environment(\.scenePhase) private var scenePhase
     @State private var stage: Stage = .launch
 
     var body: some View {
@@ -40,6 +41,14 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.3), value: stage)
         .task { await resolveLaunchStage() }
+        // A session that expired (or was revoked) while the app sat idle: show only sign-in.
+        .onChange(of: clerk.isSignedIn) { _, signedIn in
+            if !signedIn && (stage == .main || stage == .paywall) { go(.auth) }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, stage == .main else { return }
+            Task { await SessionGuard.revalidate() }
+        }
         // Ties this device's earlier anonymous events (onboarding, sign-in) to the rider once known.
         .task(id: clerk.user?.id) { if let id = clerk.user?.id { Analytics.identify(userId: id) } }
     }
@@ -72,7 +81,9 @@ struct ContentView: View {
             try? await Task.sleep(nanoseconds: 50_000_000)
         }
 
-        if clerk.user != nil {
+        await SessionGuard.revalidate()
+
+        if clerk.isSignedIn {
             // Already signed in (includes everyone who installed before onboarding existed).
             OnboardingState.hasCompleted = true
             go(.main)

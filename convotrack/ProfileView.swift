@@ -365,8 +365,11 @@ struct ProfileView: View {
             appState.inviteCode = nil
             appState.currentRide = nil
             Analytics.reset()
-            await PushNotifications.unregister()
-            try? await Clerk.shared.auth.signOut()
+            // Bounded: with an expired session these calls can stall, and a stuck spinner is
+            // worse than a skipped server round-trip. `Clerk.isSignedIn` flips regardless.
+            _ = await SessionGuard.bounded(3) { await PushNotifications.unregister() }
+            _ = await SessionGuard.bounded(5) { try await Clerk.shared.auth.signOut() }
+            await SessionGuard.revalidate()
             await ImageCache.clearEverything()
             // Signing out is the one moment we know the rider may want a different
             // account next time; it arms the cookie-free web session that lets

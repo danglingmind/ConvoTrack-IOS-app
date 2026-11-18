@@ -93,9 +93,9 @@ struct AuthView: View {
         .onAppear {
             #if DEBUG
             // `-authHold YES` keeps this screen up for design review even when signed in.
-            if clerk.user != nil, !UserDefaults.standard.bool(forKey: "authHold") { finishAuth() }
+            if clerk.isSignedIn, !UserDefaults.standard.bool(forKey: "authHold") { finishAuth() }
             #else
-            if clerk.user != nil { finishAuth() }
+            if clerk.isSignedIn { finishAuth() }
             #endif
             withAnimation(DS.Motion.emphasized) { appeared = true }
         }
